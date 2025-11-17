@@ -9,7 +9,7 @@
 | Phase | Name | Status | % Complete | Tests | Issues |
 |-------|------|--------|------------|-------|--------|
 | 1 | Core API | COMPLETE | 100% | 88/88 PASSING | None |
-| 2 | Caching | IN PROGRESS | 0% | 0/3 | - |
+| 2 | Caching | IN PROGRESS | 60% | 6/12 passing | Cache stats not resetting in tests |
 | 3 | Timeout | NOT STARTED | 0% | 0/1 | - |
 | 4 | Logging/Metrics | NOT STARTED | 0% | 0/1 | - |
 | 5 | Safety/Testing | NOT STARTED | 0% | 0/5 | - |
@@ -34,7 +34,8 @@
 **Blockers:** None
 
 **Next Steps:**
-- Start Phase 2 (Pattern Caching)
-- Add resource tracker
-- Implement LRU + idle-time eviction
+- Fix cache test failures (6/12 failing)
+- Add resetCacheForTesting() method
+- Implement idle eviction tests
+- Complete Phase 2
 

@@ -1,198 +1,301 @@
 # Native Library Build System
 
-This directory contains the native RE2 wrapper library build infrastructure.
+This directory contains the build infrastructure for compiling the RE2 wrapper library for all supported platforms.
 
-**IMPORTANT:** Native libraries are built ONLY via GitHub Actions CI/CD. Java developers never need to compile C++ code locally.
+**IMPORTANT:** Native libraries are built ONLY via [GitHub Actions CI/CD](.github/workflows/build-native.yml). Java developers never compile C++ code - libraries are pre-built and committed to the repository.
+
+---
+
+## For Java Developers
+
+**You don't need to do anything!**
+
+Pre-compiled libraries are already in the repository at:
+- `src/main/resources/native/darwin-x86_64/libre2.dylib` (macOS Intel)
+- `src/main/resources/native/darwin-aarch64/libre2.dylib` (macOS Apple Silicon)
+- `src/main/resources/native/linux-x86_64/libre2.so` (Linux x86_64)
+- `src/main/resources/native/linux-aarch64/libre2.so` (Linux ARM64)
+
+Just build the Java project:
+```bash
+mvn clean package
+```
+
+Libraries are automatically embedded in the JAR and loaded at runtime by `RE2LibraryLoader`.
+
+---
 
 ## What Gets Built
 
-### RE2 - Google's Regular Expression Library
+Our library bundles three components into a single self-contained shared library:
+
+### 1. RE2 - Google's Regex Engine
 - **Project:** https://github.com/google/re2
-- **Version:** 2025-11-05 (latest release)
+- **Version:** 2025-11-05
 - **License:** BSD-3-Clause
-- **What it is:** A fast, safe, thread-friendly regular expression engine
 - **Why we use it:**
   - Linear time complexity (no catastrophic backtracking)
   - ReDoS safe (prevents regex denial-of-service attacks)
-  - Production-grade (used by Google internally)
-  - Much safer than Java's built-in regex for untrusted patterns
+  - Production-grade (used by Google Search, Gmail, etc.)
+  - Essential for Cassandra security (processes untrusted regex patterns)
 
-### Abseil - Google's C++ Common Libraries
+### 2. Abseil - Google's C++ Common Libraries
 - **Project:** https://github.com/abseil/abseil-cpp
-- **Version:** 20250814.1 (LTS release)
+- **Version:** 20250814.1 (LTS)
 - **License:** Apache License 2.0
-- **What it is:** Google's core C++ libraries (containers, algorithms, utilities)
-- **Why we need it:** RE2 depends on Abseil for core functionality
+- **Why we need it:** RE2 depends on Abseil containers and utilities
 - **Note:** Statically linked, not exposed in our API
 
-### Our Wrapper (re2_wrapper.cpp)
-- **Purpose:** Provides a pure C API that JNA can call from Java
-- **Functions:** 8 C functions matching our JNA interface
-- **Size:** ~150 lines of C++ code wrapping RE2's C++ API
+### 3. Our C Wrapper (re2_wrapper.cpp)
+- **Purpose:** Provides pure C API that JNA can call from Java
+- **Functions:** 8 C functions (re2_compile, re2_free_pattern, re2_full_match, etc.)
+- **Size:** ~120 lines of C++ wrapping RE2's C++ API
 
-## Build Output
-
-All three components are compiled and linked into a single shared library:
+**Final output:**
 - **macOS:** `libre2.dylib` (~875 KB)
 - **Linux:** `libre2.so` (~2.7 MB)
-- **Contains:** RE2 + Abseil + our wrapper (all statically linked)
 - **Dependencies:** Only system libraries (libc, libm, CoreFoundation on macOS)
+- **Everything else:** Statically linked inside
 
-## Security: Why We Use Git Commit Pinning
+---
 
-**We pin exact git commits instead of downloading release tarballs.**
+## Security: Git Commit Pinning
 
-**Current pins:**
+**We build from pinned git commits, not release tarballs.**
+
+### Current Pins
+
 ```bash
-RE2:    927f5d53caf8111721e734cf24724686bb745f55  # 2025-11-05 (signed by Russ Cox)
-Abseil: d38452e1ee03523a208362186fd42248ff2609f6  # 20250814.1 LTS
+RE2:    927f5d53caf8111721e734cf24724686bb745f55  # Release 2025-11-05
+Abseil: d38452e1ee03523a208362186fd42248ff2609f6  # LTS 20250814.1
 ```
 
-**Why this is critical for database/security use:**
+### Why This Matters for Cassandra
 
-1. **Immutability**: Git commit hashes are cryptographically bound to exact code
+This library runs inside Cassandra, a mission-critical database. Commit pinning provides:
+
+1. **Immutability**: Commits are cryptographically sealed
    - Cannot be changed without changing the hash
-   - Changing a single byte anywhere changes the commit hash
-   - Much stronger than version tags (which can be moved)
+   - Stronger than version tags (which can be moved/deleted)
 
-2. **Supply chain security**: Protects against:
-   - Compromised GitHub releases
-   - Tampered tarballs
+2. **Supply chain security**: Protects against
+   - Compromised release tarballs
    - Dependency confusion attacks
-   - "Tag moved" attacks
+   - Upstream repository compromises
 
-3. **Audit trail**: Full git history verification
-   - Can verify commits are signed by Google engineers
-   - Can inspect exact code being compiled
-   - Industry best practice (Kubernetes, Go modules, etc.)
+3. **Audit trail**: Full verification
+   - Inspect exact code being compiled
+   - Verify GPG signatures from Google engineers
+   - Track what's running in production
 
-4. **Database safety**: Since this runs in Cassandra (mission-critical database):
-   - Any vulnerability could compromise data
-   - Commit pinning ensures we know EXACTLY what code is running
-   - No surprises from upstream changes
+4. **Industry best practice**: Used by Kubernetes, Go modules, Bazel, etc.
 
-**Updating dependencies:**
-When updating RE2/Abseil versions, we:
-1. Review release notes for security fixes
-2. Find exact commit hash for new release
-3. Update `RE2_COMMIT`/`ABSEIL_COMMIT` in build.sh
-4. Code review the change (visible in git diff)
-5. Rebuild all platforms via GitHub Actions
+### Finding Commit Hashes for Updates
 
-## Overview
+**When updating to a new RE2/Abseil version:**
 
-The automated build system:
-1. Downloads RE2 2025-11-05 and Abseil 20250814.1 source from GitHub
-2. Compiles them as static libraries
-3. Compiles the C wrapper (`wrapper/re2_wrapper.cpp`)
-4. Links everything into self-contained shared libraries
-5. Automatically commits libraries to a PR for review
+1. Go to the GitHub release page:
+   - RE2: https://github.com/google/re2/releases
+   - Abseil: https://github.com/abseil/abseil-cpp/releases
 
-## Supported Platforms
+2. Click on the release tag (e.g., "2025-11-05")
 
-- **darwin-x86_64** → macOS Intel (libre2.dylib)
-- **darwin-aarch64** → macOS Apple Silicon (libre2.dylib)
-- **linux-x86_64** → Linux x86_64 (libre2.so)
-- **linux-aarch64** → Linux ARM64 (libre2.so)
+3. Look for the commit hash:
+   - Usually shown near the top: "Commits: `abc123...`"
+   - Or in the URL after clicking the commit count
+   - Full hash is 40 characters (use the full hash, not abbreviated)
 
-## Building Native Libraries (Maintainers Only)
+4. Update in `scripts/build.sh`:
+   ```bash
+   RE2_COMMIT="new_full_40_char_commit_hash_here"
+   RE2_VERSION="2025-XX-XX"  # for reference
+   ```
 
-**When to rebuild:**
-- Updating to a new RE2 version
-- Modifying `wrapper/re2_wrapper.cpp`
-- Adding new platforms
+5. Test and rebuild (see below)
 
-**How to rebuild:**
+---
 
-1. Go to: https://github.com/axonops/libre2-java/actions/workflows/build-native.yml
-2. Click **"Run workflow"** button
-3. Select inputs:
-   - **Use workflow from:** `development` (or your branch)
-   - **Target branch to create PR against:** `development` (or target branch)
-4. Click **"Run workflow"**
-5. Wait ~10-15 minutes for build to complete
-6. Workflow will automatically:
-   - Build all 4 platforms in parallel
-   - Create branch `native-libs-YYYYMMDD-HHMMSS`
-   - Commit all libraries to `src/main/resources/native/`
-   - Open a Pull Request
-7. Review the PR and merge
+## Rebuilding Libraries (Maintainers Only)
 
-**That's it!** The libraries are now in the repository.
+### When to Rebuild
+
+- Updating to a new RE2 or Abseil version
+- Modifying the C wrapper (`wrapper/re2_wrapper.cpp`)
+- Security updates
+
+### How to Rebuild
+
+**Using GitHub Actions (Automated):**
+
+1. **Navigate to workflow:**
+   - Direct link: https://github.com/axonops/libre2-java/actions/workflows/build-native.yml
+   - Or: GitHub → Actions → "Build Native Libraries" (left sidebar)
+
+2. **Trigger build:**
+   - Click **"Run workflow"** button (top right, above workflow runs)
+   - If you don't see this button: use `gh` CLI instead (see below)
+
+3. **Select options:**
+   - **Use workflow from:** Select branch with build script changes
+   - **Target branch to create PR against:** Usually `development`
+
+4. **Click "Run workflow"**
+
+5. **Wait ~10-15 minutes** for all 4 platforms to build
+
+6. **Review automatically created PR:**
+   - Workflow creates branch `native-libs-YYYYMMDD-HHMMSS`
+   - Commits all 4 libraries to `src/main/resources/native/`
+   - Opens PR against your selected target branch
+
+7. **Merge PR** when satisfied
+
+**Using GitHub CLI (if UI doesn't work):**
+
+```bash
+gh workflow run build-native.yml --ref development -f target_branch=development
+```
+
+**Monitor progress:**
+```bash
+gh run list --workflow=build-native.yml --limit 5
+gh run watch  # Watch most recent run
+```
+
+---
+
+## Build Process (Technical Details)
+
+The [build script](scripts/build.sh) executes these steps:
+
+### Step 1: Clone Source (Security-Critical)
+```bash
+git clone https://github.com/google/re2.git
+cd re2
+git checkout 927f5d53caf8111721e734cf24724686bb745f55  # Pinned commit
+```
+
+Repeat for Abseil. Uses `--depth 50` for faster clones.
+
+### Step 2: Build Abseil (~5 minutes)
+- Compiles as static library
+- Installs to local prefix for RE2 to find
+- Position-independent code (required for shared library)
+
+### Step 3: Build RE2 (~2 minutes)
+- Compiles as static library
+- Links against Abseil
+- Testing disabled (not needed for distribution)
+
+### Step 4: Build Wrapper (~1 minute)
+- Compiles `re2_wrapper.cpp`
+- Links with static RE2 + Abseil libraries
+- Produces single self-contained shared library
+- **macOS:** Links CoreFoundation framework, strips dead code
+- **Linux:** Static libstdc++, strips sections
+
+### Step 5: Automated Verification
+- Checks library format (Mach-O or ELF)
+- Verifies all 8 wrapper functions exported
+- Confirms only system dependencies
+- **Build fails if any check fails**
+
+---
+
+## Platform-Specific Build Methods
+
+| Platform | Build Method | Notes |
+|----------|-------------|-------|
+| macOS x86_64 | Native on `macos-15-intel` runner | GitHub-hosted Intel Mac |
+| macOS aarch64 | Native on `macos-latest` runner | GitHub-hosted Apple Silicon Mac |
+| Linux x86_64 | Docker on `ubuntu-latest` runner | Clean Ubuntu 22.04 environment |
+| Linux aarch64 | Docker + QEMU on `ubuntu-latest` | Emulation (slower but free) |
+
+**Why Docker for Linux:**
+- Reproducible: Locks in Ubuntu 22.04 regardless of runner version
+- Explicit dependencies: Dockerfile shows exactly what's needed
+- QEMU support: Enables ARM64 cross-compilation
+
+---
 
 ## Directory Structure
 
 ```
 native/
 ├── wrapper/
-│   └── re2_wrapper.cpp          # C wrapper for RE2 (JNA interface)
+│   └── re2_wrapper.cpp          # C wrapper (8 JNA functions)
 ├── scripts/
-│   └── build.sh                  # Build script (downloads & compiles everything)
-├── Dockerfile                    # Docker image for Linux builds
+│   └── build.sh                  # Build script (git clone, cmake, link)
+├── Dockerfile                    # Ubuntu 22.04 + build tools
 └── README.md                     # This file
+
+Generated during build (not committed):
+├── build/
+│   ├── re2/                      # RE2 source (git cloned)
+│   ├── abseil-cpp/               # Abseil source (git cloned)
+│   ├── re2-build/                # RE2 compiled
+│   ├── abseil-build/             # Abseil compiled
+│   ├── abseil-install/           # Abseil installed (for RE2)
+│   └── libre2.{dylib|so}         # Final library
 ```
 
-## Build Process Details
-
-The `build.sh` script does the following:
-
-1. **Download sources** (~2-3 MB total):
-   - RE2 2025-11-05 from github.com/google/re2
-   - Abseil 20250814.1 from github.com/abseil/abseil-cpp
-
-2. **Build Abseil** (~5 minutes):
-   - Static library
-   - Position-independent code (for shared library)
-   - C++17 standard
-   - Installed to local prefix for RE2 to find
-
-3. **Build RE2** (~2 minutes):
-   - Static library
-   - Linked against Abseil
-   - Testing disabled
-
-4. **Build wrapper** (~1 minute):
-   - Compiles `re2_wrapper.cpp`
-   - Links against static RE2 and Abseil
-   - Produces single shared library with no external dependencies
-   - Strips symbols for smaller size
-
-5. **Automatic verification** (in GitHub Actions):
-   - Checks library format (Mach-O or ELF)
-   - Verifies all 8 C functions are exported
-   - Confirms only system dependencies
-   - Build fails if verification fails
-
-## For Java Developers
-
-**You don't need to do anything!**
-
-The compiled native libraries are already in the repository at:
-- `src/main/resources/native/darwin-x86_64/libre2.dylib`
-- `src/main/resources/native/darwin-aarch64/libre2.dylib`
-- `src/main/resources/native/linux-x86_64/libre2.so`
-- `src/main/resources/native/linux-aarch64/libre2.so`
-
-Just build the Java project normally:
-```bash
-mvn clean package
-```
-
-The libraries are automatically embedded in the JAR and extracted at runtime by `RE2LibraryLoader`.
+---
 
 ## Troubleshooting
 
-**GitHub Actions build fails:**
-- Check the Actions log for specific errors
-- Verify all 4 platform jobs completed successfully
-- macOS Intel runners can sometimes be slow/unavailable
+**"Run workflow" button not visible in GitHub UI:**
+- Try hard refresh (Ctrl+Shift+R / Cmd+Shift+R)
+- Use GitHub CLI instead: `gh workflow run build-native.yml --ref development -f target_branch=development`
+- Check repo permissions (need write access)
+
+**Build fails with "cmake not found":**
+- Should not happen (cmake is in Dockerfile and macOS runners)
+- Check GitHub Actions logs for environment issues
+
+**Build fails with git clone errors:**
+- Network issue on GitHub's side (rare)
+- Re-run the workflow
+
+**ARM64 build takes too long (>30 minutes):**
+- QEMU emulation is slow (~15 minutes normal)
+- Check if job is actually running or stalled
+- Cancel and retry if stalled
 
 **PR creation fails:**
-- Check GitHub token permissions
-- Verify target branch exists
-- Check Actions log for git push errors
+- Check the "Commit Native Libraries" job logs
+- Verify `GITHUB_TOKEN` has permissions
+- May need to enable "Allow GitHub Actions to create and approve pull requests" in repo settings
 
-**Libraries missing from JAR:**
-- Verify the PR was merged
-- Check `src/main/resources/native/` has all 4 platform directories
-- Run `mvn clean package` to regenerate JAR
+**Libraries still using old commits after merge:**
+- Check PR actually merged (not just closed)
+- Pull latest: `git pull origin development`
+- Verify `src/main/resources/native/` has updated files
+
+---
+
+## Exported C Functions
+
+The wrapper exposes these 8 functions for JNA:
+
+```c
+void* re2_compile(const char* pattern, int pattern_len, int case_sensitive);
+void  re2_free_pattern(void* pattern);
+int   re2_full_match(void* pattern, const char* text, int text_len);
+int   re2_partial_match(void* pattern, const char* text, int text_len);
+const char* re2_get_error();
+const char* re2_get_pattern(void* pattern);
+int   re2_num_capturing_groups(void* pattern);
+int   re2_pattern_ok(void* pattern);
+```
+
+All verification steps check these functions are correctly exported.
+
+---
+
+## Links
+
+- **GitHub Workflow:** [.github/workflows/build-native.yml](../.github/workflows/build-native.yml)
+- **Build Script:** [scripts/build.sh](scripts/build.sh)
+- **C Wrapper:** [wrapper/re2_wrapper.cpp](wrapper/re2_wrapper.cpp)
+- **RE2 Project:** https://github.com/google/re2
+- **Abseil Project:** https://github.com/abseil/abseil-cpp

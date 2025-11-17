@@ -96,7 +96,13 @@ This library is designed for production environments (databases, web services, s
    - Dependency confusion attacks
    - Upstream repository compromises
 
-3. **Audit trail**: Full verification
+3. **Signature verification**: Automated cryptographic validation
+   - Build script verifies each commit via GitHub API
+   - Confirms commits are signed by trusted Google engineers
+   - Build fails immediately if signature invalid or missing
+   - No GPG key management needed (GitHub does verification)
+
+4. **Audit trail**: Full verification
    - Inspect exact code being compiled
    - Verify GPG signatures from Google engineers
    - Track what's running in production

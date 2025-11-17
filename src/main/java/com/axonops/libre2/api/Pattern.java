@@ -16,7 +16,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * A compiled regular expression pattern.
  *
- * Must be closed to free native resources (unless from cache).
+ * Thread-safe: Pattern instances can be safely shared between threads.
+ * Multiple threads can call matcher() concurrently on the same Pattern.
+ *
+ * Resource Management: Patterns from compile() are cached and managed automatically.
+ * Do NOT call close() on cached patterns (it's a no-op). For testing, use compileWithoutCache().
+ *
+ * Reference Counting: Patterns are not freed while Matchers are active (prevents use-after-free).
  *
  * @since 1.0.0
  */

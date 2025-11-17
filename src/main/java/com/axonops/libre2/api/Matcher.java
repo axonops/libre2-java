@@ -11,6 +11,27 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Performs regex matching operations.
  *
+ * NOT Thread-Safe: Each Matcher instance must be confined to a single thread.
+ * Do NOT share Matcher instances between threads.
+ *
+ * Safe Pattern: Create separate Matcher per thread from shared Pattern.
+ * The underlying Pattern CAN be safely shared - only the Matcher cannot.
+ *
+ * Example:
+ * <pre>
+ * Pattern sharedPattern = RE2.compile("\\d+");  // Thread-safe, can share
+ *
+ * // Thread 1
+ * try (Matcher m1 = sharedPattern.matcher("123")) {  // Each thread gets own Matcher
+ *     m1.matches();
+ * }
+ *
+ * // Thread 2
+ * try (Matcher m2 = sharedPattern.matcher("456")) {  // Different Matcher instance
+ *     m2.matches();
+ * }
+ * </pre>
+ *
  * @since 1.0.0
  */
 public final class Matcher implements AutoCloseable {

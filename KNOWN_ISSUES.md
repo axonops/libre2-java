@@ -48,15 +48,15 @@
 - **Date Discovered:** 2025-11-17
 - **Date Resolved:** 2025-11-17
 
-## Issue 6: Cache Tests Failing Due to Statistics Not Resetting (OPEN)
-- **Status:** OPEN (Phase 2 WIP)
-- **Severity:** Medium (blocks Phase 2 completion)
+## Issue 6: Cache Tests Failing Due to Statistics Not Resetting (RESOLVED)
+- **Status:** RESOLVED
+- **Severity:** Medium (blocked Phase 2 completion)
 - **Description:** Cache tests expect statistics to reset between tests, but global cache persists
 - **Impact:** 6/12 cache tests failing (hitRate, currentSize assertions fail)
 - **Root Cause:** Static cache in Pattern class is shared across all tests
-- **Potential Solutions:**
-  - Add Pattern.resetCacheForTesting() method
-  - Make cache non-static and inject via Pattern.setCache()
-  - Use @BeforeEach to fully reset cache state
-- **Assigned:** Next session
+- **Resolution:** Added Pattern.resetCache() and PatternCache.reset() methods
+  - Clears cache entries
+  - Resets all statistics counters
+  - Called in @BeforeEach/@AfterEach
 - **Date Discovered:** 2025-11-17
+- **Date Resolved:** 2025-11-17

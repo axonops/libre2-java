@@ -16,14 +16,14 @@ name: Build Native Libraries
 #    src/main/resources/native/{platform}/
 
 on:
-  # Trigger this workflow manually from GitHub UI
+  # Trigger this workflow ONLY manually from GitHub UI
   workflow_dispatch:
-
-  # Or trigger on pushes to native/** (when we change wrapper code)
-  push:
-    paths:
-      - 'native/**'
-      - '.github/workflows/build-native.yml'
+    inputs:
+      target_branch:
+        description: 'Target branch to create PR against'
+        required: true
+        default: 'development'
+        type: string
 
 jobs:
   # ============================================================================
@@ -220,30 +220,34 @@ jobs:
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ env.BRANCH_NAME }}
-          title: "Update native libraries (RE2 2025-11-05)"
-          body: |
-            ## Native Libraries Update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base "${{ github.event.inputs.target_branch }}" \
+            --head "$BRANCH_NAME" \
+            --title "Update native libraries (RE2 2025-11-05)" \
+            --body "$(cat <<'PRBODY'
+          ## Native Libraries Update
 
-            This PR adds/updates the compiled native RE2 libraries for all supported platforms.
+          This PR adds/updates the compiled native RE2 libraries for all supported platforms.
 
-            ### Built Libraries
-            - ✅ darwin-x86_64/libre2.dylib (macOS Intel)
-            - ✅ darwin-aarch64/libre2.dylib (macOS Apple Silicon)
-            - ✅ linux-x86_64/libre2.so (Linux x86_64)
-            - ✅ linux-aarch64/libre2.so (Linux ARM64)
+          ### Built Libraries
+          - ✅ darwin-x86_64/libre2.dylib (macOS Intel)
+          - ✅ darwin-aarch64/libre2.dylib (macOS Apple Silicon)
+          - ✅ linux-x86_64/libre2.so (Linux x86_64)
+          - ✅ linux-aarch64/libre2.so (Linux ARM64)
 
-            ### Versions
-            - RE2: 2025-11-05
-            - Abseil: 20250814.1
+          ### Versions
+          - RE2: 2025-11-05
+          - Abseil: 20250814.1
 
-            ### Verification
-            All libraries are self-contained with only system dependencies.
+          ### Verification
+          All libraries are self-contained with only system dependencies.
 
-            ### Next Steps
-            1. Review library sizes and dependencies
-            2. Merge this PR
-            3. Java code will automatically load correct library for platform
+          ### Next Steps
+          1. Review library sizes and dependencies
+          2. Merge this PR
+          3. Java code will automatically load correct library for platform
+          PRBODY
+          )"

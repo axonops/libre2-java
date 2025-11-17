@@ -179,6 +179,13 @@ public final class Pattern implements AutoCloseable {
         cache.clear();
     }
 
+    /**
+     * Fully resets the cache including statistics (for testing only).
+     */
+    public static void resetCache() {
+        cache.reset();
+    }
+
     private void checkNotClosed() {
         if (closed.get()) {
             throw new IllegalStateException("RE2: Pattern is closed");

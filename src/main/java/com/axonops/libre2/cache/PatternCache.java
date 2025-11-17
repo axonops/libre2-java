@@ -179,6 +179,26 @@ public final class PatternCache {
     }
 
     /**
+     * Resets cache statistics (for testing only).
+     */
+    public void resetStatistics() {
+        hits.set(0);
+        misses.set(0);
+        evictionsLRU.set(0);
+        evictionsIdle.set(0);
+        logger.debug("RE2: Cache statistics reset");
+    }
+
+    /**
+     * Full reset for testing (clears cache and resets statistics).
+     */
+    public void reset() {
+        clear();
+        resetStatistics();
+        logger.debug("RE2: Cache fully reset");
+    }
+
+    /**
      * Shuts down the cache (stops eviction thread, clears cache).
      */
     public void shutdown() {

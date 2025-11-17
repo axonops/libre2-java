@@ -16,14 +16,14 @@ class CacheTest {
 
     @BeforeEach
     void setUp() {
-        // Clear cache before each test
-        Pattern.clearCache();
+        // Fully reset cache and statistics before each test
+        Pattern.resetCache();
     }
 
     @AfterEach
     void tearDown() {
-        // Clear cache after each test
-        Pattern.clearCache();
+        // Fully reset cache and statistics after each test
+        Pattern.resetCache();
     }
 
     @Test

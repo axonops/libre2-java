@@ -21,6 +21,21 @@
         </license>
     </licenses>
 
+    <developers>
+        <developer>
+            <id>axonops</id>
+            <name>AxonOps Team</name>
+            <organization>AxonOps</organization>
+            <organizationUrl>https://axonops.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <url>https://github.com/axonops/libre2-java</url>
+        <connection>scm:git:git://github.com/axonops/libre2-java.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/axonops/libre2-java.git</developerConnection>
+    </scm>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>17</maven.compiler.source>

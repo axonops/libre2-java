@@ -1,5 +1,7 @@
 # libre2-java
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+
 High-performance, thread-safe Java bindings to [Google's RE2 regular expression library](https://github.com/google/re2).
 
 Built for production use in high-concurrency applications requiring safe, predictable regex matching with linear-time guarantees.
@@ -484,9 +486,37 @@ mvn test
 
 ## License
 
-**Apache License 2.0** (compatible with RE2's BSD-3-Clause)
+libre2-java is licensed under the **Apache License 2.0**.
 
-This allows use in Apache Cassandra and other Apache projects.
+See [LICENSE](LICENSE) file for details.
+
+### Third-Party Licenses
+
+This library bundles the **RE2 regular expression library**:
+- **Project:** [google/re2](https://github.com/google/re2)
+- **License:** BSD-3-Clause
+- **Copyright:** The RE2 Authors
+
+The BSD-3-Clause license is fully compatible with Apache License 2.0.
+
+**Complete License Texts:**
+- Apache License 2.0: See [LICENSE](LICENSE)
+- RE2 BSD-3-Clause: See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
+
+### License Compatibility
+
+libre2-java (Apache 2.0) can be used in:
+- Apache 2.0 licensed projects
+- Proprietary projects
+- Commercial projects
+- Any project compatible with Apache 2.0
+
+### Attribution
+
+When distributing libre2-java:
+1. Include Apache License 2.0 (LICENSE file)
+2. Include RE2 BSD-3-Clause license (THIRD_PARTY_LICENSES.md)
+3. Include NOTICE file with attribution
 
 ---
 

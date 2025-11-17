@@ -116,26 +116,16 @@ public final class PatternCache {
                 return cached.pattern();
             }
 
-            // Cache miss - need to compile
+            // Cache miss - compile and cache
             misses.incrementAndGet();
-
-            // Before adding to cache, check if we have room
-            if (cache.size() >= config.maxCacheSize()) {
-                // Cache at capacity - check if ANY pattern can be evicted
-                boolean hasEvictablePattern = cache.values().stream()
-                    .anyMatch(cp -> cp.pattern().getRefCount() == 0);
-
-                if (!hasEvictablePattern) {
-                    // Cache full, all patterns in use - compile WITHOUT caching
-                    logger.warn("RE2: Cache full and all patterns in use - compiling without caching: {}", key);
-                    return compiler.get(); // Pattern works, just not cached
-                }
-            }
-
-            // Normal path - compile and cache (LRU will evict if needed)
             logger.debug("RE2: Cache miss - compiling pattern: {}", key);
+
             Pattern pattern = compiler.get();
             cache.put(key, new CachedPattern(pattern));
+
+            // LRU eviction happens automatically in LinkedHashMap.put()
+            // If eldest pattern has refCount > 0, it goes to deferred cleanup list
+            // Eventually freed when refCount reaches 0
 
             return pattern;
         }

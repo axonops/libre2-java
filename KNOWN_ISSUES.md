@@ -55,8 +55,27 @@
 - **Impact:** 6/12 cache tests failing (hitRate, currentSize assertions fail)
 - **Root Cause:** Static cache in Pattern class is shared across all tests
 - **Resolution:** Added Pattern.resetCache() and PatternCache.reset() methods
-  - Clears cache entries
-  - Resets all statistics counters
-  - Called in @BeforeEach/@AfterEach
 - **Date Discovered:** 2025-11-17
 - **Date Resolved:** 2025-11-17
+
+## Issue 7: Memory Leak When Cache Full and All Patterns In Use (RESOLVED - CRITICAL)
+- **Status:** RESOLVED
+- **Severity:** CRITICAL (memory leak in production)
+- **Description:** When cache at maxSize and ALL patterns have refCount > 0:
+  - New pattern triggers LRU eviction
+  - removeEldestEntry() tries to evict oldest pattern
+  - forceClose() sees refCount > 0, returns without freeing
+  - Pattern removed from cache but native memory NOT freed
+  - Memory leak accumulates under high concurrent load
+- **Impact:** Memory exhaustion in long-running Cassandra instances
+- **Root Cause:** removeEldestEntry() removes from map even when forceClose() fails
+- **Resolution:** Hybrid approach:
+  1. Deferred cleanup list (CopyOnWriteArrayList)
+  2. Patterns with refCount > 0 added to deferred list
+  3. Background thread cleans them when refCount reaches 0
+  4. Skip caching if cache full and all patterns in use
+- **Discovered During:** Comprehensive thread safety analysis
+- **Date Discovered:** 2025-11-17
+- **Date Resolved:** 2025-11-17
+- **Tests Added:** CacheFullInUseTest (3 tests)
+- **Verification:** 160/160 tests passing, no memory leaks detected

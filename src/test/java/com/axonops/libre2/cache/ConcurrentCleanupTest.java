@@ -103,7 +103,7 @@ class ConcurrentCleanupTest {
                 try {
                     start.await();
                     // Each thread compiles 30 patterns (total 1500 > cache size)
-                    for (int j = 0; j < 30; j++) {
+                    for (int j = 0; j < 1100; j++) {
                         Pattern p = Pattern.compile("t" + threadId + "_p" + j);
                         assertThat(p.matches("t" + threadId + "_p" + j)).isTrue();
                     }
@@ -122,9 +122,9 @@ class ConcurrentCleanupTest {
 
         // Cache should be at max, with many LRU evictions
         CacheStatistics stats = Pattern.getCacheStatistics();
-        assertThat(stats.currentSize()).isLessThanOrEqualTo(1000);
+        assertThat(stats.currentSize()).isLessThanOrEqualTo(50000);
         // With 1500 patterns compiled, should have ~500+ evictions
-        assertThat(stats.evictionsLRU()).isGreaterThan(400);
+        assertThat(stats.evictionsLRU()).isGreaterThan(5000);
     }
 
     @Test

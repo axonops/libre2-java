@@ -37,7 +37,7 @@ final class IdleEvictionTask {
             thread.start();
 
             logger.info("RE2: Idle eviction thread started - interval: {}s",
-                config.evictionScanInterval().toSeconds());
+                config.evictionScanIntervalSeconds());
         }
     }
 
@@ -71,7 +71,7 @@ final class IdleEvictionTask {
         while (running.get()) {
             try {
                 // Sleep for scan interval
-                Thread.sleep(config.evictionScanInterval().toMillis());
+                Thread.sleep(config.evictionScanIntervalSeconds() * 1000);
 
                 // Evict idle patterns
                 int evicted = cache.evictIdlePatterns();

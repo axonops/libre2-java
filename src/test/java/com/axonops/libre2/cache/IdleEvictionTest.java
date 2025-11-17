@@ -92,7 +92,7 @@ class IdleEvictionTest {
     @Test
     void testCacheStatisticsTrackEvictions() {
         // Compile enough patterns to trigger LRU eviction
-        int maxSize = 1000; // Default
+        int maxSize = 50000; // Default
         for (int i = 0; i < maxSize + 10; i++) {
             Pattern.compile("pattern" + i);
         }

@@ -38,10 +38,10 @@ public final class PatternCache {
 
         if (config.cacheEnabled()) {
             // LinkedHashMap in access-order mode for LRU
-            this.cache = new LinkedHashMap<>(config.cacheMaxSize(), 0.75f, true) {
+            this.cache = new LinkedHashMap<>(config.maxCacheSize(), 0.75f, true) {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<CacheKey, CachedPattern> eldest) {
-                    if (size() > config.cacheMaxSize()) {
+                    if (size() > config.maxCacheSize()) {
                         logger.debug("RE2: LRU evicting pattern: {}", eldest.getKey());
                         eldest.getValue().forceClose(); // Force close even if from cache
                         evictionsLRU.incrementAndGet();
@@ -56,9 +56,9 @@ public final class PatternCache {
             this.evictionTask.start();
 
             logger.info("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s",
-                config.cacheMaxSize(),
-                config.idleTimeout().toSeconds(),
-                config.evictionScanInterval().toSeconds());
+                config.maxCacheSize(),
+                config.idleTimeoutSeconds(),
+                config.evictionScanIntervalSeconds());
         } else {
             this.cache = null;
             this.evictionTask = null;
@@ -115,7 +115,7 @@ public final class PatternCache {
             return 0;
         }
 
-        Instant cutoff = Instant.now().minus(config.idleTimeout());
+        Instant cutoff = Instant.now().minusSeconds(config.idleTimeoutSeconds());
         int evicted = 0;
 
         synchronized (cache) {
@@ -155,7 +155,7 @@ public final class PatternCache {
             evictionsLRU.get(),
             evictionsIdle.get(),
             currentSize,
-            config.cacheMaxSize()
+            config.maxCacheSize()
         );
     }
 

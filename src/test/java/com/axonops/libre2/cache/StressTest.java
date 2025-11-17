@@ -74,7 +74,7 @@ class StressTest {
 
         // Cache should be stable (not growing unbounded)
         CacheStatistics stats = Pattern.getCacheStatistics();
-        assertThat(stats.currentSize()).isLessThanOrEqualTo(1000);
+        assertThat(stats.currentSize()).isLessThanOrEqualTo(50000);
     }
 
     @Test
@@ -107,7 +107,7 @@ class StressTest {
 
         // Cache should handle burst, with evictions
         CacheStatistics stats = Pattern.getCacheStatistics();
-        assertThat(stats.currentSize()).isLessThanOrEqualTo(1000);
+        assertThat(stats.currentSize()).isLessThanOrEqualTo(50000);
         assertThat(stats.misses()).isEqualTo(1000);
     }
 
@@ -174,7 +174,7 @@ class StressTest {
 
         // 10,000 patterns compiled - cache should enforce size limit
         CacheStatistics stats = Pattern.getCacheStatistics();
-        assertThat(stats.currentSize()).isLessThanOrEqualTo(1000);
+        assertThat(stats.currentSize()).isLessThanOrEqualTo(50000);
         assertThat(stats.evictionsLRU()).isGreaterThanOrEqualTo(9000);
     }
 }

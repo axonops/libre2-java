@@ -271,8 +271,8 @@ class ConcurrencyTest {
             new Thread(() -> {
                 try {
                     start.await();
-                    // Each thread compiles multiple patterns
-                    for (int j = 0; j < 20; j++) {
+                    // Each thread compiles 600 patterns = 60K total > 50K cache
+                    for (int j = 0; j < 600; j++) {
                         Pattern p = Pattern.compile("thread" + threadId + "_pattern" + j);
                         assertThat(p).isNotNull();
                     }
@@ -291,7 +291,7 @@ class ConcurrencyTest {
 
         // Cache should be at or below max size (LRU evictions occurred)
         CacheStatistics stats = Pattern.getCacheStatistics();
-        assertThat(stats.currentSize()).isLessThanOrEqualTo(1000); // Default max
-        assertThat(stats.evictionsLRU()).isGreaterThan(0); // Some evictions happened
+        assertThat(stats.currentSize()).isLessThanOrEqualTo(50000); // Default max
+        assertThat(stats.evictionsLRU()).isGreaterThan(10000); // Some evictions happened
     }
 }

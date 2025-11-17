@@ -91,7 +91,7 @@ class CacheTest {
     @Test
     void testCacheSizeLimit() {
         // Compile more patterns than cache max size
-        int cacheSize = 1000;  // Default max size
+        int cacheSize = 50000;  // Default max size
         int patternsToCompile = cacheSize + 100;
 
         for (int i = 0; i < patternsToCompile; i++) {
@@ -148,13 +148,13 @@ class CacheTest {
         CacheStatistics stats = Pattern.getCacheStatistics();
         assertThat(stats.utilization()).isEqualTo(0.0);
 
-        // Add 100 patterns
-        for (int i = 0; i < 100; i++) {
+        // Add 5000 patterns
+        for (int i = 0; i < 5000; i++) {
             Pattern.compile("pattern" + i);
         }
 
         stats = Pattern.getCacheStatistics();
-        assertThat(stats.utilization()).isEqualTo(0.1); // 100/1000 = 10%
+        assertThat(stats.utilization()).isEqualTo(0.1); // 5000/50000 = 10%
     }
 
     @Test

@@ -47,7 +47,7 @@ class EvictionEdgeCasesTest {
     @Test
     @Timeout(value = 60, unit = TimeUnit.SECONDS)
     void testLRUEviction_MultipleEvictions() {
-        int cacheSize = 1000;
+        int cacheSize = 50000;
 
         // Add exactly cache size
         for (int i = 0; i < cacheSize; i++) {

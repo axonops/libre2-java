@@ -3,55 +3,89 @@ package com.axonops.libre2.cache;
 import java.time.Duration;
 
 /**
- * Configuration for RE2 pattern caching.
+ * Configuration for RE2 library including caching and resource limits.
  *
  * Immutable configuration using Java 17 records.
  *
  * @since 1.0.0
  */
 public record RE2Config(
-    int cacheMaxSize,
-    Duration idleTimeout,
-    Duration evictionScanInterval,
-    boolean cacheEnabled
+    boolean cacheEnabled,
+    int maxCacheSize,
+    long idleTimeoutSeconds,
+    long evictionScanIntervalSeconds,
+    int maxSimultaneousCompiledPatterns,
+    int maxMatchersPerPattern
 ) {
 
     /**
-     * Default configuration for production use.
+     * Default configuration for production Cassandra use.
+     *
+     * Defaults chosen for typical 128GB+ Cassandra clusters:
+     * - Cache: 50K patterns (~50-200MB, negligible in large clusters)
+     * - Idle timeout: 5 minutes (patterns auto-cleaned after inactivity)
+     * - Scan interval: 1 minute (balance cleanup speed vs CPU)
+     * - Simultaneous limit: 100K ACTIVE patterns (NOT cumulative - patterns can be freed/recompiled)
+     * - Matchers per pattern: 10K (prevents per-pattern exhaustion)
      */
     public static final RE2Config DEFAULT = new RE2Config(
-        1000,                          // Max 1000 patterns
-        Duration.ofSeconds(300),       // 5 minute idle timeout
-        Duration.ofSeconds(60),        // Scan every 60 seconds
-        true                           // Cache enabled
+        true,                          // Cache enabled
+        50000,                         // Max 50K cached patterns (~50-200MB)
+        300,                           // 5 minute idle timeout
+        60,                            // Scan every 60 seconds
+        100000,                        // Max 100K simultaneous active patterns
+        10000                          // Max 10K matchers per pattern
     );
 
     /**
      * Configuration with caching disabled.
+     * Users manage all pattern resources manually.
      */
     public static final RE2Config NO_CACHE = new RE2Config(
-        0,
-        Duration.ZERO,
-        Duration.ZERO,
-        false
+        false,                         // Cache disabled
+        0,                             // Ignored when cache disabled
+        0,                             // Ignored when cache disabled
+        0,                             // Ignored when cache disabled
+        100000,                        // Still enforce simultaneous limit
+        10000                          // Still enforce matcher limit
     );
 
     /**
      * Compact constructor with validation.
+     *
+     * CRITICAL: maxSimultaneousCompiledPatterns is SIMULTANEOUS/ACTIVE count, NOT cumulative.
      */
     public RE2Config {
+        // Always validate resource limits (even if cache disabled)
+        if (maxSimultaneousCompiledPatterns <= 0) {
+            throw new IllegalArgumentException("maxSimultaneousCompiledPatterns must be positive (this is SIMULTANEOUS active count, not cumulative)");
+        }
+        if (maxMatchersPerPattern <= 0) {
+            throw new IllegalArgumentException("maxMatchersPerPattern must be positive");
+        }
+
+        // Validate cache parameters only if cache enabled
         if (cacheEnabled) {
-            if (cacheMaxSize <= 0) {
-                throw new IllegalArgumentException("Cache max size must be positive");
+            if (maxCacheSize <= 0) {
+                throw new IllegalArgumentException("maxCacheSize must be positive when cache enabled");
             }
-            if (idleTimeout.isNegative() || idleTimeout.isZero()) {
-                throw new IllegalArgumentException("Idle timeout must be positive");
+            if (idleTimeoutSeconds <= 0) {
+                throw new IllegalArgumentException("idleTimeoutSeconds must be positive when cache enabled");
             }
-            if (evictionScanInterval.isNegative() || evictionScanInterval.isZero()) {
-                throw new IllegalArgumentException("Eviction scan interval must be positive");
+            if (evictionScanIntervalSeconds <= 0) {
+                throw new IllegalArgumentException("evictionScanIntervalSeconds must be positive when cache enabled");
             }
-            if (evictionScanInterval.compareTo(idleTimeout) > 0) {
-                throw new IllegalArgumentException("Scan interval should not exceed idle timeout");
+
+            // Warn if scan interval exceeds idle timeout (still valid, just suboptimal)
+            if (evictionScanIntervalSeconds > idleTimeoutSeconds) {
+                System.err.println("WARNING: evictionScanIntervalSeconds (" + evictionScanIntervalSeconds +
+                    "s) exceeds idleTimeoutSeconds (" + idleTimeoutSeconds + "s) - idle patterns may not be evicted promptly");
+            }
+
+            // Cache size must not exceed simultaneous limit
+            if (maxCacheSize > maxSimultaneousCompiledPatterns) {
+                throw new IllegalArgumentException("maxCacheSize (" + maxCacheSize +
+                    ") cannot exceed maxSimultaneousCompiledPatterns (" + maxSimultaneousCompiledPatterns + ")");
             }
         }
     }
@@ -64,33 +98,52 @@ public record RE2Config(
     }
 
     public static class Builder {
-        private int cacheMaxSize = 1000;
-        private Duration idleTimeout = Duration.ofSeconds(300);
-        private Duration evictionScanInterval = Duration.ofSeconds(60);
         private boolean cacheEnabled = true;
-
-        public Builder cacheMaxSize(int size) {
-            this.cacheMaxSize = size;
-            return this;
-        }
-
-        public Builder idleTimeout(Duration timeout) {
-            this.idleTimeout = timeout;
-            return this;
-        }
-
-        public Builder evictionScanInterval(Duration interval) {
-            this.evictionScanInterval = interval;
-            return this;
-        }
+        private int maxCacheSize = 50000;
+        private long idleTimeoutSeconds = 300;
+        private long evictionScanIntervalSeconds = 60;
+        private int maxSimultaneousCompiledPatterns = 100000;
+        private int maxMatchersPerPattern = 10000;
 
         public Builder cacheEnabled(boolean enabled) {
             this.cacheEnabled = enabled;
             return this;
         }
 
+        public Builder maxCacheSize(int size) {
+            this.maxCacheSize = size;
+            return this;
+        }
+
+        public Builder idleTimeoutSeconds(long seconds) {
+            this.idleTimeoutSeconds = seconds;
+            return this;
+        }
+
+        public Builder evictionScanIntervalSeconds(long seconds) {
+            this.evictionScanIntervalSeconds = seconds;
+            return this;
+        }
+
+        public Builder maxSimultaneousCompiledPatterns(int max) {
+            this.maxSimultaneousCompiledPatterns = max;
+            return this;
+        }
+
+        public Builder maxMatchersPerPattern(int max) {
+            this.maxMatchersPerPattern = max;
+            return this;
+        }
+
         public RE2Config build() {
-            return new RE2Config(cacheMaxSize, idleTimeout, evictionScanInterval, cacheEnabled);
+            return new RE2Config(
+                cacheEnabled,
+                maxCacheSize,
+                idleTimeoutSeconds,
+                evictionScanIntervalSeconds,
+                maxSimultaneousCompiledPatterns,
+                maxMatchersPerPattern
+            );
         }
     }
 }

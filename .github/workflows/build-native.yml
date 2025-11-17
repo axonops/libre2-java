@@ -198,22 +198,21 @@ jobs:
           # Add libraries
           git add -f src/main/resources/native/*/libre2.*
 
-          # Commit
-          git commit -m "Add compiled native libraries for all platforms
+          # Commit with heredoc
+          git commit -m "$(cat <<'EOF'
+          Add compiled native libraries for all platforms
 
-Built from:
-- RE2 version: 2025-11-05
-- Abseil version: 20250814.1
-- Build date: $(date -u +%Y-%m-%d)
+          Built from RE2 2025-11-05 and Abseil 20250814.1
 
-Libraries:
-- darwin-x86_64/libre2.dylib (macOS Intel)
-- darwin-aarch64/libre2.dylib (macOS Apple Silicon)
-- linux-x86_64/libre2.so (Linux x86_64)
-- linux-aarch64/libre2.so (Linux ARM64)
+          Libraries:
+          - darwin-x86_64/libre2.dylib (macOS Intel)
+          - darwin-aarch64/libre2.dylib (macOS Apple Silicon)
+          - linux-x86_64/libre2.so (Linux x86_64)
+          - linux-aarch64/libre2.so (Linux ARM64)
 
-All libraries are self-contained with only system dependencies.
-Built via GitHub Actions workflow."
+          All libraries are self-contained with only system dependencies.
+          EOF
+          )"
 
           # Push branch
           git push origin "$BRANCH_NAME"

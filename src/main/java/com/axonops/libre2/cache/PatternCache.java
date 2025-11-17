@@ -77,7 +77,13 @@ public final class PatternCache {
             this.evictionTask = new IdleEvictionTask(this, config);
             this.evictionTask.start();
 
-            logger.info("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s",
+            // Register shutdown hook for graceful cleanup
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                logger.info("RE2: Shutdown hook triggered - cleaning up cache");
+                shutdown();
+            }, "RE2-Shutdown"));
+
+            logger.info("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s, deferredCleanup: every 5s",
                 config.maxCacheSize(),
                 config.idleTimeoutSeconds(),
                 config.evictionScanIntervalSeconds());
@@ -186,9 +192,11 @@ public final class PatternCache {
     /**
      * Cleans up deferred patterns that are no longer in use.
      *
+     * Called frequently by background thread (every 5s) to minimize memory retention.
+     *
      * @return number of patterns cleaned
      */
-    private int cleanupDeferredPatterns() {
+    int cleanupDeferredPatterns() {
         int cleaned = 0;
 
         // CopyOnWriteArrayList allows safe iteration + modification

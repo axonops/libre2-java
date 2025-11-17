@@ -64,19 +64,37 @@ final class IdleEvictionTask {
 
     /**
      * Main eviction loop.
+     *
+     * Wakes frequently (every 5s) to cleanup deferred patterns.
+     * Runs idle eviction less frequently (every 60s by default).
      */
     private void run() {
         logger.debug("RE2: Idle eviction thread running");
 
+        long lastIdleScan = System.currentTimeMillis();
+        long idleScanIntervalMs = config.evictionScanIntervalSeconds() * 1000;
+        long deferredCleanupIntervalMs = 5000; // Wake every 5 seconds for deferred cleanup
+
         while (running.get()) {
             try {
-                // Sleep for scan interval
-                Thread.sleep(config.evictionScanIntervalSeconds() * 1000);
+                // Sleep for deferred cleanup interval (5 seconds)
+                Thread.sleep(deferredCleanupIntervalMs);
 
-                // Evict idle patterns
-                int evicted = cache.evictIdlePatterns();
+                long now = System.currentTimeMillis();
 
-                logger.debug("RE2: Idle eviction scan complete - evicted: {}", evicted);
+                // Check if time for idle eviction scan
+                if (now - lastIdleScan >= idleScanIntervalMs) {
+                    // Full scan: idle eviction + deferred cleanup
+                    int evicted = cache.evictIdlePatterns();
+                    logger.debug("RE2: Idle eviction scan complete - evicted: {}", evicted);
+                    lastIdleScan = now;
+                } else {
+                    // Quick scan: just deferred cleanup
+                    int cleaned = cache.cleanupDeferredPatterns();
+                    if (cleaned > 0) {
+                        logger.debug("RE2: Deferred cleanup - freed {} patterns", cleaned);
+                    }
+                }
 
             } catch (InterruptedException e) {
                 logger.debug("RE2: Idle eviction thread interrupted");

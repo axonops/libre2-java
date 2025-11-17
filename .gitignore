@@ -25,7 +25,11 @@ build/
 
 # ===== NATIVE LIBRARY COMPILATION =====
 
-# Don't commit compiled native libraries
+# EXCEPT: Allow compiled libraries in resources (these go in the JAR)
+!src/main/resources/native/**/libre2.so
+!src/main/resources/native/**/libre2.dylib
+
+# Don't commit compiled native libraries (build artifacts)
 *.so
 *.dylib
 *.dll

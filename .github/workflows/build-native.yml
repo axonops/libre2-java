@@ -1,0 +1,175 @@
+name: Build Native Libraries
+
+# What this workflow does:
+# 1. Builds the RE2 wrapper library for 4 platforms:
+#    - macOS x86_64 (Intel Macs)
+#    - macOS aarch64 (Apple Silicon)
+#    - Linux x86_64 (Intel/AMD servers)
+#    - Linux aarch64 (ARM servers)
+#
+# 2. Each platform gets a separate job that:
+#    - Checks out the code
+#    - Runs our build.sh script (which downloads RE2, compiles it, compiles wrapper)
+#    - Uploads the resulting .dylib/.so file as an artifact
+#
+# 3. Artifacts can be downloaded from the GitHub Actions UI and placed in:
+#    src/main/resources/native/{platform}/
+
+on:
+  # Trigger this workflow manually from GitHub UI
+  workflow_dispatch:
+
+  # Or trigger on pushes to native/** (when we change wrapper code)
+  push:
+    paths:
+      - 'native/**'
+      - '.github/workflows/build-native.yml'
+
+jobs:
+  # ============================================================================
+  # macOS Builds (native runners, no Docker needed)
+  # ============================================================================
+
+  build-macos-x86_64:
+    name: Build macOS x86_64
+    runs-on: macos-13  # Intel Mac runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          # CMake should already be installed on GitHub macOS runners
+          # but let's verify
+          cmake --version
+
+      - name: Build RE2 wrapper
+        run: |
+          cd native
+          ./scripts/build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libre2-macos-x86_64
+          path: native/build/libre2.dylib
+          retention-days: 30
+
+  build-macos-aarch64:
+    name: Build macOS aarch64 (Apple Silicon)
+    runs-on: macos-14  # M1/M2 Mac runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          cmake --version
+
+      - name: Build RE2 wrapper
+        run: |
+          cd native
+          ./scripts/build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libre2-macos-aarch64
+          path: native/build/libre2.dylib
+          retention-days: 30
+
+  # ============================================================================
+  # Linux Builds (using Docker for clean, reproducible builds)
+  # ============================================================================
+
+  build-linux-x86_64:
+    name: Build Linux x86_64
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build in Docker container
+        run: |
+          cd native
+
+          # Build the Docker image with our build environment
+          docker build -t re2-builder .
+
+          # Run the container to compile RE2 + wrapper
+          # Mount current directory so we can extract the .so file
+          docker run --rm \
+            -v "$(pwd):/output" \
+            re2-builder \
+            sh -c "./build.sh && cp build/libre2.so /output/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libre2-linux-x86_64
+          path: native/libre2.so
+          retention-days: 30
+
+  build-linux-aarch64:
+    name: Build Linux aarch64 (ARM64)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build in Docker container (ARM64 via QEMU)
+        run: |
+          cd native
+
+          # Build Docker image for ARM64 platform
+          docker buildx build --platform linux/arm64 -t re2-builder-arm64 --load .
+
+          # Run ARM64 container (QEMU will emulate if not native ARM)
+          docker run --rm --platform linux/arm64 \
+            -v "$(pwd):/output" \
+            re2-builder-arm64 \
+            sh -c "./build.sh && cp build/libre2.so /output/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libre2-linux-aarch64
+          path: native/libre2.so
+          retention-days: 30
+
+  # ============================================================================
+  # Summary job - just lists what was built
+  # ============================================================================
+
+  summary:
+    name: Build Summary
+    needs: [build-macos-x86_64, build-macos-aarch64, build-linux-x86_64, build-linux-aarch64]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Summary
+        run: |
+          echo "✅ All native libraries built successfully!"
+          echo ""
+          echo "Artifacts available:"
+          echo "  - libre2-macos-x86_64 (darwin-x86_64/libre2.dylib)"
+          echo "  - libre2-macos-aarch64 (darwin-aarch64/libre2.dylib)"
+          echo "  - libre2-linux-x86_64 (linux-x86_64/libre2.so)"
+          echo "  - libre2-linux-aarch64 (linux-aarch64/libre2.so)"
+          echo ""
+          echo "Download artifacts and place in src/main/resources/native/{platform}/"

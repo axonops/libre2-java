@@ -4,6 +4,40 @@ This directory contains the native RE2 wrapper library build infrastructure.
 
 **IMPORTANT:** Native libraries are built ONLY via GitHub Actions CI/CD. Java developers never need to compile C++ code locally.
 
+## What Gets Built
+
+### RE2 - Google's Regular Expression Library
+- **Project:** https://github.com/google/re2
+- **Version:** 2025-11-05 (latest release)
+- **License:** BSD-3-Clause
+- **What it is:** A fast, safe, thread-friendly regular expression engine
+- **Why we use it:**
+  - Linear time complexity (no catastrophic backtracking)
+  - ReDoS safe (prevents regex denial-of-service attacks)
+  - Production-grade (used by Google internally)
+  - Much safer than Java's built-in regex for untrusted patterns
+
+### Abseil - Google's C++ Common Libraries
+- **Project:** https://github.com/abseil/abseil-cpp
+- **Version:** 20250814.1 (LTS release)
+- **License:** Apache License 2.0
+- **What it is:** Google's core C++ libraries (containers, algorithms, utilities)
+- **Why we need it:** RE2 depends on Abseil for core functionality
+- **Note:** Statically linked, not exposed in our API
+
+### Our Wrapper (re2_wrapper.cpp)
+- **Purpose:** Provides a pure C API that JNA can call from Java
+- **Functions:** 8 C functions matching our JNA interface
+- **Size:** ~150 lines of C++ code wrapping RE2's C++ API
+
+## Build Output
+
+All three components are compiled and linked into a single shared library:
+- **macOS:** `libre2.dylib` (~875 KB)
+- **Linux:** `libre2.so` (~2.7 MB)
+- **Contains:** RE2 + Abseil + our wrapper (all statically linked)
+- **Dependencies:** Only system libraries (libc, libm, CoreFoundation on macOS)
+
 ## Overview
 
 The automated build system:

@@ -35,3 +35,15 @@
 - **Resolution:** Removed --depth flag to clone full history
 - **Date Discovered:** 2025-11-17
 - **Date Resolved:** 2025-11-17
+
+## Issue 5: Linux Libraries Had Undefined Abseil Symbols (RESOLVED)
+- **Status:** RESOLVED
+- **Severity:** Critical (runtime failures on Linux x86_64)
+- **Description:** Linux x86_64 library had undefined symbols for Abseil (CycleClock, etc.)
+- **Impact:** JNA failed to load library with "undefined symbol" errors
+- **Root Cause:** g++ linker was excluding Abseil .a files it thought were unused
+- **Resolution:** Added --whole-archive flag to force inclusion of all Abseil symbols
+- **Build Script Change:** `-Wl,--whole-archive abseil-build/absl/*/*.a -Wl,--no-whole-archive`
+- **Verification:** Will be confirmed when new libraries pass tests on all platforms
+- **Date Discovered:** 2025-11-17
+- **Date Resolved:** 2025-11-17

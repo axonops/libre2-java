@@ -189,12 +189,12 @@ if [ "$OS" = "darwin" ]; then
 
     OUTPUT="libre2.dylib"
 else
-    # Linux
+    # Linux - use --whole-archive to ensure ALL Abseil symbols are included
     g++ -std=c++17 -O3 -fPIC -shared \
         -o libre2.so \
         "$WRAPPER_SRC" \
         re2-build/libre2.a \
-        abseil-build/absl/*/*.a \
+        -Wl,--whole-archive abseil-build/absl/*/*.a -Wl,--no-whole-archive \
         -Ire2 \
         -Iabseil-cpp \
         -Wl,--gc-sections \

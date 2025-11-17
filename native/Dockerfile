@@ -20,13 +20,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install build dependencies
 # - build-essential: g++, make, etc
 # - cmake: for building RE2 and Abseil
-# - curl: for downloading source tarballs
-# - git: in case we need to clone repos
+# - curl: for API calls and downloads
+# - git: for cloning RE2 and Abseil repos
+# - jq: for JSON parsing (signature verification)
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     curl \
     git \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory where builds will happen

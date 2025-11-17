@@ -41,9 +41,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # CMake should already be installed on GitHub macOS runners
-          # but let's verify
+          # Install jq for JSON parsing (signature verification)
+          brew install jq
+
+          # Verify cmake is available
           cmake --version
+          jq --version
 
       - name: Build RE2 wrapper
         env:
@@ -97,7 +100,12 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Install jq for JSON parsing (signature verification)
+          brew install jq
+
+          # Verify tools are available
           cmake --version
+          jq --version
 
       - name: Build RE2 wrapper
         env:

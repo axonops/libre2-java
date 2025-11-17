@@ -4,7 +4,7 @@
 
 **Date:** 2025-11-17
 **Phase:** Pattern Caching with Dual Eviction
-**Tests:** 17/17 passing (12 cache + 5 idle eviction)
+**Tests:** 49/49 passing (comprehensive concurrency coverage)
 
 ---
 
@@ -86,6 +86,50 @@
 - Eviction thread starts automatically
 - LRU vs idle evictions counted separately
 - Statistics track evictions correctly
+
+### ✅ ConcurrencyTest.java (7/7 passing)
+- 100 threads compile different patterns simultaneously
+- 100 threads compile same pattern (all get same instance)
+- Repeating patterns across threads (high hit rate)
+- 100 threads matching on same pattern
+- 100 threads with different patterns
+- Concurrent cache hits and misses
+- Concurrent cache and eviction (1500 patterns across threads)
+
+### ✅ EvictionWhileInUseTest.java (6/6 passing) **CRITICAL**
+- Reference count increments/decrements correctly
+- Pattern not freed while matcher active
+- Multiple matchers prevent eviction
+- 100 concurrent matchers on same pattern
+- Eviction deferred when in use
+- Pattern recompiled while old version in use
+
+### ✅ ConcurrentCleanupTest.java (4/4 passing)
+- 100 threads close patterns simultaneously
+- Close() race condition (idempotent)
+- LRU eviction with concurrent use (50 threads)
+- Concurrent forceClose (100 threads)
+
+### ✅ StressTest.java (4/4 passing)
+- Sustained load: 100 threads × 1000 operations
+- Burst: 1000 threads compile simultaneously
+- Memory pressure: Large complex patterns
+- Memory pressure: 10,000 small patterns
+
+### ✅ EvictionEdgeCasesTest.java (6/6 passing)
+- LRU last access time updates
+- Multiple evictions (1000+ patterns)
+- Eviction with active matchers (refCount prevents)
+- Cache clear with active matchers
+- Deterministic eviction order
+- Case sensitivity in eviction keys
+
+### ✅ ThreadSafetyTest.java (5/5 passing)
+- 100 threads concurrent cache map access
+- 100 threads concurrent metrics updates (no lost increments)
+- 100 threads concurrent refCount updates
+- No ConcurrentModificationException under load
+- No deadlocks (verified with 30s timeout)
 
 ---
 

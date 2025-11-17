@@ -62,10 +62,21 @@ if [ ! -d "re2" ]; then
     cd re2
     git checkout "$RE2_COMMIT"
 
-    # Optional: Verify commit signature (requires GPG keys)
-    # git verify-commit "$RE2_COMMIT" || echo "Warning: Could not verify RE2 commit signature"
-
     echo "RE2 commit: $(git log -1 --oneline)"
+
+    # SECURITY: Verify commit signature via GitHub API
+    echo "Verifying RE2 commit signature..."
+    VERIFIED=$(curl -s "https://api.github.com/repos/google/re2/commits/$RE2_COMMIT" | \
+               grep -o '"verified":[^,]*' | head -1 | cut -d: -f2)
+
+    if [ "$VERIFIED" = "true" ]; then
+        echo "✓ RE2 commit signature verified by GitHub"
+    else
+        echo "✗ ERROR: RE2 commit signature NOT verified"
+        echo "This commit may not be from a trusted Google engineer"
+        exit 1
+    fi
+
     cd ..
 fi
 
@@ -76,10 +87,21 @@ if [ ! -d "abseil-cpp" ]; then
     cd abseil-cpp
     git checkout "$ABSEIL_COMMIT"
 
-    # Optional: Verify commit signature
-    # git verify-commit "$ABSEIL_COMMIT" || echo "Warning: Could not verify Abseil commit signature"
-
     echo "Abseil commit: $(git log -1 --oneline)"
+
+    # SECURITY: Verify commit signature via GitHub API
+    echo "Verifying Abseil commit signature..."
+    VERIFIED=$(curl -s "https://api.github.com/repos/abseil/abseil-cpp/commits/$ABSEIL_COMMIT" | \
+               grep -o '"verified":[^,]*' | head -1 | cut -d: -f2)
+
+    if [ "$VERIFIED" = "true" ]; then
+        echo "✓ Abseil commit signature verified by GitHub"
+    else
+        echo "✗ ERROR: Abseil commit signature NOT verified"
+        echo "This commit may not be from a trusted Google engineer"
+        exit 1
+    fi
+
     cd ..
 fi
 

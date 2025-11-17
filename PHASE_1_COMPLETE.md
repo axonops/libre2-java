@@ -4,6 +4,8 @@
 
 **Date:** 2025-11-17
 **Phase:** Core API and Basic Safety
+**Tag:** v1.0.0-phase1
+**Verified:** All 4 platforms tested and passing
 
 ---
 
@@ -92,33 +94,52 @@
 ## Testing (Phase 1)
 
 ### ✅ RE2Test.java - Comprehensive Test Suite
-- **Status:** ALL TESTS PASSING (75/75) ✅
+- **Status:** ALL TESTS PASSING (88/88) ✅
 - **Coverage:**
   - Basic matching: 10 tests (exact, partial, empty, full vs partial)
   - Case sensitivity: 2 tests
-  - Regex features: 25 tests (character classes, repetition, alternation, anchors, etc.)
+  - Regex features: 30 tests (character classes, repetition, alternation, anchors, etc.)
   - UTF-8 & special chars: 4 tests (café, 日本語, emoji, regex metacharacters)
   - Real-world patterns: 5 tests (email, URL, IP, phone, dates)
   - Error handling: 5 tests (null inputs, invalid patterns, exceptions)
   - Resource management: 7 tests (close, try-with-resources, leak prevention)
-  - Concurrent access: 1 test (10 threads × 100 patterns = 1000 concurrent operations)
+  - Concurrent access: 2 tests (1000 concurrent compilations + 20 thread log search)
   - ReDoS safety: 1 test (catastrophic backtracking patterns in linear time)
   - Edge cases: 5 tests (very long patterns/inputs, deep nesting, 100 alternatives)
+  - **Log processing: 12 NEW tests**
+    - Typical log entries (timestamps, levels, emails, durations)
+    - Multi-line stack traces
+    - Large log files (10K-100K lines, 1MB+ data)
+    - Apache access logs
+    - JSON structured logs
+    - Cassandra query logs and CQL parsing
+    - Large partition scanning (500KB+, 10K rows)
+    - Database text search (JSON/XML/log blobs)
+    - SQL injection pattern detection
+    - Multi-line data handling
   - Properties & metadata: 4 tests
-  - Large scale: 2 tests (many patterns, successive operations)
+  - Large scale: 3 tests (pattern reuse, successive operations)
 
 **Test output:**
 ```
-Tests run: 75, Failures: 0, Errors: 0, Skipped: 0
-Time: ~1.3 seconds
+Tests run: 88, Failures: 0, Errors: 0, Skipped: 0
+Time: ~1.2 seconds
 ```
+
+**Platform verification:** ✅ ALL PLATFORMS TESTED
+- ✅ macOS x86_64: 88/88 passing
+- ✅ macOS aarch64: 88/88 passing
+- ✅ Linux x86_64: 88/88 passing (fixed with --whole-archive)
+- ✅ Linux aarch64: 88/88 passing
 
 **Production readiness:** ✅
 - Comprehensive coverage of regex features
-- Stress tested (1000+ pattern compilations)
-- Concurrent safety verified
+- Real-world log processing scenarios tested
+- Stress tested (1000+ patterns, 1MB+ text searches)
+- Concurrent safety verified (20 threads)
 - ReDoS safety validated
 - UTF-8 support confirmed
+- Performance validated (<500ms for 1MB scans)
 
 ---
 

@@ -60,8 +60,43 @@
 
 ### Decision: JNA Dependency Scope
 - **What:** Should JNA be "provided" or "compile" scope
-- **Chosen:** compile
-- **Rationale:** Needed for compilation and testing, Cassandra also provides it (no conflict)
-- **Impact:** JNA available at compile time
+- **Chosen:** provided
+- **Rationale:** Users (Cassandra) provide JNA, we just need it for compilation/tests
+- **Impact:** JNA not included in JAR, users must provide
 - **Date:** 2025-11-17
 - **Status:** Implemented
+
+## Phase 2: Pattern Caching
+
+### Decision: Cache Size Default
+- **What:** Default maxCacheSize value
+- **Options:** 1000, 10000, 50000, 100000
+- **Chosen:** 50000
+- **Rationale:** Production Cassandra clusters (128GB+), 50K patterns = ~50-200MB (negligible)
+- **Impact:** Better hit rates for diverse workloads, minimal memory overhead
+- **Date:** 2025-11-17
+- **Status:** Implemented
+
+### Decision: maxSimultaneousCompiledPatterns is ACTIVE not Cumulative
+- **What:** Does limit apply to total compilations or active patterns?
+- **Chosen:** ACTIVE/SIMULTANEOUS count only
+- **Rationale:**
+  - Allows unlimited compilations over library lifetime
+  - Patterns can be freed and recompiled
+  - Prevents only SIMULTANEOUS accumulation
+  - Critical for long-running Cassandra instances
+- **Impact:** After 1 month, 10M queries OK if only 100K simultaneous
+- **Date:** 2025-11-17
+- **Status:** Implemented (enforcement pending)
+
+### Decision: Reference Counting for Use-After-Free Prevention
+- **What:** How to prevent patterns freed while matchers active?
+- **Chosen:** Reference counting (AtomicInteger refCount)
+- **Rationale:**
+  - Matcher increments refCount on creation
+  - Matcher decrements on close
+  - forceClose() only frees if refCount == 0
+  - Industry standard (Java GC, smart pointers, etc.)
+- **Impact:** Prevents catastrophic use-after-free under concurrent load
+- **Date:** 2025-11-17
+- **Status:** Implemented and tested

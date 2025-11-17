@@ -4,6 +4,7 @@ import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.cache.RE2Config;
 import com.axonops.libre2.jni.RE2LibraryLoader;
 import com.axonops.libre2.jni.RE2Native;
+import com.axonops.libre2.util.ResourceTracker;
 import com.sun.jna.Pointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,7 @@ public final class Pattern implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final boolean fromCache;
     private final java.util.concurrent.atomic.AtomicInteger refCount = new java.util.concurrent.atomic.AtomicInteger(0);
+    private static final int maxMatchersPerPattern = RE2Config.DEFAULT.maxMatchersPerPattern();
 
     Pattern(String patternString, boolean caseSensitive, Pointer nativePattern) {
         this(patternString, caseSensitive, nativePattern, false);
@@ -95,20 +97,34 @@ public final class Pattern implements AutoCloseable {
      * Actual compilation logic.
      */
     private static Pattern doCompile(String pattern, boolean caseSensitive, boolean fromCache) {
-        RE2Native lib = RE2LibraryLoader.loadLibrary();
-        byte[] bytes = pattern.getBytes(StandardCharsets.UTF_8);
+        // Track allocation and enforce maxSimultaneousCompiledPatterns limit
+        // This is ACTIVE count, not cumulative - patterns can be freed and recompiled
+        ResourceTracker.trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns());
 
-        Pointer ptr = lib.re2_compile(pattern, bytes.length, caseSensitive ? 1 : 0);
+        try {
+            RE2Native lib = RE2LibraryLoader.loadLibrary();
+            byte[] bytes = pattern.getBytes(StandardCharsets.UTF_8);
 
-        if (ptr == null || lib.re2_pattern_ok(ptr) != 1) {
-            String error = lib.re2_get_error();
-            if (ptr != null) {
-                lib.re2_free_pattern(ptr);
+            Pointer ptr = lib.re2_compile(pattern, bytes.length, caseSensitive ? 1 : 0);
+
+            if (ptr == null || lib.re2_pattern_ok(ptr) != 1) {
+                String error = lib.re2_get_error();
+                if (ptr != null) {
+                    lib.re2_free_pattern(ptr);
+                }
+                // Compilation failed - decrement count
+                ResourceTracker.trackPatternFreed();
+                throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
             }
-            throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
-        }
 
-        return new Pattern(pattern, caseSensitive, ptr, fromCache);
+            return new Pattern(pattern, caseSensitive, ptr, fromCache);
+        } catch (Exception e) {
+            // If any exception, decrement count (unless it was ResourceException from limit)
+            if (!(e instanceof ResourceException)) {
+                ResourceTracker.trackPatternFreed();
+            }
+            throw e;
+        }
     }
 
     public Matcher matcher(String input) {
@@ -137,9 +153,18 @@ public final class Pattern implements AutoCloseable {
 
     /**
      * Increments reference count (called by Matcher constructor).
+     *
+     * @throws ResourceException if maxMatchersPerPattern exceeded
      */
     void incrementRefCount() {
-        refCount.incrementAndGet();
+        int current = refCount.incrementAndGet();
+
+        if (current > maxMatchersPerPattern) {
+            refCount.decrementAndGet(); // Roll back
+            throw new ResourceException(
+                "Maximum matchers per pattern exceeded: " + maxMatchersPerPattern +
+                " (current matchers on this pattern: " + current + ")");
+        }
     }
 
     /**
@@ -194,6 +219,9 @@ public final class Pattern implements AutoCloseable {
             logger.debug("RE2: Force closing pattern");
             RE2Native lib = RE2LibraryLoader.loadLibrary();
             lib.re2_free_pattern(nativePattern);
+
+            // Track that pattern was freed (decrements active count)
+            ResourceTracker.trackPatternFreed();
         }
     }
 

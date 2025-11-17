@@ -24,6 +24,10 @@ public final class PatternCache {
     private static final Logger logger = LoggerFactory.getLogger(PatternCache.class);
 
     private final RE2Config config;
+
+    public RE2Config getConfig() {
+        return config;
+    }
     private final Map<CacheKey, CachedPattern> cache;
     private final IdleEvictionTask evictionTask;
 

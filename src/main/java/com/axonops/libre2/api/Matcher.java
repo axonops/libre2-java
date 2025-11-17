@@ -6,6 +6,7 @@ import com.axonops.libre2.jni.RE2Native;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Performs regex matching operations.

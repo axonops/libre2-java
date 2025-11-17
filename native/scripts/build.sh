@@ -66,15 +66,32 @@ if [ ! -d "re2" ]; then
 
     # SECURITY: Verify commit signature via GitHub API
     echo "Verifying RE2 commit signature..."
-    VERIFIED=$(curl -s "https://api.github.com/repos/google/re2/commits/$RE2_COMMIT" | \
-               jq -r '.commit.verification.verified // empty')
+
+    # Debug: Check jq is available
+    if ! command -v jq &> /dev/null; then
+        echo "✗ ERROR: jq is not installed"
+        exit 1
+    fi
+
+    # Fetch commit info from GitHub API
+    API_URL="https://api.github.com/repos/google/re2/commits/$RE2_COMMIT"
+    echo "  Calling: $API_URL"
+
+    API_JSON=$(curl -s "$API_URL")
+
+    # Debug: Show what we got
+    echo "  API response length: ${#API_JSON} bytes"
+
+    # Extract verification status
+    VERIFIED=$(echo "$API_JSON" | jq -r '.commit.verification.verified // empty')
+
+    echo "  Verification status: '$VERIFIED'"
 
     if [ "$VERIFIED" = "true" ]; then
         echo "✓ RE2 commit signature verified by GitHub"
     else
-        echo "✗ ERROR: RE2 commit signature NOT verified (got: '$VERIFIED')"
-        echo "This commit may not be from a trusted Google engineer"
-        echo "Ensure the commit is signed and jq is installed"
+        echo "✗ ERROR: RE2 commit signature NOT verified"
+        echo "  This commit may not be from a trusted Google engineer"
         exit 1
     fi
 
@@ -92,15 +109,21 @@ if [ ! -d "abseil-cpp" ]; then
 
     # SECURITY: Verify commit signature via GitHub API
     echo "Verifying Abseil commit signature..."
-    VERIFIED=$(curl -s "https://api.github.com/repos/abseil/abseil-cpp/commits/$ABSEIL_COMMIT" | \
-               jq -r '.commit.verification.verified // empty')
+
+    API_URL="https://api.github.com/repos/abseil/abseil-cpp/commits/$ABSEIL_COMMIT"
+    echo "  Calling: $API_URL"
+
+    API_JSON=$(curl -s "$API_URL")
+    echo "  API response length: ${#API_JSON} bytes"
+
+    VERIFIED=$(echo "$API_JSON" | jq -r '.commit.verification.verified // empty')
+    echo "  Verification status: '$VERIFIED'"
 
     if [ "$VERIFIED" = "true" ]; then
         echo "✓ Abseil commit signature verified by GitHub"
     else
-        echo "✗ ERROR: Abseil commit signature NOT verified (got: '$VERIFIED')"
-        echo "This commit may not be from a trusted Google engineer"
-        echo "Ensure the commit is signed and jq is installed"
+        echo "✗ ERROR: Abseil commit signature NOT verified"
+        echo "  This commit may not be from a trusted Google engineer"
         exit 1
     fi
 

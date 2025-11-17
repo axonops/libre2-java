@@ -9,18 +9,27 @@ set -e
 #
 # Detects container runtime (podman or docker) for Linux builds
 
-# SECURITY: Pin exact git commits for immutable builds
-# These commits are cryptographically verified and immutable
-RE2_COMMIT="927f5d53caf8111721e734cf24724686bb745f55"       # RE2 release 2025-11-05 (signed by Russ Cox)
-ABSEIL_COMMIT="d38452e1ee03523a208362186fd42248ff2609f6"   # Abseil LTS 20250814.1 (Patch 1)
+# SECURITY: Commit hashes are provided via GitHub Environment Variables
+# These are stored in the 'native-builds' protected environment
+# and can only be modified by repository admins.
+#
+# If running locally for testing, set these manually:
+# export RE2_COMMIT="927f5d53caf8111721e734cf24724686bb745f55"
+# export ABSEIL_COMMIT="d38452e1ee03523a208362186fd42248ff2609f6"
 
-# Version tags (for reference only, not used in build)
-RE2_VERSION="2025-11-05"
-ABSEIL_VERSION="20250814.1"
+if [ -z "$RE2_COMMIT" ] || [ -z "$ABSEIL_COMMIT" ]; then
+    echo "ERROR: RE2_COMMIT and ABSEIL_COMMIT must be set as environment variables"
+    echo "These should be provided by the GitHub Actions 'native-builds' environment"
+    echo ""
+    echo "For local testing, set them manually:"
+    echo "  export RE2_COMMIT=927f5d53caf8111721e734cf24724686bb745f55"
+    echo "  export ABSEIL_COMMIT=d38452e1ee03523a208362186fd42248ff2609f6"
+    exit 1
+fi
 
-echo "Building with pinned commits:"
-echo "  RE2:    $RE2_COMMIT (release $RE2_VERSION)"
-echo "  Abseil: $ABSEIL_COMMIT (release $ABSEIL_VERSION)"
+echo "Building with pinned commits (from environment):"
+echo "  RE2:    $RE2_COMMIT"
+echo "  Abseil: $ABSEIL_COMMIT"
 
 # Detect platform
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')

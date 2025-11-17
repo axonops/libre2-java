@@ -33,6 +33,7 @@ jobs:
   build-macos-x86_64:
     name: Build macOS x86_64
     runs-on: macos-15-intel  # Intel Mac runner (updated from deprecated macos-13)
+    environment: native-builds  # Use protected environment for commit hashes
 
     steps:
       - name: Checkout code
@@ -45,6 +46,9 @@ jobs:
           cmake --version
 
       - name: Build RE2 wrapper
+        env:
+          RE2_COMMIT: ${{ vars.RE2_COMMIT }}
+          ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
         run: |
           cd native
           ./scripts/build.sh
@@ -83,6 +87,7 @@ jobs:
   build-macos-aarch64:
     name: Build macOS aarch64 (Apple Silicon)
     runs-on: macos-latest  # M1/M2/M3 Mac runner
+    environment: native-builds  # Use protected environment for commit hashes
 
     steps:
       - name: Checkout code
@@ -93,6 +98,9 @@ jobs:
           cmake --version
 
       - name: Build RE2 wrapper
+        env:
+          RE2_COMMIT: ${{ vars.RE2_COMMIT }}
+          ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
         run: |
           cd native
           ./scripts/build.sh
@@ -135,6 +143,7 @@ jobs:
   build-linux-x86_64:
     name: Build Linux x86_64
     runs-on: ubuntu-latest
+    environment: native-builds  # Use protected environment for commit hashes
 
     steps:
       - name: Checkout code
@@ -191,6 +200,7 @@ jobs:
   build-linux-aarch64:
     name: Build Linux aarch64 (ARM64)
     runs-on: ubuntu-latest
+    environment: native-builds  # Use protected environment for commit hashes
 
     steps:
       - name: Checkout code

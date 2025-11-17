@@ -65,10 +65,16 @@ Our library bundles three components into a single self-contained shared library
 
 ### Current Pins
 
-```bash
-RE2:    927f5d53caf8111721e734cf24724686bb745f55  # Release 2025-11-05
-Abseil: d38452e1ee03523a208362186fd42248ff2609f6  # LTS 20250814.1
-```
+Commit hashes are stored as **GitHub Environment Variables** in the `native-builds` environment:
+
+- `RE2_COMMIT`: `927f5d53caf8111721e734cf24724686bb745f55` (Release 2025-11-05)
+- `ABSEIL_COMMIT`: `d38452e1ee03523a208362186fd42248ff2609f6` (LTS 20250814.1)
+
+**Why environment variables:**
+- Cannot be changed by editing code files
+- Require repository admin access to modify
+- Can be protected with approval requirements
+- Audit trail of who changed what
 
 ### Why This Matters for Production Use
 
@@ -105,13 +111,13 @@ This library is designed for production environments (databases, web services, s
    - Or in the URL after clicking the commit count
    - Full hash is 40 characters (use the full hash, not abbreviated)
 
-4. Update in `scripts/build.sh`:
-   ```bash
-   RE2_COMMIT="new_full_40_char_commit_hash_here"
-   RE2_VERSION="2025-XX-XX"  # for reference
-   ```
+4. Update GitHub Environment Variables:
+   - Go to: https://github.com/axonops/libre2-java/settings/environments
+   - Click on `native-builds` environment
+   - Update `RE2_COMMIT` and/or `ABSEIL_COMMIT` with new commit hash
+   - Requires repository admin access
 
-5. Test and rebuild (see below)
+5. Rebuild via GitHub Actions (see below)
 
 ---
 

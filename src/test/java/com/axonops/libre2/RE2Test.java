@@ -307,7 +307,8 @@ class RE2Test {
 
     @Test
     void testPatternClose() {
-        Pattern p = RE2.compile("test");
+        // Use compileWithoutCache() to test actual closing
+        Pattern p = Pattern.compileWithoutCache("test", true);
         assertThat(p.isClosed()).isFalse();
 
         p.close();
@@ -316,7 +317,8 @@ class RE2Test {
 
     @Test
     void testUseAfterClose() {
-        Pattern p = RE2.compile("test");
+        // Use compileWithoutCache() to test actual closing
+        Pattern p = Pattern.compileWithoutCache("test", true);
         p.close();
 
         assertThatThrownBy(() -> p.matcher("input"))
@@ -326,7 +328,8 @@ class RE2Test {
 
     @Test
     void testDoubleClose() {
-        Pattern p = RE2.compile("test");
+        // Use compileWithoutCache() to test actual closing
+        Pattern p = Pattern.compileWithoutCache("test", true);
         p.close();
 
         // Second close should be idempotent (not throw)
@@ -335,15 +338,27 @@ class RE2Test {
 
     @Test
     void testTryWithResources() {
-        // Verify AutoCloseable works correctly
+        // Verify AutoCloseable works correctly with uncached patterns
         Pattern[] holder = new Pattern[1];
 
-        try (Pattern p = RE2.compile("test")) {
+        try (Pattern p = Pattern.compileWithoutCache("test", true)) {
             holder[0] = p;
             assertThat(p.isClosed()).isFalse();
         }
 
         assertThat(holder[0].isClosed()).isTrue();
+    }
+
+    @Test
+    void testCachedPatternNotClosedOnClose() {
+        // Cached patterns should NOT actually close when close() is called
+        Pattern p = RE2.compile("test");
+        assertThat(p.isClosed()).isFalse();
+
+        p.close(); // This should be a no-op for cached patterns
+
+        // Pattern should still not be closed (cache manages it)
+        assertThat(p.isClosed()).isFalse();
     }
 
     @Test

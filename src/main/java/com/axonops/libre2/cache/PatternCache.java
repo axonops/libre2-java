@@ -199,6 +199,7 @@ public final class PatternCache {
     public void reset() {
         clear();
         resetStatistics();
+        com.axonops.libre2.util.ResourceTracker.reset(); // Reset resource tracker too
         logger.debug("RE2: Cache fully reset");
     }
 

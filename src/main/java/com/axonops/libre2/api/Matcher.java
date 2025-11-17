@@ -21,6 +21,9 @@ public final class Matcher implements AutoCloseable {
     Matcher(Pattern pattern, String input) {
         this.pattern = Objects.requireNonNull(pattern);
         this.input = Objects.requireNonNull(input);
+
+        // Increment reference count to prevent pattern being freed while in use
+        pattern.incrementRefCount();
     }
 
     public boolean matches() {
@@ -65,7 +68,10 @@ public final class Matcher implements AutoCloseable {
 
     @Override
     public void close() {
-        closed.set(true);
+        if (closed.compareAndSet(false, true)) {
+            // Decrement reference count - pattern can now be freed if evicted
+            pattern.decrementRefCount();
+        }
     }
 
     private void checkNotClosed() {

@@ -30,6 +30,7 @@ public final class Pattern implements AutoCloseable {
     private final Pointer nativePattern;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final boolean fromCache;
+    private final java.util.concurrent.atomic.AtomicInteger refCount = new java.util.concurrent.atomic.AtomicInteger(0);
 
     Pattern(String patternString, boolean caseSensitive, Pointer nativePattern) {
         this(patternString, caseSensitive, nativePattern, false);
@@ -134,6 +135,27 @@ public final class Pattern implements AutoCloseable {
         return nativePattern;
     }
 
+    /**
+     * Increments reference count (called by Matcher constructor).
+     */
+    void incrementRefCount() {
+        refCount.incrementAndGet();
+    }
+
+    /**
+     * Decrements reference count (called by Matcher.close()).
+     */
+    void decrementRefCount() {
+        refCount.decrementAndGet();
+    }
+
+    /**
+     * Gets current reference count (for testing).
+     */
+    int getRefCount() {
+        return refCount.get();
+    }
+
     public boolean isClosed() {
         return closed.get();
     }
@@ -151,13 +173,21 @@ public final class Pattern implements AutoCloseable {
     /**
      * Force closes the pattern (INTERNAL USE ONLY - called by cache during eviction).
      *
+     * CRITICAL: Only frees native resources if reference count is 0.
+     * If refCount > 0, pattern is still in use by Matchers - defer cleanup.
+     *
      * Do not call this method directly - use close() instead.
-     * This method bypasses the fromCache check and always closes.
+     * This method bypasses the fromCache check.
      *
      * @deprecated Internal use only
      */
     @Deprecated
     public void forceClose() {
+        if (refCount.get() > 0) {
+            logger.warn("RE2: Cannot force close pattern - still in use by {} matcher(s)", refCount.get());
+            return;
+        }
+
         if (closed.compareAndSet(false, true)) {
             logger.debug("RE2: Force closing pattern");
             RE2Native lib = RE2LibraryLoader.loadLibrary();

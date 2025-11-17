@@ -37,7 +37,7 @@ Our library bundles three components into a single self-contained shared library
   - Linear time complexity (no catastrophic backtracking)
   - ReDoS safe (prevents regex denial-of-service attacks)
   - Production-grade (used by Google Search, Gmail, etc.)
-  - Essential for Cassandra security (processes untrusted regex patterns)
+  - Critical for production systems processing untrusted regex patterns
 
 ### 2. Abseil - Google's C++ Common Libraries
 - **Project:** https://github.com/abseil/abseil-cpp
@@ -70,9 +70,9 @@ RE2:    927f5d53caf8111721e734cf24724686bb745f55  # Release 2025-11-05
 Abseil: d38452e1ee03523a208362186fd42248ff2609f6  # LTS 20250814.1
 ```
 
-### Why This Matters for Cassandra
+### Why This Matters for Production Use
 
-This library runs inside Cassandra, a mission-critical database. Commit pinning provides:
+This library is designed for production environments (databases, web services, security tools). Commit pinning provides:
 
 1. **Immutability**: Commits are cryptographically sealed
    - Cannot be changed without changing the hash

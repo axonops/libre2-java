@@ -32,7 +32,7 @@ jobs:
 
   build-macos-x86_64:
     name: Build macOS x86_64
-    runs-on: macos-13  # Intel Mac runner
+    runs-on: macos-15-intel  # Intel Mac runner (updated from deprecated macos-13)
 
     steps:
       - name: Checkout code
@@ -58,7 +58,7 @@ jobs:
 
   build-macos-aarch64:
     name: Build macOS aarch64 (Apple Silicon)
-    runs-on: macos-14  # M1/M2 Mac runner
+    runs-on: macos-latest  # M1/M2/M3 Mac runner
 
     steps:
       - name: Checkout code
@@ -153,23 +153,98 @@ jobs:
           retention-days: 30
 
   # ============================================================================
-  # Summary job - just lists what was built
+  # Commit job - downloads all artifacts and commits to a new branch
   # ============================================================================
 
-  summary:
-    name: Build Summary
+  commit-libraries:
+    name: Commit Native Libraries
     needs: [build-macos-x86_64, build-macos-aarch64, build-linux-x86_64, build-linux-aarch64]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Summary
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize libraries into resources directory
         run: |
-          echo "✅ All native libraries built successfully!"
-          echo ""
-          echo "Artifacts available:"
-          echo "  - libre2-macos-x86_64 (darwin-x86_64/libre2.dylib)"
-          echo "  - libre2-macos-aarch64 (darwin-aarch64/libre2.dylib)"
-          echo "  - libre2-linux-x86_64 (linux-x86_64/libre2.so)"
-          echo "  - libre2-linux-aarch64 (linux-aarch64/libre2.so)"
-          echo ""
-          echo "Download artifacts and place in src/main/resources/native/{platform}/"
+          # Create resources directory structure
+          mkdir -p src/main/resources/native/{darwin-x86_64,darwin-aarch64,linux-x86_64,linux-aarch64}
+
+          # Copy libraries to correct locations
+          cp artifacts/libre2-macos-x86_64/libre2.dylib src/main/resources/native/darwin-x86_64/
+          cp artifacts/libre2-macos-aarch64/libre2.dylib src/main/resources/native/darwin-aarch64/
+          cp artifacts/libre2-linux-x86_64/libre2.so src/main/resources/native/linux-x86_64/
+          cp artifacts/libre2-linux-aarch64/libre2.so src/main/resources/native/linux-aarch64/
+
+          # Show what we got
+          echo "Libraries copied:"
+          ls -lh src/main/resources/native/*/libre2.*
+
+      - name: Create branch and commit
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create new branch with timestamp
+          BRANCH_NAME="native-libs-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+
+          # Add libraries
+          git add -f src/main/resources/native/*/libre2.*
+
+          # Commit
+          git commit -m "Add compiled native libraries for all platforms
+
+Built from:
+- RE2 version: 2025-11-05
+- Abseil version: 20250814.1
+- Build date: $(date -u +%Y-%m-%d)
+
+Libraries:
+- darwin-x86_64/libre2.dylib (macOS Intel)
+- darwin-aarch64/libre2.dylib (macOS Apple Silicon)
+- linux-x86_64/libre2.so (Linux x86_64)
+- linux-aarch64/libre2.so (Linux ARM64)
+
+All libraries are self-contained with only system dependencies.
+Built via GitHub Actions workflow."
+
+          # Push branch
+          git push origin "$BRANCH_NAME"
+
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ env.BRANCH_NAME }}
+          title: "Update native libraries (RE2 2025-11-05)"
+          body: |
+            ## Native Libraries Update
+
+            This PR adds/updates the compiled native RE2 libraries for all supported platforms.
+
+            ### Built Libraries
+            - ✅ darwin-x86_64/libre2.dylib (macOS Intel)
+            - ✅ darwin-aarch64/libre2.dylib (macOS Apple Silicon)
+            - ✅ linux-x86_64/libre2.so (Linux x86_64)
+            - ✅ linux-aarch64/libre2.so (Linux ARM64)
+
+            ### Versions
+            - RE2: 2025-11-05
+            - Abseil: 20250814.1
+
+            ### Verification
+            All libraries are self-contained with only system dependencies.
+
+            ### Next Steps
+            1. Review library sizes and dependencies
+            2. Merge this PR
+            3. Java code will automatically load correct library for platform

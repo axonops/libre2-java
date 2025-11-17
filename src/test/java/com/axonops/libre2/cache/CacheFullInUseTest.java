@@ -153,4 +153,126 @@ class CacheFullInUseTest {
         // For this test, we just verify the mechanism is in place
         assertThat(afterEviction.deferredCleanupPending()).isGreaterThanOrEqualTo(0);
     }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    void testClear_ClosesDeferredPatterns() {
+        // Compile patterns with active matchers (these will go to deferred list when evicted)
+        List<Matcher> matchers = new ArrayList<>();
+
+        for (int i = 0; i < 20; i++) {
+            Pattern p = Pattern.compile("pattern" + i);
+            Matcher m = p.matcher("test");
+            matchers.add(m);
+        }
+
+        // Trigger evictions - patterns with matchers go to deferred list
+        for (int i = 20; i < 100; i++) {
+            Pattern.compile("trigger" + i);
+        }
+
+        CacheStatistics beforeClear = Pattern.getCacheStatistics();
+        logger.info("Before clear - deferred pending: {}, evictions deferred: {}",
+            beforeClear.deferredCleanupPending(), beforeClear.evictionsDeferred());
+
+        // Clear the cache - should also close deferred patterns
+        Pattern.clearCache();
+
+        CacheStatistics afterClear = Pattern.getCacheStatistics();
+
+        // Cache should be empty
+        assertThat(afterClear.currentSize()).isEqualTo(0);
+
+        // Deferred cleanup list should be empty (patterns were closed)
+        assertThat(afterClear.deferredCleanupPending()).isEqualTo(0);
+
+        // Clean up matchers
+        for (Matcher m : matchers) {
+            m.close();
+        }
+
+        logger.info("Clear successfully closed all deferred patterns");
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    void testReset_ClosesDeferredPatternsAndResetsStats() {
+        // Compile patterns with active matchers
+        List<Matcher> matchers = new ArrayList<>();
+
+        for (int i = 0; i < 20; i++) {
+            Pattern p = Pattern.compile("pattern" + i);
+            Matcher m = p.matcher("test");
+            matchers.add(m);
+        }
+
+        // Trigger evictions
+        for (int i = 20; i < 100; i++) {
+            Pattern.compile("trigger" + i);
+        }
+
+        CacheStatistics beforeReset = Pattern.getCacheStatistics();
+        logger.info("Before reset - hits: {}, misses: {}, deferred: {}",
+            beforeReset.hits(), beforeReset.misses(), beforeReset.evictionsDeferred());
+
+        // Ensure we have some stats
+        assertThat(beforeReset.misses()).isGreaterThan(0);
+
+        // Reset the cache - should close deferred patterns and reset stats
+        Pattern.resetCache();
+
+        CacheStatistics afterReset = Pattern.getCacheStatistics();
+
+        // Cache should be empty
+        assertThat(afterReset.currentSize()).isEqualTo(0);
+
+        // Deferred cleanup list should be empty
+        assertThat(afterReset.deferredCleanupPending()).isEqualTo(0);
+
+        // All statistics should be reset
+        assertThat(afterReset.hits()).isEqualTo(0);
+        assertThat(afterReset.misses()).isEqualTo(0);
+        assertThat(afterReset.evictionsLRU()).isEqualTo(0);
+        assertThat(afterReset.evictionsIdle()).isEqualTo(0);
+        assertThat(afterReset.evictionsDeferred()).isEqualTo(0);
+
+        // Clean up matchers
+        for (Matcher m : matchers) {
+            m.close();
+        }
+
+        logger.info("Reset successfully closed deferred patterns and reset all stats");
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    void testClear_MultipleTimes_NoDuplicateClose() {
+        // Compile patterns with active matchers
+        List<Matcher> matchers = new ArrayList<>();
+
+        for (int i = 0; i < 10; i++) {
+            Pattern p = Pattern.compile("pattern" + i);
+            Matcher m = p.matcher("test");
+            matchers.add(m);
+        }
+
+        // Trigger evictions
+        for (int i = 10; i < 50; i++) {
+            Pattern.compile("trigger" + i);
+        }
+
+        // Clear multiple times - should not cause issues
+        Pattern.clearCache();
+        Pattern.clearCache();
+        Pattern.clearCache();
+
+        CacheStatistics stats = Pattern.getCacheStatistics();
+        assertThat(stats.currentSize()).isEqualTo(0);
+        assertThat(stats.deferredCleanupPending()).isEqualTo(0);
+
+        // Clean up matchers
+        for (Matcher m : matchers) {
+            m.close();
+        }
+    }
 }

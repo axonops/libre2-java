@@ -251,6 +251,7 @@ public final class PatternCache {
 
     /**
      * Clears the cache and closes all cached patterns.
+     * Also clears deferred cleanup list.
      */
     public void clear() {
         if (!config.cacheEnabled()) {
@@ -258,13 +259,23 @@ public final class PatternCache {
         }
 
         synchronized (cache) {
-            logger.info("RE2: Clearing cache - {} patterns", cache.size());
+            int cacheSize = cache.size();
+            int deferredSize = deferredCleanup.size();
 
+            logger.info("RE2: Clearing cache - {} cached patterns, {} deferred patterns",
+                cacheSize, deferredSize);
+
+            // Close all cached patterns
             for (CachedPattern cached : cache.values()) {
-                cached.forceClose(); // Force close even if from cache
+                cached.forceClose();
             }
-
             cache.clear();
+
+            // Close all deferred patterns
+            for (CachedPattern deferred : deferredCleanup) {
+                deferred.forceClose();
+            }
+            deferredCleanup.clear();
         }
     }
 
@@ -276,6 +287,7 @@ public final class PatternCache {
         misses.set(0);
         evictionsLRU.set(0);
         evictionsIdle.set(0);
+        evictionsDeferred.set(0);
         logger.debug("RE2: Cache statistics reset");
     }
 

@@ -65,16 +65,23 @@ Our library bundles three components into a single self-contained shared library
 
 ### Current Pins
 
-Commit hashes are stored as **GitHub Environment Variables** in the `native-builds` environment:
+All version information is stored as **GitHub Environment Variables** in the `native-builds` environment:
 
-- `RE2_COMMIT`: `927f5d53caf8111721e734cf24724686bb745f55` (Release 2025-11-05)
-- `ABSEIL_COMMIT`: `d38452e1ee03523a208362186fd42248ff2609f6` (LTS 20250814.1)
+| Variable | Current Value | Purpose |
+|----------|---------------|---------|
+| `RE2_COMMIT` | `927f5d53caf8111721e734cf24724686bb745f55` | RE2 git commit (immutable) |
+| `RE2_RELEASE_VERSION` | `2025-11-05` | RE2 release version (for logging) |
+| `ABSEIL_COMMIT` | `d38452e1ee03523a208362186fd42248ff2609f6` | Abseil git commit (immutable) |
+| `ABSEIL_RELEASE_VERSION` | `20250814.1` | Abseil release version (for logging) |
+
+**View/edit at:** https://github.com/axonops/libre2-java/settings/environments/native-builds
 
 **Why environment variables:**
 - Cannot be changed by editing code files
 - Require repository admin access to modify
 - Can be protected with approval requirements
 - Audit trail of who changed what
+- Single source of truth (no hardcoded versions in code)
 
 ### Why This Matters for Production Use
 
@@ -112,10 +119,14 @@ This library is designed for production environments (databases, web services, s
    - Full hash is 40 characters (use the full hash, not abbreviated)
 
 4. Update GitHub Environment Variables:
-   - Go to: https://github.com/axonops/libre2-java/settings/environments
-   - Click on `native-builds` environment
-   - Update `RE2_COMMIT` and/or `ABSEIL_COMMIT` with new commit hash
+   - Go to: https://github.com/axonops/libre2-java/settings/environments/native-builds
+   - Update all 4 variables with new values:
+     - `RE2_COMMIT`: New commit hash (40 chars)
+     - `RE2_RELEASE_VERSION`: New release version (e.g., "2025-12-01")
+     - `ABSEIL_COMMIT`: New commit hash (if Abseil also updated)
+     - `ABSEIL_RELEASE_VERSION`: New release version (if Abseil also updated)
    - Requires repository admin access
+   - Changes are logged in environment audit trail
 
 5. Rebuild via GitHub Actions (see below)
 

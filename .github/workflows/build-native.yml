@@ -157,6 +157,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build in Docker container
+        env:
+          RE2_COMMIT: ${{ vars.RE2_COMMIT }}
+          RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
+          ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
+          ABSEIL_RELEASE_VERSION: ${{ vars.ABSEIL_RELEASE_VERSION }}
         run: |
           cd native
 
@@ -164,8 +169,12 @@ jobs:
           docker build -t re2-builder .
 
           # Run the container to compile RE2 + wrapper
-          # Mount current directory so we can extract the .so file
+          # Pass environment variables into container
           docker run --rm \
+            -e RE2_COMMIT \
+            -e RE2_RELEASE_VERSION \
+            -e ABSEIL_COMMIT \
+            -e ABSEIL_RELEASE_VERSION \
             -v "$(pwd):/output" \
             re2-builder \
             sh -c "./build.sh && cp build/libre2.so /output/"
@@ -219,6 +228,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build in Docker container (ARM64 via QEMU)
+        env:
+          RE2_COMMIT: ${{ vars.RE2_COMMIT }}
+          RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
+          ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
+          ABSEIL_RELEASE_VERSION: ${{ vars.ABSEIL_RELEASE_VERSION }}
         run: |
           cd native
 
@@ -226,7 +240,12 @@ jobs:
           docker buildx build --platform linux/arm64 -t re2-builder-arm64 --load .
 
           # Run ARM64 container (QEMU will emulate if not native ARM)
+          # Pass environment variables into container
           docker run --rm --platform linux/arm64 \
+            -e RE2_COMMIT \
+            -e RE2_RELEASE_VERSION \
+            -e ABSEIL_COMMIT \
+            -e ABSEIL_RELEASE_VERSION \
             -v "$(pwd):/output" \
             re2-builder-arm64 \
             sh -c "./build.sh && cp build/libre2.so /output/"

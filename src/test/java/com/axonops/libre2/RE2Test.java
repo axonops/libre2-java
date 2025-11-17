@@ -626,27 +626,121 @@ class RE2Test {
 
     @Test
     void testManyDifferentPatterns() {
-        String[] patterns = {
-            "\\d+", "\\w+", "\\s+", "[a-z]+", "[A-Z]+",
-            ".*", ".+", ".?", "a*", "a+", "a?",
-            "^start", "end$", "^exact$",
-            "hello|world", "(cat|dog)",
-            "\\d{3}-\\d{4}", "\\w+@\\w+\\.\\w+"
-        };
+        // Test each pattern with matching and non-matching input
+        try (Pattern p = RE2.compile("\\d+")) {
+            assertThat(p.matches("123")).isTrue();
+            assertThat(p.matches("abc")).isFalse();
+        }
 
-        for (String pattern : patterns) {
-            try (Pattern p = RE2.compile(pattern)) {
-                assertThat(p).isNotNull();
-                assertThat(p.pattern()).isEqualTo(pattern);
+        try (Pattern p = RE2.compile("\\w+")) {
+            assertThat(p.matches("hello123")).isTrue();
+            assertThat(p.matches("!!!")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("\\s+")) {
+            assertThat(p.matches("   ")).isTrue();
+            assertThat(p.matches("text")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("[a-z]+")) {
+            assertThat(p.matches("abc")).isTrue();
+            assertThat(p.matches("ABC")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("[A-Z]+")) {
+            assertThat(p.matches("ABC")).isTrue();
+            assertThat(p.matches("abc")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile(".*")) {
+            assertThat(p.matches("anything")).isTrue();
+            assertThat(p.matches("")).isTrue();
+        }
+
+        try (Pattern p = RE2.compile(".+")) {
+            assertThat(p.matches("something")).isTrue();
+            assertThat(p.matches("")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("a*")) {
+            assertThat(p.matches("aaa")).isTrue();
+            assertThat(p.matches("")).isTrue();
+            assertThat(p.matches("b")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("a+")) {
+            assertThat(p.matches("aaa")).isTrue();
+            assertThat(p.matches("")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("^start")) {
+            try (Matcher m = p.matcher("start here")) {
+                assertThat(m.find()).isTrue();
             }
+            try (Matcher m = p.matcher("here start")) {
+                assertThat(m.find()).isFalse();
+            }
+        }
+
+        try (Pattern p = RE2.compile("end$")) {
+            try (Matcher m = p.matcher("at the end")) {
+                assertThat(m.find()).isTrue();
+            }
+            try (Matcher m = p.matcher("end here")) {
+                assertThat(m.find()).isFalse();
+            }
+        }
+
+        try (Pattern p = RE2.compile("^exact$")) {
+            assertThat(p.matches("exact")).isTrue();
+            assertThat(p.matches("exact ")).isFalse();
+            assertThat(p.matches(" exact")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("hello|world")) {
+            assertThat(p.matches("hello")).isTrue();
+            assertThat(p.matches("world")).isTrue();
+            assertThat(p.matches("goodbye")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("(cat|dog)")) {
+            assertThat(p.matches("cat")).isTrue();
+            assertThat(p.matches("dog")).isTrue();
+            assertThat(p.matches("bird")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("\\d{3}-\\d{4}")) {
+            assertThat(p.matches("123-4567")).isTrue();
+            assertThat(p.matches("12-4567")).isFalse();
+        }
+
+        try (Pattern p = RE2.compile("\\w+@\\w+\\.\\w+")) {
+            assertThat(p.matches("user@example.com")).isTrue();
+            assertThat(p.matches("invalid")).isFalse();
         }
     }
 
     @Test
     void testQuickSuccessiveOperations() {
+        // Test rapid pattern creation and matching (stress test)
         for (int i = 0; i < 100; i++) {
             boolean matches = RE2.matches("test" + i, "test" + i);
             assertThat(matches).isTrue();
+
+            // Also verify non-match
+            matches = RE2.matches("test" + i, "different" + i);
+            assertThat(matches).isFalse();
+        }
+    }
+
+    @Test
+    void testPatternReuseManyTimes() {
+        // Test a single pattern used many times
+        try (Pattern p = RE2.compile("\\d+")) {
+            for (int i = 0; i < 1000; i++) {
+                assertThat(p.matches(String.valueOf(i))).isTrue();
+                assertThat(p.matches("text" + i)).isFalse();
+            }
         }
     }
 }

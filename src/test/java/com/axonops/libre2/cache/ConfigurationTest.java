@@ -51,49 +51,49 @@ class ConfigurationTest {
 
     @Test
     void testValidation_InvalidMaxCacheSize_Zero() {
-        assertThatThrownBy(() -> new RE2Config(true, 0, 300, 60, 100000, 10000))
+        assertThatThrownBy(() -> new RE2Config(true, 0, 300, 60, 5, 100000, 10000))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("maxCacheSize must be positive");
     }
 
     @Test
     void testValidation_InvalidMaxCacheSize_Negative() {
-        assertThatThrownBy(() -> new RE2Config(true, -1, 300, 60, 100000, 10000))
+        assertThatThrownBy(() -> new RE2Config(true, -1, 300, 60, 5, 100000, 10000))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("maxCacheSize must be positive");
     }
 
     @Test
     void testValidation_InvalidIdleTimeout_Zero() {
-        assertThatThrownBy(() -> new RE2Config(true, 1000, 0, 60, 100000, 10000))
+        assertThatThrownBy(() -> new RE2Config(true, 1000, 0, 60, 5, 100000, 10000))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("idleTimeoutSeconds must be positive");
     }
 
     @Test
     void testValidation_InvalidScanInterval_Negative() {
-        assertThatThrownBy(() -> new RE2Config(true, 1000, 300, -1, 100000, 10000))
+        assertThatThrownBy(() -> new RE2Config(true, 1000, 300, -1, 5, 100000, 10000))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("evictionScanIntervalSeconds must be positive");
     }
 
     @Test
     void testValidation_InvalidMaxSimultaneousPatterns_Zero() {
-        assertThatThrownBy(() -> new RE2Config(true, 1000, 300, 60, 0, 10000))
+        assertThatThrownBy(() -> new RE2Config(true, 1000, 300, 60, 5, 0, 10000))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("maxSimultaneousCompiledPatterns must be positive");
     }
 
     @Test
     void testValidation_InvalidMaxMatchers_Zero() {
-        assertThatThrownBy(() -> new RE2Config(true, 1000, 300, 60, 100000, 0))
+        assertThatThrownBy(() -> new RE2Config(true, 1000, 300, 60, 5, 100000, 0))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("maxMatchersPerPattern must be positive");
     }
 
     @Test
     void testValidation_CacheLargerThanSimultaneousLimit() {
-        assertThatThrownBy(() -> new RE2Config(true, 100000, 300, 60, 50000, 10000))
+        assertThatThrownBy(() -> new RE2Config(true, 100000, 300, 60, 5, 50000, 10000))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("maxCacheSize")
             .hasMessageContaining("maxSimultaneousCompiledPatterns");
@@ -102,7 +102,7 @@ class ConfigurationTest {
     @Test
     void testValidation_IgnoresInvalidCacheParams_IfCacheDisabled() {
         // Should NOT throw - cache params ignored when disabled
-        RE2Config config = new RE2Config(false, -999, -999, -999, 100000, 10000);
+        RE2Config config = new RE2Config(false, -999, -999, -999, -999, 100000, 10000);
 
         assertThat(config.cacheEnabled()).isFalse();
     }
@@ -110,7 +110,7 @@ class ConfigurationTest {
     @Test
     void testValidation_VerySmallCache() {
         // Should work - cache size = 1
-        RE2Config config = new RE2Config(true, 1, 300, 60, 100000, 10000);
+        RE2Config config = new RE2Config(true, 1, 300, 60, 5, 100000, 10000);
 
         assertThat(config.maxCacheSize()).isEqualTo(1);
     }
@@ -118,7 +118,7 @@ class ConfigurationTest {
     @Test
     void testValidation_VeryLargeCache() {
         // Should work - cache size = 500K
-        RE2Config config = new RE2Config(true, 500000, 300, 60, 1000000, 10000);
+        RE2Config config = new RE2Config(true, 500000, 300, 60, 5, 1000000, 10000);
 
         assertThat(config.maxCacheSize()).isEqualTo(500000);
     }

@@ -73,7 +73,7 @@ final class IdleEvictionTask {
 
         long lastIdleScan = System.currentTimeMillis();
         long idleScanIntervalMs = config.evictionScanIntervalSeconds() * 1000;
-        long deferredCleanupIntervalMs = 5000; // Wake every 5 seconds for deferred cleanup
+        long deferredCleanupIntervalMs = config.deferredCleanupIntervalSeconds() * 1000;
 
         while (running.get()) {
             try {

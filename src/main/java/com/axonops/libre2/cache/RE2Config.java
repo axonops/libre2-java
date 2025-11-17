@@ -14,6 +14,7 @@ public record RE2Config(
     int maxCacheSize,
     long idleTimeoutSeconds,
     long evictionScanIntervalSeconds,
+    long deferredCleanupIntervalSeconds,
     int maxSimultaneousCompiledPatterns,
     int maxMatchersPerPattern
 ) {
@@ -25,6 +26,7 @@ public record RE2Config(
      * - Cache: 50K patterns (~50-200MB, negligible in large clusters)
      * - Idle timeout: 5 minutes (patterns auto-cleaned after inactivity)
      * - Scan interval: 1 minute (balance cleanup speed vs CPU)
+     * - Deferred cleanup: 5 seconds (frequent cleanup of evicted-but-in-use patterns)
      * - Simultaneous limit: 100K ACTIVE patterns (NOT cumulative - patterns can be freed/recompiled)
      * - Matchers per pattern: 10K (prevents per-pattern exhaustion)
      */
@@ -33,6 +35,7 @@ public record RE2Config(
         50000,                         // Max 50K cached patterns (~50-200MB)
         300,                           // 5 minute idle timeout
         60,                            // Scan every 60 seconds
+        5,                             // Deferred cleanup every 5 seconds
         100000,                        // Max 100K simultaneous active patterns
         10000                          // Max 10K matchers per pattern
     );
@@ -43,6 +46,7 @@ public record RE2Config(
      */
     public static final RE2Config NO_CACHE = new RE2Config(
         false,                         // Cache disabled
+        0,                             // Ignored when cache disabled
         0,                             // Ignored when cache disabled
         0,                             // Ignored when cache disabled
         0,                             // Ignored when cache disabled
@@ -75,11 +79,27 @@ public record RE2Config(
             if (evictionScanIntervalSeconds <= 0) {
                 throw new IllegalArgumentException("evictionScanIntervalSeconds must be positive when cache enabled");
             }
+            if (deferredCleanupIntervalSeconds <= 0) {
+                throw new IllegalArgumentException("deferredCleanupIntervalSeconds must be positive when cache enabled");
+            }
 
             // Warn if scan interval exceeds idle timeout (still valid, just suboptimal)
             if (evictionScanIntervalSeconds > idleTimeoutSeconds) {
                 System.err.println("WARNING: evictionScanIntervalSeconds (" + evictionScanIntervalSeconds +
                     "s) exceeds idleTimeoutSeconds (" + idleTimeoutSeconds + "s) - idle patterns may not be evicted promptly");
+            }
+
+            // Deferred cleanup should be frequent (warn if too slow)
+            if (deferredCleanupIntervalSeconds > 30) {
+                System.err.println("WARNING: deferredCleanupIntervalSeconds (" + deferredCleanupIntervalSeconds +
+                    "s) is quite long - evicted patterns may retain memory for extended periods");
+            }
+
+            // Deferred cleanup must be at least as frequent as idle eviction
+            if (deferredCleanupIntervalSeconds > evictionScanIntervalSeconds) {
+                throw new IllegalArgumentException("deferredCleanupIntervalSeconds (" + deferredCleanupIntervalSeconds +
+                    "s) must be <= evictionScanIntervalSeconds (" + evictionScanIntervalSeconds +
+                    "s) - deferred cleanup should run at least as often as idle eviction");
             }
 
             // Cache size must not exceed simultaneous limit
@@ -102,6 +122,7 @@ public record RE2Config(
         private int maxCacheSize = 50000;
         private long idleTimeoutSeconds = 300;
         private long evictionScanIntervalSeconds = 60;
+        private long deferredCleanupIntervalSeconds = 5;
         private int maxSimultaneousCompiledPatterns = 100000;
         private int maxMatchersPerPattern = 10000;
 
@@ -125,6 +146,11 @@ public record RE2Config(
             return this;
         }
 
+        public Builder deferredCleanupIntervalSeconds(long seconds) {
+            this.deferredCleanupIntervalSeconds = seconds;
+            return this;
+        }
+
         public Builder maxSimultaneousCompiledPatterns(int max) {
             this.maxSimultaneousCompiledPatterns = max;
             return this;
@@ -141,6 +167,7 @@ public record RE2Config(
                 maxCacheSize,
                 idleTimeoutSeconds,
                 evictionScanIntervalSeconds,
+                deferredCleanupIntervalSeconds,
                 maxSimultaneousCompiledPatterns,
                 maxMatchersPerPattern
             );

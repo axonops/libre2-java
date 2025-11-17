@@ -150,9 +150,11 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Gets current reference count (for testing).
+     * Gets current reference count (for testing/monitoring).
+     *
+     * @return number of active matchers using this pattern
      */
-    int getRefCount() {
+    public int getRefCount() {
         return refCount.get();
     }
 

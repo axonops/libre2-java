@@ -103,6 +103,7 @@ The `build.sh` script does the following:
    - Static library
    - Position-independent code (for shared library)
    - C++17 standard
+   - Installed to local prefix for RE2 to find
 
 3. **Build RE2** (~2 minutes):
    - Static library
@@ -115,27 +116,11 @@ The `build.sh` script does the following:
    - Produces single shared library with no external dependencies
    - Strips symbols for smaller size
 
-## Output Verification
-
-After building, verify the library:
-
-**macOS:**
-```bash
-# Check it's a valid dylib
-file build/libre2.dylib
-
-# Check dependencies (should only show system libs)
-otool -L build/libre2.dylib
-```
-
-**Linux:**
-```bash
-# Check it's a valid shared library
-file build/libre2.so
-
-# Check dependencies (should only show libc, libm, etc)
-ldd build/libre2.so
-```
+5. **Automatic verification** (in GitHub Actions):
+   - Checks library format (Mach-O or ELF)
+   - Verifies all 8 C functions are exported
+   - Confirms only system dependencies
+   - Build fails if verification fails
 
 ## For Java Developers
 

@@ -49,6 +49,30 @@ jobs:
           cd native
           ./scripts/build.sh
 
+      - name: Verify library
+        run: |
+          cd native/build
+
+          # Check it's a valid Mach-O library
+          file libre2.dylib
+
+          # Check dependencies (should only be system libs)
+          echo "Dependencies:"
+          otool -L libre2.dylib
+
+          # Check exported functions
+          echo "Exported functions:"
+          nm -g libre2.dylib | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$'
+
+          # Verify all 8 functions exist
+          FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$' | wc -l)
+          if [ "$FUNC_COUNT" -ne 8 ]; then
+            echo "ERROR: Expected 8 exported functions, found $FUNC_COUNT"
+            exit 1
+          fi
+
+          echo "✅ Library verification passed"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -72,6 +96,30 @@ jobs:
         run: |
           cd native
           ./scripts/build.sh
+
+      - name: Verify library
+        run: |
+          cd native/build
+
+          # Check it's a valid Mach-O library
+          file libre2.dylib
+
+          # Check dependencies
+          echo "Dependencies:"
+          otool -L libre2.dylib
+
+          # Check exported functions
+          echo "Exported functions:"
+          nm -g libre2.dylib | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$'
+
+          # Verify all 8 functions exist
+          FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$' | wc -l)
+          if [ "$FUNC_COUNT" -ne 8 ]; then
+            echo "ERROR: Expected 8 exported functions, found $FUNC_COUNT"
+            exit 1
+          fi
+
+          echo "✅ Library verification passed"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -109,6 +157,30 @@ jobs:
             re2-builder \
             sh -c "./build.sh && cp build/libre2.so /output/"
 
+      - name: Verify library
+        run: |
+          cd native
+
+          # Check it's a valid ELF library
+          file libre2.so
+
+          # Check dependencies (should only be system libs)
+          echo "Dependencies:"
+          docker run --rm -v "$(pwd):/output" re2-builder ldd /output/libre2.so
+
+          # Check exported functions
+          echo "Exported functions:"
+          docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$'
+
+          # Verify all 8 functions exist
+          FUNC_COUNT=$(docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$' | wc -l)
+          if [ "$FUNC_COUNT" -ne 8 ]; then
+            echo "ERROR: Expected 8 exported functions, found $FUNC_COUNT"
+            exit 1
+          fi
+
+          echo "✅ Library verification passed"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -144,6 +216,30 @@ jobs:
             -v "$(pwd):/output" \
             re2-builder-arm64 \
             sh -c "./build.sh && cp build/libre2.so /output/"
+
+      - name: Verify library
+        run: |
+          cd native
+
+          # Check it's a valid ELF library
+          file libre2.so
+
+          # Check dependencies
+          echo "Dependencies:"
+          docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 ldd /output/libre2.so
+
+          # Check exported functions
+          echo "Exported functions:"
+          docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 nm -D /output/libre2.so | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$'
+
+          # Verify all 8 functions exist
+          FUNC_COUNT=$(docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 nm -D /output/libre2.so | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$' | wc -l)
+          if [ "$FUNC_COUNT" -ne 8 ]; then
+            echo "ERROR: Expected 8 exported functions, found $FUNC_COUNT"
+            exit 1
+          fi
+
+          echo "✅ Library verification passed"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

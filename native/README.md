@@ -1,66 +1,49 @@
 # Native Library Build System
 
-This directory contains everything needed to build the RE2 wrapper library for all supported platforms.
+This directory contains the native RE2 wrapper library build infrastructure.
+
+**IMPORTANT:** Native libraries are built ONLY via GitHub Actions CI/CD. Java developers never need to compile C++ code locally.
 
 ## Overview
 
-The build system:
-1. Downloads RE2 and Abseil source code from GitHub
+The automated build system:
+1. Downloads RE2 2025-11-05 and Abseil 20250814.1 source from GitHub
 2. Compiles them as static libraries
-3. Compiles our C wrapper (`wrapper/re2_wrapper.cpp`)
-4. Links everything into a single shared library with no external dependencies
+3. Compiles the C wrapper (`wrapper/re2_wrapper.cpp`)
+4. Links everything into self-contained shared libraries
+5. Automatically commits libraries to a PR for review
 
 ## Supported Platforms
 
-- **macOS x86_64** (Intel Macs) → `darwin-x86_64/libre2.dylib`
-- **macOS aarch64** (Apple Silicon) → `darwin-aarch64/libre2.dylib`
-- **Linux x86_64** (Intel/AMD) → `linux-x86_64/libre2.so`
-- **Linux aarch64** (ARM64) → `linux-aarch64/libre2.so`
+- **darwin-x86_64** → macOS Intel (libre2.dylib)
+- **darwin-aarch64** → macOS Apple Silicon (libre2.dylib)
+- **linux-x86_64** → Linux x86_64 (libre2.so)
+- **linux-aarch64** → Linux ARM64 (libre2.so)
 
-## Building
+## Building Native Libraries (Maintainers Only)
 
-### Automated (Recommended): GitHub Actions
+**When to rebuild:**
+- Updating to a new RE2 version
+- Modifying `wrapper/re2_wrapper.cpp`
+- Adding new platforms
 
-1. Go to: https://github.com/axonops/libre2-java/actions
-2. Select "Build Native Libraries" workflow
-3. Click "Run workflow"
-4. Wait ~10-15 minutes for all 4 platforms to build
-5. Download artifacts from the workflow run
-6. Extract and place libraries in `src/main/resources/native/{platform}/`
+**How to rebuild:**
 
-### Manual: Local Build
+1. Go to: https://github.com/axonops/libre2-java/actions/workflows/build-native.yml
+2. Click **"Run workflow"** button
+3. Select inputs:
+   - **Use workflow from:** `development` (or your branch)
+   - **Target branch to create PR against:** `development` (or target branch)
+4. Click **"Run workflow"**
+5. Wait ~10-15 minutes for build to complete
+6. Workflow will automatically:
+   - Build all 4 platforms in parallel
+   - Create branch `native-libs-YYYYMMDD-HHMMSS`
+   - Commit all libraries to `src/main/resources/native/`
+   - Open a Pull Request
+7. Review the PR and merge
 
-**Prerequisites:**
-- CMake 3.10+
-- C++17 compiler (g++ or clang++)
-- curl (for downloading sources)
-
-**Build for your current platform:**
-```bash
-cd native
-./scripts/build.sh
-```
-
-Output will be in `native/build/libre2.{dylib|so}`
-
-### Manual: Docker Build (Linux only)
-
-**Build for Linux x86_64:**
-```bash
-cd native
-docker build -t re2-builder .
-docker run --rm -v "$(pwd):/output" re2-builder \
-  sh -c "./build.sh && cp build/libre2.so /output/"
-```
-
-**Build for Linux aarch64:**
-```bash
-cd native
-docker buildx build --platform linux/arm64 -t re2-builder-arm64 --load .
-docker run --rm --platform linux/arm64 \
-  -v "$(pwd):/output" re2-builder-arm64 \
-  sh -c "./build.sh && cp build/libre2.so /output/"
-```
+**That's it!** The libraries are now in the repository.
 
 ## Directory Structure
 
@@ -120,37 +103,36 @@ file build/libre2.so
 ldd build/libre2.so
 ```
 
+## For Java Developers
+
+**You don't need to do anything!**
+
+The compiled native libraries are already in the repository at:
+- `src/main/resources/native/darwin-x86_64/libre2.dylib`
+- `src/main/resources/native/darwin-aarch64/libre2.dylib`
+- `src/main/resources/native/linux-x86_64/libre2.so`
+- `src/main/resources/native/linux-aarch64/libre2.so`
+
+Just build the Java project normally:
+```bash
+mvn clean package
+```
+
+The libraries are automatically embedded in the JAR and extracted at runtime by `RE2LibraryLoader`.
+
 ## Troubleshooting
 
-**Build fails with "cmake not found":**
-- macOS: `brew install cmake`
-- Linux: `apt-get install cmake` or `yum install cmake`
-
-**Build fails with compiler errors:**
-- Ensure you have C++17 support:
-  - g++ 7+ or clang++ 5+
-
-**GitHub Actions builds fail:**
+**GitHub Actions build fails:**
 - Check the Actions log for specific errors
-- Verify the workflow syntax at https://github.com/axonops/libre2-java/actions
+- Verify all 4 platform jobs completed successfully
+- macOS Intel runners can sometimes be slow/unavailable
 
-**Libraries are too large:**
-- They will be 1-2 MB each (RE2 + Abseil statically linked)
-- This is expected and necessary for standalone deployment
+**PR creation fails:**
+- Check GitHub token permissions
+- Verify target branch exists
+- Check Actions log for git push errors
 
-## Next Steps
-
-After building all 4 libraries:
-
-1. Create Java resources directory:
-   ```bash
-   mkdir -p src/main/resources/native/{darwin-x86_64,darwin-aarch64,linux-x86_64,linux-aarch64}
-   ```
-
-2. Copy libraries to resources:
-   ```bash
-   cp libre2.dylib src/main/resources/native/darwin-aarch64/
-   # etc for each platform
-   ```
-
-3. Libraries will be embedded in the JAR and extracted at runtime by `RE2LibraryLoader`
+**Libraries missing from JAR:**
+- Verify the PR was merged
+- Check `src/main/resources/native/` has all 4 platform directories
+- Run `mvn clean package` to regenerate JAR

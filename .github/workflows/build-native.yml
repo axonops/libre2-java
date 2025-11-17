@@ -48,7 +48,9 @@ jobs:
       - name: Build RE2 wrapper
         env:
           RE2_COMMIT: ${{ vars.RE2_COMMIT }}
+          RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
           ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
+          ABSEIL_RELEASE_VERSION: ${{ vars.ABSEIL_RELEASE_VERSION }}
         run: |
           cd native
           ./scripts/build.sh
@@ -100,7 +102,9 @@ jobs:
       - name: Build RE2 wrapper
         env:
           RE2_COMMIT: ${{ vars.RE2_COMMIT }}
+          RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
           ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
+          ABSEIL_RELEASE_VERSION: ${{ vars.ABSEIL_RELEASE_VERSION }}
         run: |
           cd native
           ./scripts/build.sh

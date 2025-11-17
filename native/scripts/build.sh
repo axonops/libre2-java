@@ -9,27 +9,33 @@ set -e
 #
 # Detects container runtime (podman or docker) for Linux builds
 
-# SECURITY: Commit hashes are provided via GitHub Environment Variables
+# SECURITY: All version info provided via GitHub Environment Variables
 # These are stored in the 'native-builds' protected environment
 # and can only be modified by repository admins.
 #
-# If running locally for testing, set these manually:
-# export RE2_COMMIT="927f5d53caf8111721e734cf24724686bb745f55"
-# export ABSEIL_COMMIT="d38452e1ee03523a208362186fd42248ff2609f6"
+# Required variables:
+# - RE2_COMMIT: Git commit hash for RE2
+# - RE2_RELEASE_VERSION: Release version (for logging/reference)
+# - ABSEIL_COMMIT: Git commit hash for Abseil
+# - ABSEIL_RELEASE_VERSION: Release version (for logging/reference)
 
-if [ -z "$RE2_COMMIT" ] || [ -z "$ABSEIL_COMMIT" ]; then
-    echo "ERROR: RE2_COMMIT and ABSEIL_COMMIT must be set as environment variables"
+if [ -z "$RE2_COMMIT" ] || [ -z "$ABSEIL_COMMIT" ] || [ -z "$RE2_RELEASE_VERSION" ] || [ -z "$ABSEIL_RELEASE_VERSION" ]; then
+    echo "ERROR: Required environment variables not set"
+    echo "Missing one or more of: RE2_COMMIT, RE2_RELEASE_VERSION, ABSEIL_COMMIT, ABSEIL_RELEASE_VERSION"
+    echo ""
     echo "These should be provided by the GitHub Actions 'native-builds' environment"
     echo ""
     echo "For local testing, set them manually:"
     echo "  export RE2_COMMIT=927f5d53caf8111721e734cf24724686bb745f55"
+    echo "  export RE2_RELEASE_VERSION=2025-11-05"
     echo "  export ABSEIL_COMMIT=d38452e1ee03523a208362186fd42248ff2609f6"
+    echo "  export ABSEIL_RELEASE_VERSION=20250814.1"
     exit 1
 fi
 
-echo "Building with pinned commits (from environment):"
-echo "  RE2:    $RE2_COMMIT"
-echo "  Abseil: $ABSEIL_COMMIT"
+echo "Building with pinned commits (from protected environment):"
+echo "  RE2:    $RE2_COMMIT (release $RE2_RELEASE_VERSION)"
+echo "  Abseil: $ABSEIL_COMMIT (release $ABSEIL_RELEASE_VERSION)"
 
 # Detect platform
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -51,29 +57,29 @@ cd "$BUILD_DIR"
 
 # Clone and checkout RE2 at pinned commit
 if [ ! -d "re2" ]; then
-    echo "Cloning RE2..."
-    git clone --depth 50 https://github.com/google/re2.git
+    echo "Cloning RE2 at commit $RE2_COMMIT..."
+    git clone https://github.com/google/re2.git
     cd re2
     git checkout "$RE2_COMMIT"
 
     # Optional: Verify commit signature (requires GPG keys)
     # git verify-commit "$RE2_COMMIT" || echo "Warning: Could not verify RE2 commit signature"
 
-    echo "RE2 commit verified: $(git log -1 --oneline)"
+    echo "RE2 commit: $(git log -1 --oneline)"
     cd ..
 fi
 
 # Clone and checkout Abseil at pinned commit
 if [ ! -d "abseil-cpp" ]; then
-    echo "Cloning Abseil..."
-    git clone --depth 50 https://github.com/abseil/abseil-cpp.git
+    echo "Cloning Abseil at commit $ABSEIL_COMMIT..."
+    git clone https://github.com/abseil/abseil-cpp.git
     cd abseil-cpp
     git checkout "$ABSEIL_COMMIT"
 
     # Optional: Verify commit signature
     # git verify-commit "$ABSEIL_COMMIT" || echo "Warning: Could not verify Abseil commit signature"
 
-    echo "Abseil commit verified: $(git log -1 --oneline)"
+    echo "Abseil commit: $(git log -1 --oneline)"
     cd ..
 fi
 

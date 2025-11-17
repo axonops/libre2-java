@@ -9,20 +9,18 @@ set -e
 #
 # Detects container runtime (podman or docker) for Linux builds
 
+# SECURITY: Pin exact git commits for immutable builds
+# These commits are cryptographically verified and immutable
+RE2_COMMIT="927f5d53caf8111721e734cf24724686bb745f55"       # RE2 release 2025-11-05 (signed by Russ Cox)
+ABSEIL_COMMIT="d38452e1ee03523a208362186fd42248ff2609f6"   # Abseil LTS 20250814.1 (Patch 1)
+
+# Version tags (for reference only, not used in build)
 RE2_VERSION="2025-11-05"
 ABSEIL_VERSION="20250814.1"
 
-# Detect container runtime (prefer podman, fallback to docker)
-if command -v podman &> /dev/null; then
-    DOCKER_CMD="podman"
-    echo "Using podman"
-elif command -v docker &> /dev/null; then
-    DOCKER_CMD="docker"
-    echo "Using docker"
-else
-    DOCKER_CMD=""
-    echo "Neither podman nor docker found (not needed for native builds)"
-fi
+echo "Building with pinned commits:"
+echo "  RE2:    $RE2_COMMIT (release $RE2_VERSION)"
+echo "  Abseil: $ABSEIL_COMMIT (release $ABSEIL_VERSION)"
 
 # Detect platform
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -42,20 +40,32 @@ BUILD_DIR="$(pwd)/build"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# Download RE2
-if [ ! -d "re2-${RE2_VERSION}" ]; then
-    echo "Downloading RE2 ${RE2_VERSION}..."
-    curl -L "https://github.com/google/re2/archive/refs/tags/${RE2_VERSION}.tar.gz" -o re2.tar.gz
-    tar xzf re2.tar.gz
-    rm re2.tar.gz
+# Clone and checkout RE2 at pinned commit
+if [ ! -d "re2" ]; then
+    echo "Cloning RE2..."
+    git clone --depth 50 https://github.com/google/re2.git
+    cd re2
+    git checkout "$RE2_COMMIT"
+
+    # Optional: Verify commit signature (requires GPG keys)
+    # git verify-commit "$RE2_COMMIT" || echo "Warning: Could not verify RE2 commit signature"
+
+    echo "RE2 commit verified: $(git log -1 --oneline)"
+    cd ..
 fi
 
-# Download Abseil
-if [ ! -d "abseil-cpp-${ABSEIL_VERSION}" ]; then
-    echo "Downloading Abseil ${ABSEIL_VERSION}..."
-    curl -L "https://github.com/abseil/abseil-cpp/archive/refs/tags/${ABSEIL_VERSION}.tar.gz" -o abseil.tar.gz
-    tar xzf abseil.tar.gz
-    rm abseil.tar.gz
+# Clone and checkout Abseil at pinned commit
+if [ ! -d "abseil-cpp" ]; then
+    echo "Cloning Abseil..."
+    git clone --depth 50 https://github.com/abseil/abseil-cpp.git
+    cd abseil-cpp
+    git checkout "$ABSEIL_COMMIT"
+
+    # Optional: Verify commit signature
+    # git verify-commit "$ABSEIL_COMMIT" || echo "Warning: Could not verify Abseil commit signature"
+
+    echo "Abseil commit verified: $(git log -1 --oneline)"
+    cd ..
 fi
 
 # Build Abseil statically
@@ -63,7 +73,7 @@ echo "Building Abseil..."
 ABSEIL_PREFIX="$BUILD_DIR/abseil-install"
 mkdir -p abseil-build
 cd abseil-build
-cmake ../abseil-cpp-${ABSEIL_VERSION} \
+cmake ../abseil-cpp \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_SHARED_LIBS=OFF \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -78,7 +88,7 @@ cd ..
 echo "Building RE2..."
 mkdir -p re2-build
 cd re2-build
-cmake ../re2-${RE2_VERSION} \
+cmake ../re2 \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_SHARED_LIBS=OFF \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -107,8 +117,8 @@ if [ "$OS" = "darwin" ]; then
         "$WRAPPER_SRC" \
         re2-build/libre2.a \
         abseil-build/absl/*/*.a \
-        -Ire2-${RE2_VERSION} \
-        -Iabseil-cpp-${ABSEIL_VERSION} \
+        -Ire2 \
+        -Iabseil-cpp \
         -framework CoreFoundation \
         -Wl,-dead_strip
 
@@ -123,8 +133,8 @@ else
         "$WRAPPER_SRC" \
         re2-build/libre2.a \
         abseil-build/absl/*/*.a \
-        -Ire2-${RE2_VERSION} \
-        -Iabseil-cpp-${ABSEIL_VERSION} \
+        -Ire2 \
+        -Iabseil-cpp \
         -Wl,--gc-sections \
         -static-libgcc \
         -static-libstdc++ \

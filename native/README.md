@@ -38,6 +38,47 @@ All three components are compiled and linked into a single shared library:
 - **Contains:** RE2 + Abseil + our wrapper (all statically linked)
 - **Dependencies:** Only system libraries (libc, libm, CoreFoundation on macOS)
 
+## Security: Why We Use Git Commit Pinning
+
+**We pin exact git commits instead of downloading release tarballs.**
+
+**Current pins:**
+```bash
+RE2:    927f5d53caf8111721e734cf24724686bb745f55  # 2025-11-05 (signed by Russ Cox)
+Abseil: d38452e1ee03523a208362186fd42248ff2609f6  # 20250814.1 LTS
+```
+
+**Why this is critical for database/security use:**
+
+1. **Immutability**: Git commit hashes are cryptographically bound to exact code
+   - Cannot be changed without changing the hash
+   - Changing a single byte anywhere changes the commit hash
+   - Much stronger than version tags (which can be moved)
+
+2. **Supply chain security**: Protects against:
+   - Compromised GitHub releases
+   - Tampered tarballs
+   - Dependency confusion attacks
+   - "Tag moved" attacks
+
+3. **Audit trail**: Full git history verification
+   - Can verify commits are signed by Google engineers
+   - Can inspect exact code being compiled
+   - Industry best practice (Kubernetes, Go modules, etc.)
+
+4. **Database safety**: Since this runs in Cassandra (mission-critical database):
+   - Any vulnerability could compromise data
+   - Commit pinning ensures we know EXACTLY what code is running
+   - No surprises from upstream changes
+
+**Updating dependencies:**
+When updating RE2/Abseil versions, we:
+1. Review release notes for security fixes
+2. Find exact commit hash for new release
+3. Update `RE2_COMMIT`/`ABSEIL_COMMIT` in build.sh
+4. Code review the change (visible in git diff)
+5. Rebuild all platforms via GitHub Actions
+
 ## Overview
 
 The automated build system:

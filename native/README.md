@@ -142,42 +142,70 @@ This library is designed for production environments (databases, web services, s
 
 ### How to Rebuild
 
-**Using GitHub Actions (Automated):**
+#### Method 1: GitHub CLI (Recommended - UI can be flakey)
+
+**Trigger the build:**
+```bash
+# From the repository directory
+gh workflow run build-native.yml \
+  --ref development \
+  -f target_branch=development
+```
+
+**Options:**
+- `--ref development`: Which branch to run the workflow from (use your branch if testing changes)
+- `-f target_branch=development`: Which branch the PR should target (usually `development` or `main`)
+
+**Monitor the build:**
+```bash
+# List recent runs
+gh run list --workflow=build-native.yml --limit 5
+
+# Watch the latest run in real-time
+gh run watch
+
+# View specific run
+gh run view 19434368550  # Use run ID from list command
+
+# View logs if build fails
+gh run view 19434368550 --log
+```
+
+**Wait ~10-15 minutes** for all 4 platforms to complete.
+
+**Check for PR:**
+```bash
+# List recent PRs
+gh pr list --limit 5
+
+# View the created PR
+gh pr view <PR_NUMBER>
+```
+
+**Merge the PR:**
+```bash
+# Review and merge via CLI
+gh pr merge <PR_NUMBER> --squash --delete-branch
+
+# Or merge via GitHub UI
+```
+
+#### Method 2: GitHub UI (Alternative)
 
 1. **Navigate to workflow:**
    - Direct link: https://github.com/axonops/libre2-java/actions/workflows/build-native.yml
-   - Or: GitHub → Actions → "Build Native Libraries" (left sidebar)
 
 2. **Trigger build:**
    - Click **"Run workflow"** button (top right, above workflow runs)
-   - If you don't see this button: use `gh` CLI instead (see below)
+   - If button not visible: Hard refresh (Cmd+Shift+R) or use gh CLI above
 
 3. **Select options:**
-   - **Use workflow from:** Select branch with build script changes
-   - **Target branch to create PR against:** Usually `development`
+   - **Use workflow from:** `development` (or your branch)
+   - **Target branch to create PR against:** `development`
 
-4. **Click "Run workflow"**
+4. **Click "Run workflow"** and wait ~10-15 minutes
 
-5. **Wait ~10-15 minutes** for all 4 platforms to build
-
-6. **Review automatically created PR:**
-   - Workflow creates branch `native-libs-YYYYMMDD-HHMMSS`
-   - Commits all 4 libraries to `src/main/resources/native/`
-   - Opens PR against your selected target branch
-
-7. **Merge PR** when satisfied
-
-**Using GitHub CLI (if UI doesn't work):**
-
-```bash
-gh workflow run build-native.yml --ref development -f target_branch=development
-```
-
-**Monitor progress:**
-```bash
-gh run list --workflow=build-native.yml --limit 5
-gh run watch  # Watch most recent run
-```
+5. **Review and merge the auto-created PR**
 
 ---
 

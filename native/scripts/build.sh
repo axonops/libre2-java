@@ -66,23 +66,26 @@ if [ ! -d "re2" ]; then
 
     # SECURITY: Verify commit signature via GitHub API
     echo "Verifying RE2 commit signature..."
-    API_RESPONSE=$(curl -s -w "\n%{http_code}" "https://api.github.com/repos/google/re2/commits/$RE2_COMMIT")
-    HTTP_CODE=$(echo "$API_RESPONSE" | tail -1)
-    BODY=$(echo "$API_RESPONSE" | sed '$d')
 
-    if [ "$HTTP_CODE" != "200" ]; then
-        echo "✗ WARNING: GitHub API call failed (HTTP $HTTP_CODE)"
-        echo "Cannot verify commit signature, but continuing build..."
+    # Try with jq if available (more reliable), fall back to grep
+    if command -v jq &> /dev/null; then
+        VERIFIED=$(curl -s "https://api.github.com/repos/google/re2/commits/$RE2_COMMIT" | \
+                   jq -r '.commit.verification.verified // "false"')
     else
-        VERIFIED=$(echo "$BODY" | grep -o '"verified":[^,]*' | head -1 | cut -d: -f2 | tr -d ' ')
+        VERIFIED=$(curl -s "https://api.github.com/repos/google/re2/commits/$RE2_COMMIT" | \
+                   grep -o '"verified"[[:space:]]*:[[:space:]]*[^,]*' | \
+                   head -1 | sed 's/.*:[[:space:]]*//' | tr -d ' "')
+    fi
 
-        if [ "$VERIFIED" = "true" ]; then
-            echo "✓ RE2 commit signature verified by GitHub"
-        else
-            echo "✗ ERROR: RE2 commit signature NOT verified (got: '$VERIFIED')"
-            echo "This commit may not be from a trusted Google engineer"
-            exit 1
-        fi
+    if [ "$VERIFIED" = "true" ]; then
+        echo "✓ RE2 commit signature verified by GitHub"
+    elif [ -z "$VERIFIED" ]; then
+        echo "✗ WARNING: Could not verify RE2 commit signature (API may be unavailable)"
+        echo "Continuing build, but verification recommended"
+    else
+        echo "✗ ERROR: RE2 commit signature NOT verified"
+        echo "This commit may not be from a trusted Google engineer"
+        exit 1
     fi
 
     cd ..
@@ -99,23 +102,26 @@ if [ ! -d "abseil-cpp" ]; then
 
     # SECURITY: Verify commit signature via GitHub API
     echo "Verifying Abseil commit signature..."
-    API_RESPONSE=$(curl -s -w "\n%{http_code}" "https://api.github.com/repos/abseil/abseil-cpp/commits/$ABSEIL_COMMIT")
-    HTTP_CODE=$(echo "$API_RESPONSE" | tail -1)
-    BODY=$(echo "$API_RESPONSE" | sed '$d')
 
-    if [ "$HTTP_CODE" != "200" ]; then
-        echo "✗ WARNING: GitHub API call failed (HTTP $HTTP_CODE)"
-        echo "Cannot verify commit signature, but continuing build..."
+    # Try with jq if available (more reliable), fall back to grep
+    if command -v jq &> /dev/null; then
+        VERIFIED=$(curl -s "https://api.github.com/repos/abseil/abseil-cpp/commits/$ABSEIL_COMMIT" | \
+                   jq -r '.commit.verification.verified // "false"')
     else
-        VERIFIED=$(echo "$BODY" | grep -o '"verified":[^,]*' | head -1 | cut -d: -f2 | tr -d ' ')
+        VERIFIED=$(curl -s "https://api.github.com/repos/abseil/abseil-cpp/commits/$ABSEIL_COMMIT" | \
+                   grep -o '"verified"[[:space:]]*:[[:space:]]*[^,]*' | \
+                   head -1 | sed 's/.*:[[:space:]]*//' | tr -d ' "')
+    fi
 
-        if [ "$VERIFIED" = "true" ]; then
-            echo "✓ Abseil commit signature verified by GitHub"
-        else
-            echo "✗ ERROR: Abseil commit signature NOT verified (got: '$VERIFIED')"
-            echo "This commit may not be from a trusted Google engineer"
-            exit 1
-        fi
+    if [ "$VERIFIED" = "true" ]; then
+        echo "✓ Abseil commit signature verified by GitHub"
+    elif [ -z "$VERIFIED" ]; then
+        echo "✗ WARNING: Could not verify Abseil commit signature (API may be unavailable)"
+        echo "Continuing build, but verification recommended"
+    else
+        echo "✗ ERROR: Abseil commit signature NOT verified"
+        echo "This commit may not be from a trusted Google engineer"
+        exit 1
     fi
 
     cd ..

@@ -12,8 +12,10 @@ public record CacheStatistics(
     long misses,
     long evictionsLRU,
     long evictionsIdle,
+    long evictionsDeferred,
     int currentSize,
-    int maxSize
+    int maxSize,
+    int deferredCleanupSize
 ) {
 
     /**
@@ -37,10 +39,17 @@ public record CacheStatistics(
     }
 
     /**
-     * Total number of evictions (LRU + idle).
+     * Total number of evictions (LRU + idle + deferred cleanup).
      */
     public long totalEvictions() {
         return evictionsLRU + evictionsIdle;
+    }
+
+    /**
+     * Total patterns pending deferred cleanup (evicted but not yet freed).
+     */
+    public int deferredCleanupPending() {
+        return deferredCleanupSize;
     }
 
     /**

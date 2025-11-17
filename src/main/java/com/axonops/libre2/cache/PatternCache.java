@@ -31,11 +31,16 @@ public final class PatternCache {
     private final Map<CacheKey, CachedPattern> cache;
     private final IdleEvictionTask evictionTask;
 
+    // Deferred cleanup: Patterns evicted from cache but still in use (refCount > 0)
+    // These will be freed when refCount reaches 0
+    private final java.util.List<CachedPattern> deferredCleanup = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     // Statistics
     private final AtomicLong hits = new AtomicLong(0);
     private final AtomicLong misses = new AtomicLong(0);
     private final AtomicLong evictionsLRU = new AtomicLong(0);
     private final AtomicLong evictionsIdle = new AtomicLong(0);
+    private final AtomicLong evictionsDeferred = new AtomicLong(0);
 
     public PatternCache(RE2Config config) {
         this.config = config;
@@ -46,10 +51,23 @@ public final class PatternCache {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<CacheKey, CachedPattern> eldest) {
                     if (size() > config.maxCacheSize()) {
-                        logger.debug("RE2: LRU evicting pattern: {}", eldest.getKey());
-                        eldest.getValue().forceClose(); // Force close even if from cache
-                        evictionsLRU.incrementAndGet();
-                        return true;
+                        CachedPattern evicted = eldest.getValue();
+
+                        // Check if pattern can be freed immediately
+                        if (evicted.pattern().getRefCount() > 0) {
+                            // Pattern still in use - defer cleanup
+                            logger.debug("RE2: LRU evicting pattern (deferred cleanup - {} active matchers): {}",
+                                evicted.pattern().getRefCount(), eldest.getKey());
+                            deferredCleanup.add(evicted);
+                            evictionsDeferred.incrementAndGet();
+                        } else {
+                            // Can free immediately
+                            logger.debug("RE2: LRU evicting pattern (immediate): {}", eldest.getKey());
+                            evicted.forceClose();
+                            evictionsLRU.incrementAndGet();
+                        }
+
+                        return true; // Remove from cache either way
                     }
                     return false;
                 }
@@ -98,10 +116,24 @@ public final class PatternCache {
                 return cached.pattern();
             }
 
-            // Cache miss - compile and cache
+            // Cache miss - need to compile
             misses.incrementAndGet();
-            logger.debug("RE2: Cache miss - compiling pattern: {}", key);
 
+            // Before adding to cache, check if we have room
+            if (cache.size() >= config.maxCacheSize()) {
+                // Cache at capacity - check if ANY pattern can be evicted
+                boolean hasEvictablePattern = cache.values().stream()
+                    .anyMatch(cp -> cp.pattern().getRefCount() == 0);
+
+                if (!hasEvictablePattern) {
+                    // Cache full, all patterns in use - compile WITHOUT caching
+                    logger.warn("RE2: Cache full and all patterns in use - compiling without caching: {}", key);
+                    return compiler.get(); // Pattern works, just not cached
+                }
+            }
+
+            // Normal path - compile and cache (LRU will evict if needed)
+            logger.debug("RE2: Cache miss - compiling pattern: {}", key);
             Pattern pattern = compiler.get();
             cache.put(key, new CachedPattern(pattern));
 
@@ -111,6 +143,8 @@ public final class PatternCache {
 
     /**
      * Evicts idle patterns (called by background thread).
+     *
+     * Also cleans up deferred patterns that are now safe to free.
      *
      * @return number of patterns evicted
      */
@@ -129,22 +163,57 @@ public final class PatternCache {
                 CachedPattern cached = entry.getValue();
 
                 if (cached.lastAccessTime().isBefore(cutoff)) {
-                    logger.debug("RE2: Idle evicting pattern: {} (idle since: {})",
-                        entry.getKey(), cached.lastAccessTime());
-
-                    cached.forceClose(); // Force close even if from cache
-                    iterator.remove();
-                    evicted++;
+                    if (cached.pattern().getRefCount() > 0) {
+                        // Pattern idle but still in use - defer cleanup
+                        logger.debug("RE2: Idle evicting pattern (deferred - {} active matchers): {}",
+                            cached.pattern().getRefCount(), entry.getKey());
+                        deferredCleanup.add(cached);
+                        iterator.remove();
+                        evictionsDeferred.incrementAndGet();
+                        evicted++;
+                    } else {
+                        // Can free immediately
+                        logger.debug("RE2: Idle evicting pattern (immediate): {}", entry.getKey());
+                        cached.forceClose();
+                        iterator.remove();
+                        evictionsIdle.addAndGet(1);
+                        evicted++;
+                    }
                 }
             }
         }
 
-        if (evicted > 0) {
-            evictionsIdle.addAndGet(evicted);
-            logger.info("RE2: Idle eviction completed - evicted {} patterns", evicted);
+        // Clean up deferred patterns (now safe to free)
+        int deferredCleaned = cleanupDeferredPatterns();
+
+        if (evicted > 0 || deferredCleaned > 0) {
+            logger.info("RE2: Eviction completed - idle evicted: {}, deferred cleaned: {}", evicted, deferredCleaned);
         }
 
         return evicted;
+    }
+
+    /**
+     * Cleans up deferred patterns that are no longer in use.
+     *
+     * @return number of patterns cleaned
+     */
+    private int cleanupDeferredPatterns() {
+        int cleaned = 0;
+
+        // CopyOnWriteArrayList allows safe iteration + modification
+        for (CachedPattern deferred : deferredCleanup) {
+            if (deferred.pattern().getRefCount() == 0) {
+                // Now safe to free
+                logger.debug("RE2: Cleaning up deferred pattern");
+                deferred.forceClose();
+                deferredCleanup.remove(deferred);
+                evictionsLRU.incrementAndGet(); // Count as LRU eviction
+                cleaned++;
+            }
+        }
+
+        return cleaned;
     }
 
     /**
@@ -152,14 +221,17 @@ public final class PatternCache {
      */
     public CacheStatistics getStatistics() {
         int currentSize = config.cacheEnabled() ? cache.size() : 0;
+        int deferredSize = deferredCleanup.size();
 
         return new CacheStatistics(
             hits.get(),
             misses.get(),
             evictionsLRU.get(),
             evictionsIdle.get(),
+            evictionsDeferred.get(),
             currentSize,
-            config.maxCacheSize()
+            config.maxCacheSize(),
+            deferredSize
         );
     }
 

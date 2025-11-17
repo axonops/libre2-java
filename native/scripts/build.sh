@@ -67,12 +67,12 @@ if [ ! -d "re2" ]; then
     # SECURITY: Verify commit signature via GitHub API
     echo "Verifying RE2 commit signature..."
     VERIFIED=$(curl -s "https://api.github.com/repos/google/re2/commits/$RE2_COMMIT" | \
-               grep -o '"verified":[^,]*' | head -1 | cut -d: -f2)
+               grep -o '"verified":[^,]*' | head -1 | cut -d: -f2 | tr -d ' ')
 
     if [ "$VERIFIED" = "true" ]; then
         echo "✓ RE2 commit signature verified by GitHub"
     else
-        echo "✗ ERROR: RE2 commit signature NOT verified"
+        echo "✗ ERROR: RE2 commit signature NOT verified (got: '$VERIFIED')"
         echo "This commit may not be from a trusted Google engineer"
         exit 1
     fi
@@ -92,12 +92,12 @@ if [ ! -d "abseil-cpp" ]; then
     # SECURITY: Verify commit signature via GitHub API
     echo "Verifying Abseil commit signature..."
     VERIFIED=$(curl -s "https://api.github.com/repos/abseil/abseil-cpp/commits/$ABSEIL_COMMIT" | \
-               grep -o '"verified":[^,]*' | head -1 | cut -d: -f2)
+               grep -o '"verified":[^,]*' | head -1 | cut -d: -f2 | tr -d ' ')
 
     if [ "$VERIFIED" = "true" ]; then
         echo "✓ Abseil commit signature verified by GitHub"
     else
-        echo "✗ ERROR: Abseil commit signature NOT verified"
+        echo "✗ ERROR: Abseil commit signature NOT verified (got: '$VERIFIED')"
         echo "This commit may not be from a trusted Google engineer"
         exit 1
     fi

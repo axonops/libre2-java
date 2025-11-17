@@ -451,7 +451,7 @@ mvn test
 
 - **[CONFIGURATION.md](CONFIGURATION.md)** - Complete configuration guide
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Design and internals
-- **[USAGE.md](USAGE.md)** - Comprehensive usage examples
+- **[DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)** - Why native binding (not pure Java)
 - **[THREAD_SAFETY.md](THREAD_SAFETY.md)** - Thread safety guarantees
 - **[native/README.md](native/README.md)** - Native library build system
 

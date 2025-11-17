@@ -149,7 +149,7 @@ class StressTest {
     @Timeout(value = 60, unit = TimeUnit.SECONDS)
     void testMemoryPressure_ManySmallPatterns() throws InterruptedException {
         int threadCount = 100;
-        int patternsPerThread = 100;
+        int patternsPerThread = 600; // 60K total > 50K cache
         CountDownLatch done = new CountDownLatch(threadCount);
         AtomicInteger errors = new AtomicInteger(0);
 
@@ -172,9 +172,9 @@ class StressTest {
 
         assertThat(errors.get()).isEqualTo(0);
 
-        // 10,000 patterns compiled - cache should enforce size limit
+        // 60,000 patterns compiled - cache should enforce size limit
         CacheStatistics stats = Pattern.getCacheStatistics();
         assertThat(stats.currentSize()).isLessThanOrEqualTo(50000);
-        assertThat(stats.evictionsLRU()).isGreaterThanOrEqualTo(9000);
+        assertThat(stats.evictionsLRU()).isGreaterThanOrEqualTo(10000); // 60K - 50K = exactly 10K evictions
     }
 }

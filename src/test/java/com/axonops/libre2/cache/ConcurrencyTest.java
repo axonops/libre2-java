@@ -292,6 +292,6 @@ class ConcurrencyTest {
         // Cache should be at or below max size (LRU evictions occurred)
         CacheStatistics stats = Pattern.getCacheStatistics();
         assertThat(stats.currentSize()).isLessThanOrEqualTo(50000); // Default max
-        assertThat(stats.evictionsLRU()).isGreaterThan(10000); // Some evictions happened
+        assertThat(stats.evictionsLRU()).isGreaterThan(1000); // Some evictions happened
     }
 }

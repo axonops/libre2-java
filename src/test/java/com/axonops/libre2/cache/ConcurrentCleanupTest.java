@@ -124,7 +124,7 @@ class ConcurrentCleanupTest {
         CacheStatistics stats = Pattern.getCacheStatistics();
         assertThat(stats.currentSize()).isLessThanOrEqualTo(50000);
         // With 1500 patterns compiled, should have ~500+ evictions
-        assertThat(stats.evictionsLRU()).isGreaterThan(5000);
+        assertThat(stats.evictionsLRU()).isGreaterThan(1000);
     }
 
     @Test

@@ -3,7 +3,7 @@
 # Purpose: Creates a clean build environment with all dependencies needed to compile RE2
 #
 # What this does:
-# 1. Uses Ubuntu 22.04 as base (widely compatible)
+# 1. Uses Rocky Linux 8 as base (GLIBC 2.28 for maximum compatibility with RHEL 8+)
 # 2. Installs build tools: g++, cmake, curl, git
 # 3. Sets up a /build working directory
 # 4. Copies our build script and wrapper source
@@ -11,31 +11,40 @@
 # This image will be used in GitHub Actions to build:
 # - linux-x86_64/libre2.so
 # - linux-aarch64/libre2.so (via QEMU emulation or native ARM runners)
+#
+# Using Rocky 8 ensures compatibility with:
+# - Rocky Linux 8/9
+# - RHEL 8/9
+# - Ubuntu 20.04/22.04/24.04
+# - Any system with GLIBC 2.28+
 
-FROM ubuntu:22.04
+FROM rockylinux:8
 
-# Prevent interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
+# Enable PowerTools repo for development packages
+RUN dnf install -y dnf-plugins-core && \
+    dnf config-manager --set-enabled powertools
 
 # Install build dependencies
-# - build-essential: g++, make, etc
+# - gcc-c++: C++ compiler
+# - make: build automation
 # - cmake: for building RE2 and Abseil
 # - curl: for API calls and downloads
 # - git: for cloning RE2 and Abseil repos
 # - jq: for JSON parsing (signature verification)
-# - openjdk-17-jdk-headless: for JNI headers
-RUN apt-get update && apt-get install -y \
-    build-essential \
+# - java-17-openjdk-devel: for JNI headers
+RUN dnf install -y \
+    gcc-c++ \
+    make \
     cmake \
     curl \
     git \
     jq \
-    openjdk-17-jdk-headless \
-    && rm -rf /var/lib/apt/lists/*
+    java-17-openjdk-devel \
+    && dnf clean all
 
-# JAVA_HOME is set dynamically in build.sh based on architecture
-# - x86_64: /usr/lib/jvm/java-17-openjdk-amd64
-# - arm64:  /usr/lib/jvm/java-17-openjdk-arm64
+# JAVA_HOME for Rocky Linux
+# - x86_64: /usr/lib/jvm/java-17-openjdk
+# - aarch64: /usr/lib/jvm/java-17-openjdk
 
 # Set working directory where builds will happen
 WORKDIR /build

@@ -149,10 +149,55 @@ jobs:
           echo "✅ Tests passed on darwin-aarch64"
 
   # ============================================================================
-  # Linux Tests (Debian-based: Ubuntu 22.04)
+  # Linux Tests (Debian-based: Ubuntu LTS versions)
   # ============================================================================
 
-  test-linux-ubuntu-x86_64:
+  test-linux-ubuntu-2004-x86_64:
+    name: Test Linux Ubuntu 20.04 x86_64
+    needs: build-jar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code (for tests)
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: libre2-java-jar
+          path: target/
+
+      - name: Test in Ubuntu 20.04 container
+        run: |
+          docker run --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            ubuntu:20.04 \
+            bash -c "
+              # Install JDK 17 from AdoptOpenJDK
+              apt-get update
+              apt-get install -y wget apt-transport-https gnupg unzip
+
+              # Add Adoptium repository
+              wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | apt-key add -
+              echo 'deb https://packages.adoptium.net/artifactory/deb focal main' > /etc/apt/sources.list.d/adoptium.list
+              apt-get update
+              apt-get install -y temurin-17-jdk
+
+              # Verify Java
+              java -version
+
+              # Verify native library in JAR
+              echo 'Checking linux-x86_64 library in JAR:'
+              unzip -l target/libre2-java-*.jar | grep 'linux-x86_64/libre2.so'
+
+              # Run tests
+              ./mvnw test -B
+
+              echo '✅ Tests passed on Ubuntu 20.04 linux-x86_64'
+            "
+
+  test-linux-ubuntu-2204-x86_64:
     name: Test Linux Ubuntu 22.04 x86_64
     needs: build-jar
     runs-on: ubuntu-latest
@@ -186,11 +231,92 @@ jobs:
         run: |
           echo "✅ Tests passed on Ubuntu 22.04 linux-x86_64"
 
+  test-linux-ubuntu-2404-x86_64:
+    name: Test Linux Ubuntu 24.04 x86_64
+    needs: build-jar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code (for tests)
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: libre2-java-jar
+          path: target/
+
+      - name: Test in Ubuntu 24.04 container
+        run: |
+          docker run --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            ubuntu:24.04 \
+            bash -c "
+              # Install JDK 17
+              apt-get update
+              apt-get install -y openjdk-17-jdk unzip
+
+              # Verify Java
+              java -version
+
+              # Verify native library in JAR
+              echo 'Checking linux-x86_64 library in JAR:'
+              unzip -l target/libre2-java-*.jar | grep 'linux-x86_64/libre2.so'
+
+              # Run tests
+              ./mvnw test -B
+
+              echo '✅ Tests passed on Ubuntu 24.04 linux-x86_64'
+            "
+
   # ============================================================================
-  # Linux Tests (RHEL-based: Rocky Linux 9)
+  # Linux Tests (RHEL-based: Rocky Linux versions)
   # ============================================================================
 
-  test-linux-rocky-x86_64:
+  test-linux-rocky-8-x86_64:
+    name: Test Linux Rocky 8 x86_64
+    needs: build-jar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code (for tests)
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: libre2-java-jar
+          path: target/
+
+      - name: Test in Rocky Linux 8 container
+        run: |
+          docker run --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            rockylinux:8 \
+            bash -c "
+              # Install JDK 17
+              dnf install -y java-17-openjdk java-17-openjdk-devel unzip
+
+              # Set JAVA_HOME
+              export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+              export PATH=\$JAVA_HOME/bin:\$PATH
+
+              # Verify Java
+              java -version
+
+              # Verify native library in JAR
+              echo 'Checking linux-x86_64 library in JAR:'
+              unzip -l target/libre2-java-*.jar | grep 'linux-x86_64/libre2.so'
+
+              # Run tests
+              ./mvnw test -B
+
+              echo '✅ Tests passed on Rocky Linux 8 x86_64'
+            "
+
+  test-linux-rocky-9-x86_64:
     name: Test Linux Rocky 9 x86_64
     needs: build-jar
     runs-on: ubuntu-latest
@@ -233,7 +359,7 @@ jobs:
               echo '✅ Tests passed on Rocky Linux 9 x86_64'
             "
 
-  test-linux-ubuntu-aarch64:
+  test-linux-ubuntu-2204-aarch64:
     name: Test Linux Ubuntu 22.04 aarch64 (ARM64)
     needs: build-jar
     runs-on: ubuntu-latest
@@ -253,9 +379,9 @@ jobs:
         with:
           platforms: arm64
 
-      - name: Test in Ubuntu ARM64 container
+      - name: Test in Ubuntu 22.04 ARM64 container
         run: |
-          # Run tests in Ubuntu ARM64 Docker container with JDK 17
+          # Run tests in Ubuntu 22.04 ARM64 Docker container with JDK 17
           docker run --rm --platform linux/arm64 \
             -v "$(pwd):/workspace" \
             -w /workspace \
@@ -271,7 +397,52 @@ jobs:
               echo '✅ Tests passed on Ubuntu 22.04 linux-aarch64'
             "
 
-  test-linux-rocky-aarch64:
+  test-linux-ubuntu-2404-aarch64:
+    name: Test Linux Ubuntu 24.04 aarch64 (ARM64)
+    needs: build-jar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code (for tests)
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: libre2-java-jar
+          path: target/
+
+      - name: Set up QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Test in Ubuntu 24.04 ARM64 container
+        run: |
+          # Run tests in Ubuntu 24.04 ARM64 Docker container with JDK 17
+          docker run --rm --platform linux/arm64 \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            ubuntu:24.04 \
+            bash -c "
+              # Install JDK 17
+              apt-get update
+              apt-get install -y openjdk-17-jdk unzip
+
+              # Verify Java
+              java -version
+
+              # Verify native library in JAR
+              echo 'Checking linux-aarch64 library in JAR:'
+              unzip -l target/libre2-java-*.jar | grep 'linux-aarch64/libre2.so'
+
+              # Run tests
+              ./mvnw test -B
+
+              echo '✅ Tests passed on Ubuntu 24.04 linux-aarch64'
+            "
+
+  test-linux-rocky-9-aarch64:
     name: Test Linux Rocky 9 aarch64 (ARM64)
     needs: build-jar
     runs-on: ubuntu-latest
@@ -325,7 +496,17 @@ jobs:
 
   all-platforms-tested:
     name: All Platforms Tested
-    needs: [test-macos-x86_64, test-macos-aarch64, test-linux-ubuntu-x86_64, test-linux-rocky-x86_64, test-linux-ubuntu-aarch64, test-linux-rocky-aarch64]
+    needs:
+      - test-macos-x86_64
+      - test-macos-aarch64
+      - test-linux-ubuntu-2004-x86_64
+      - test-linux-ubuntu-2204-x86_64
+      - test-linux-ubuntu-2404-x86_64
+      - test-linux-ubuntu-2204-aarch64
+      - test-linux-ubuntu-2404-aarch64
+      - test-linux-rocky-8-x86_64
+      - test-linux-rocky-9-x86_64
+      - test-linux-rocky-9-aarch64
     runs-on: ubuntu-latest
 
     steps:
@@ -333,12 +514,22 @@ jobs:
         run: |
           echo "✅ All platform tests passed!"
           echo ""
-          echo "Verified platforms:"
+          echo "Verified platforms (10 total):"
+          echo ""
+          echo "macOS:"
           echo "  - macOS x86_64 (Intel)"
           echo "  - macOS aarch64 (Apple Silicon)"
-          echo "  - Linux Ubuntu 22.04 x86_64 (Debian-based)"
-          echo "  - Linux Ubuntu 22.04 aarch64 (Debian-based ARM64)"
-          echo "  - Linux Rocky 9 x86_64 (RHEL-based)"
-          echo "  - Linux Rocky 9 aarch64 (RHEL-based ARM64)"
+          echo ""
+          echo "Ubuntu (Debian-based):"
+          echo "  - Ubuntu 20.04 x86_64"
+          echo "  - Ubuntu 22.04 x86_64"
+          echo "  - Ubuntu 22.04 aarch64"
+          echo "  - Ubuntu 24.04 x86_64"
+          echo "  - Ubuntu 24.04 aarch64"
+          echo ""
+          echo "Rocky Linux (RHEL-based):"
+          echo "  - Rocky 8 x86_64"
+          echo "  - Rocky 9 x86_64"
+          echo "  - Rocky 9 aarch64"
           echo ""
           echo "All native libraries load and function correctly!"

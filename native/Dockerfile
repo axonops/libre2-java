@@ -26,6 +26,7 @@ RUN dnf install -y dnf-plugins-core && \
 
 # Install build dependencies
 # - gcc-c++: C++ compiler
+# - libstdc++-static: static C++ standard library (required for -static-libstdc++)
 # - make: build automation
 # - cmake: for building RE2 and Abseil
 # - curl: for API calls and downloads
@@ -34,6 +35,7 @@ RUN dnf install -y dnf-plugins-core && \
 # - java-17-openjdk-devel: for JNI headers
 RUN dnf install -y \
     gcc-c++ \
+    libstdc++-static \
     make \
     cmake \
     curl \

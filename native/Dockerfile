@@ -33,9 +33,9 @@ RUN apt-get update && apt-get install -y \
     openjdk-17-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
 
-# Set JAVA_HOME for JNI headers
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-# Note: On ARM64, this will be java-17-openjdk-arm64, handled in build.sh
+# JAVA_HOME is set dynamically in build.sh based on architecture
+# - x86_64: /usr/lib/jvm/java-17-openjdk-amd64
+# - arm64:  /usr/lib/jvm/java-17-openjdk-arm64
 
 # Set working directory where builds will happen
 WORKDIR /build

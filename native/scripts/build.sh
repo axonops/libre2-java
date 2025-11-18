@@ -182,10 +182,10 @@ fi
 if [ -z "$JAVA_HOME" ]; then
     if [ "$OS" = "darwin" ]; then
         JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || echo "")
+    elif [ "$ARCH" = "aarch64" ] && [ -d "/usr/lib/jvm/java-17-openjdk-arm64" ]; then
+        JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"
     elif [ -d "/usr/lib/jvm/java-17-openjdk-amd64" ]; then
         JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
-    elif [ -d "/usr/lib/jvm/java-17-openjdk-arm64" ]; then
-        JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"
     fi
 fi
 

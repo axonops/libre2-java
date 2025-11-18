@@ -130,4 +130,20 @@ int re2_pattern_ok(void* pattern) {
     }
 }
 
+/**
+ * Returns the size of the compiled pattern's program in bytes.
+ * This represents the native (off-heap) memory consumed by this pattern.
+ *
+ * @param pattern The compiled pattern pointer
+ * @return Size in bytes, or 0 if pattern is null
+ */
+size_t re2_pattern_memory(void* pattern) {
+    if (!pattern) return 0;
+    try {
+        return static_cast<RE2*>(pattern)->ProgramSize();
+    } catch (...) {
+        return 0;
+    }
+}
+
 } // extern "C"

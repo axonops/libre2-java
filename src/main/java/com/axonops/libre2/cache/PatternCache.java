@@ -213,6 +213,9 @@ public final class PatternCache {
      *
      * Uses sample-based LRU: samples subset of cache and evicts oldest.
      * Much faster than scanning entire cache.
+     *
+     * IMPORTANT: Patterns accessed within the last 100ms are protected from eviction
+     * to prevent race conditions where a pattern is evicted before the caller can use it.
      */
     private void evictLRUBatch(int toEvict) {
         int actualToEvict = Math.min(toEvict, cache.size() - config.maxCacheSize());
@@ -222,8 +225,14 @@ public final class PatternCache {
         // This is O(sample size) not O(cache size)
         int sampleSize = Math.min(500, cache.size());
 
+        // Minimum age before a pattern can be evicted (configurable, default 1 second)
+        // This prevents evicting patterns before the caller has a chance to use them
+        long minAgeNanos = config.evictionProtectionMs() * 1_000_000L;
+        long cutoffTime = System.nanoTime() - minAgeNanos;
+
         List<Map.Entry<CacheKey, CachedPattern>> candidates = cache.entrySet()
             .stream()
+            .filter(e -> e.getValue().lastAccessTimeNanos() < cutoffTime) // Only evict "old" patterns
             .limit(sampleSize)
             .sorted(Comparator.comparingLong(e -> e.getValue().lastAccessTimeNanos()))
             .limit(actualToEvict)

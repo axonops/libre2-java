@@ -296,8 +296,8 @@ class ConcurrencyTest {
         start.countDown();
         done.await();
 
-        // Wait for async LRU eviction to settle
-        Thread.sleep(500);
+        // Wait for async LRU eviction to settle (must exceed evictionProtectionMs of 1 second)
+        Thread.sleep(1500);
 
         assertThat(errors.get()).isEqualTo(0);
 

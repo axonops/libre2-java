@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.*;
@@ -47,6 +48,7 @@ class CachePerformanceTest {
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(threadCount);
         AtomicLong totalOps = new AtomicLong(0);
+        AtomicInteger errors = new AtomicInteger(0);
 
         long startTime = System.nanoTime();
 
@@ -67,6 +69,7 @@ class CachePerformanceTest {
                         totalOps.incrementAndGet();
                     }
                 } catch (Exception e) {
+                    errors.incrementAndGet();
                     logger.error("Thread error", e);
                 } finally {
                     done.countDown();
@@ -94,9 +97,10 @@ class CachePerformanceTest {
         logger.info("Hit rate: {}%", String.format("%.1f", stats.hitRate() * 100));
         logger.info("========================================");
 
-        // Verify performance: should complete most ops (allow some failures under extreme load)
+        // Verify all operations completed without errors
+        assertThat(errors.get()).isEqualTo(0);
         long expected = (long) threadCount * operationsPerThread;
-        assertThat(totalOps.get()).isGreaterThan((long) (expected * 0.95)); // At least 95% complete
+        assertThat(totalOps.get()).isEqualTo(expected);
         // With lock-free implementation, should achieve high throughput
         assertThat(opsPerSecond).isGreaterThan(50000); // At least 50K ops/sec
     }
@@ -150,6 +154,7 @@ class CachePerformanceTest {
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(threadCount);
         AtomicLong maxLatencyNs = new AtomicLong(0);
+        AtomicInteger errors = new AtomicInteger(0);
 
         // These threads will trigger evictions by adding new patterns
         for (int i = 0; i < threadCount; i++) {
@@ -173,6 +178,7 @@ class CachePerformanceTest {
                         } while (latency > current && !maxLatencyNs.compareAndSet(current, latency));
                     }
                 } catch (Exception e) {
+                    errors.incrementAndGet();
                     logger.error("Thread error", e);
                 } finally {
                     done.countDown();
@@ -189,11 +195,13 @@ class CachePerformanceTest {
         logger.info("Threads: {}", threadCount);
         logger.info("Operations per thread: {}", operationsPerThread);
         logger.info("Max operation latency: {} ms", String.format("%.2f", maxLatencyMs));
+        logger.info("Errors: {}", errors.get());
         logger.info("==================================");
 
         // With async eviction, no single operation should be blocked for >100ms
         // Old synchronized implementation could block for seconds during eviction scan
         assertThat(maxLatencyMs).isLessThan(100.0);
+        assertThat(errors.get()).isEqualTo(0);
     }
 
     @Test

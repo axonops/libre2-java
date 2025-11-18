@@ -226,6 +226,27 @@ public final class Pattern implements AutoCloseable {
         return closed.get();
     }
 
+    /**
+     * Checks if the native pattern pointer is still valid.
+     *
+     * Used for defensive validation to detect memory corruption or
+     * other issues that could cause the native pointer to become invalid.
+     *
+     * @return true if pattern is valid, false if closed or native pointer invalid
+     */
+    public boolean isValid() {
+        if (closed.get()) {
+            return false;
+        }
+        try {
+            RE2Native lib = RE2LibraryLoader.loadLibrary();
+            return lib.re2_pattern_ok(nativePattern) == 1;
+        } catch (Exception e) {
+            logger.warn("RE2: Exception while validating pattern", e);
+            return false;
+        }
+    }
+
     @Override
     public void close() {
         if (fromCache) {

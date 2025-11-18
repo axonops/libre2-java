@@ -75,6 +75,9 @@ public final class PatternCache {
     private final AtomicLong totalNativeMemoryBytes = new AtomicLong(0);
     private final AtomicLong peakNativeMemoryBytes = new AtomicLong(0);
 
+    // Invalid pattern recompilations (defensive check triggered)
+    private final AtomicLong invalidPatternRecompilations = new AtomicLong(0);
+
     public PatternCache(RE2Config config) {
         this.config = config;
 
@@ -136,11 +139,22 @@ public final class PatternCache {
         // Try to get existing pattern (lock-free read)
         CachedPattern cached = cache.get(key);
         if (cached != null) {
-            // Cache hit - update access time atomically
-            cached.touch();
-            hits.incrementAndGet();
-            logger.debug("RE2: Cache hit - pattern: {}", key);
-            return cached.pattern();
+            // Optional defensive check: validate native pointer is still valid
+            if (config.validateCachedPatterns() && !cached.pattern().isValid()) {
+                logger.warn("RE2: Invalid pattern detected in cache (recompiling): {}", key);
+                invalidPatternRecompilations.incrementAndGet();
+                // Remove invalid pattern and decrement memory
+                if (cache.remove(key, cached)) {
+                    totalNativeMemoryBytes.addAndGet(-cached.memoryBytes());
+                }
+                // Fall through to recompile below
+            } else {
+                // Cache hit - update access time atomically
+                cached.touch();
+                hits.incrementAndGet();
+                logger.debug("RE2: Cache hit - pattern: {}", key);
+                return cached.pattern();
+            }
         }
 
         // Cache miss - use computeIfAbsent for safe concurrent compilation
@@ -337,7 +351,8 @@ public final class PatternCache {
             config.maxCacheSize(),
             deferredSize,
             totalNativeMemoryBytes.get(),
-            peakNativeMemoryBytes.get()
+            peakNativeMemoryBytes.get(),
+            invalidPatternRecompilations.get()
         );
     }
 
@@ -381,6 +396,7 @@ public final class PatternCache {
         evictionsIdle.set(0);
         evictionsDeferred.set(0);
         peakNativeMemoryBytes.set(totalNativeMemoryBytes.get());
+        invalidPatternRecompilations.set(0);
         logger.debug("RE2: Cache statistics reset");
     }
 

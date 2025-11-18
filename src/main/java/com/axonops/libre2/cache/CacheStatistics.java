@@ -33,7 +33,8 @@ public record CacheStatistics(
     int maxSize,
     int deferredCleanupSize,
     long nativeMemoryBytes,
-    long peakNativeMemoryBytes
+    long peakNativeMemoryBytes,
+    long invalidPatternRecompilations
 ) {
 
     /**

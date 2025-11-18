@@ -32,19 +32,21 @@ public record RE2Config(
     long evictionScanIntervalSeconds,
     long deferredCleanupIntervalSeconds,
     int maxSimultaneousCompiledPatterns,
-    int maxMatchersPerPattern
+    int maxMatchersPerPattern,
+    boolean validateCachedPatterns
 ) {
 
     /**
-     * Default configuration for production Cassandra use.
+     * Default configuration for production use.
      *
-     * Defaults chosen for typical 128GB+ Cassandra clusters:
+     * Defaults chosen for typical production clusters:
      * - Cache: 50K patterns (~50-200MB, negligible in large clusters)
      * - Idle timeout: 5 minutes (patterns auto-cleaned after inactivity)
      * - Scan interval: 1 minute (balance cleanup speed vs CPU)
      * - Deferred cleanup: 5 seconds (frequent cleanup of evicted-but-in-use patterns)
      * - Simultaneous limit: 100K ACTIVE patterns (NOT cumulative - patterns can be freed/recompiled)
      * - Matchers per pattern: 10K (prevents per-pattern exhaustion)
+     * - Validate cached patterns: enabled (defensive check for native pointer validity)
      */
     public static final RE2Config DEFAULT = new RE2Config(
         true,                          // Cache enabled
@@ -53,7 +55,8 @@ public record RE2Config(
         60,                            // Scan every 60 seconds
         5,                             // Deferred cleanup every 5 seconds
         100000,                        // Max 100K simultaneous active patterns
-        10000                          // Max 10K matchers per pattern
+        10000,                         // Max 10K matchers per pattern
+        true                           // Validate cached patterns (defensive check)
     );
 
     /**
@@ -67,7 +70,8 @@ public record RE2Config(
         0,                             // Ignored when cache disabled
         0,                             // Ignored when cache disabled
         100000,                        // Still enforce simultaneous limit
-        10000                          // Still enforce matcher limit
+        10000,                         // Still enforce matcher limit
+        false                          // No validation needed when no cache
     );
 
     /**
@@ -141,6 +145,7 @@ public record RE2Config(
         private long deferredCleanupIntervalSeconds = 5;
         private int maxSimultaneousCompiledPatterns = 100000;
         private int maxMatchersPerPattern = 10000;
+        private boolean validateCachedPatterns = true;
 
         public Builder cacheEnabled(boolean enabled) {
             this.cacheEnabled = enabled;
@@ -177,6 +182,11 @@ public record RE2Config(
             return this;
         }
 
+        public Builder validateCachedPatterns(boolean validate) {
+            this.validateCachedPatterns = validate;
+            return this;
+        }
+
         public RE2Config build() {
             return new RE2Config(
                 cacheEnabled,
@@ -185,7 +195,8 @@ public record RE2Config(
                 evictionScanIntervalSeconds,
                 deferredCleanupIntervalSeconds,
                 maxSimultaneousCompiledPatterns,
-                maxMatchersPerPattern
+                maxMatchersPerPattern,
+                validateCachedPatterns
             );
         }
     }

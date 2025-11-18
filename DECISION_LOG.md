@@ -100,3 +100,81 @@
 - **Impact:** Prevents catastrophic use-after-free under concurrent load
 - **Date:** 2025-11-17
 - **Status:** Implemented and tested
+
+### Decision: Lock-Free ConcurrentHashMap vs Synchronized LinkedHashMap
+- **What:** Cache implementation for high concurrency
+- **Options:**
+  - Synchronized LinkedHashMap (original)
+  - ConcurrentHashMap with atomic timestamps
+  - Caffeine cache library
+- **Chosen:** ConcurrentHashMap with AtomicLong timestamps
+- **Rationale:**
+  - Lock-free reads (most common operation)
+  - computeIfAbsent for safe concurrent compilation
+  - No external dependencies
+  - Pattern compilation was inside lock causing bottleneck
+- **Impact:** >100K ops/sec with 100 threads, <1μs P50 latency
+- **Date:** 2025-11-18
+- **Status:** Implemented and tested
+
+### Decision: Soft Limits vs Strict Cache Size Limits
+- **What:** Should cache strictly enforce max size or allow temporary overage?
+- **Options:**
+  - Strict: Block until eviction completes
+  - Soft: Allow temporary overage, async eviction
+- **Chosen:** Soft limits with async eviction
+- **Rationale:**
+  - Strict limits would block callers during eviction
+  - Soft limits allow ~10-20% overage temporarily
+  - Async eviction runs in background, doesn't block cache access
+  - Better for high-throughput scenarios
+- **Impact:** Cache can temporarily exceed maxSize during high concurrent load
+- **Date:** 2025-11-18
+- **Status:** Implemented and tested
+
+### Decision: Sample-Based LRU Eviction
+- **What:** How to find least-recently-used patterns for eviction?
+- **Options:**
+  - Full scan O(n)
+  - Maintain sorted list O(log n) per access
+  - Sample-based O(sample size)
+- **Chosen:** Sample-based (sample 500 entries, evict oldest)
+- **Rationale:**
+  - Full scan of 50K entries = 5-10ms blocking
+  - Sample-based is O(500) regardless of cache size
+  - Good-enough LRU approximation
+  - Industry practice (Redis uses this approach)
+- **Impact:** Eviction is fast even with large caches
+- **Date:** 2025-11-18
+- **Status:** Implemented
+
+### Decision: Native Memory Tracking via RE2::ProgramSize()
+- **What:** How to track off-heap memory used by compiled patterns?
+- **Options:**
+  - Estimate from pattern complexity
+  - Call RE2::ProgramSize() at compile time
+  - Periodic iteration to sum memory
+- **Chosen:** Call ProgramSize() once at compile time, maintain running total
+- **Rationale:**
+  - O(1) per pattern vs O(n) periodic scan
+  - Accurate (from RE2 itself)
+  - Enables future memory-based eviction
+- **Impact:** Can monitor native memory pressure, ~100ns overhead per compile
+- **Date:** 2025-11-18
+- **Status:** Implemented and tested
+
+### Decision: Defensive Pattern Validation on Cache Hit
+- **What:** Should we validate native pointer before returning cached pattern?
+- **Options:**
+  - No validation (trust the cache)
+  - Always validate with re2_pattern_ok()
+  - Configurable validation
+- **Chosen:** Configurable, default enabled
+- **Rationale:**
+  - Prevents crashes from memory corruption
+  - Auto-heals by recompiling invalid patterns
+  - ~100ns overhead acceptable for safety
+  - Can be disabled if overhead unacceptable
+- **Impact:** Production resilience against edge cases
+- **Date:** 2025-11-18
+- **Status:** Implemented

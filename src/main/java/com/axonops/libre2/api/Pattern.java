@@ -250,7 +250,8 @@ public final class Pattern implements AutoCloseable {
     @Override
     public void close() {
         if (fromCache) {
-            logger.warn("RE2: Attempted to close cached pattern (ignoring - cache manages lifecycle)");
+            // This is expected behavior when using try-with-resources with cached patterns
+            logger.trace("RE2: Attempted to close cached pattern (ignoring - cache manages lifecycle)");
             return;
         }
 

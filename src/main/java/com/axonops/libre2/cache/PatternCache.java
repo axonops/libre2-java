@@ -48,18 +48,18 @@ import java.util.stream.Collectors;
 public final class PatternCache {
     private static final Logger logger = LoggerFactory.getLogger(PatternCache.class);
 
-    private final RE2Config config;
+    private volatile RE2Config config;
 
     public RE2Config getConfig() {
         return config;
     }
 
     // ConcurrentHashMap for lock-free reads/writes
-    private final ConcurrentHashMap<CacheKey, CachedPattern> cache;
-    private final IdleEvictionTask evictionTask;
+    private ConcurrentHashMap<CacheKey, CachedPattern> cache;
+    private IdleEvictionTask evictionTask;
 
     // Single-thread executor for async LRU eviction (doesn't block cache access)
-    private final ExecutorService lruEvictionExecutor;
+    private ExecutorService lruEvictionExecutor;
 
     // Deferred cleanup: Patterns evicted from cache but still in use (refCount > 0)
     private final CopyOnWriteArrayList<CachedPattern> deferredCleanup = new CopyOnWriteArrayList<>();
@@ -417,6 +417,60 @@ public final class PatternCache {
         resetStatistics();
         com.axonops.libre2.util.ResourceTracker.reset();
         logger.trace("RE2: Cache fully reset");
+    }
+
+    /**
+     * Reconfigures the cache with new settings (for testing only).
+     *
+     * This clears the existing cache and reinitializes with the new config.
+     *
+     * @param newConfig the new configuration
+     */
+    public synchronized void reconfigure(RE2Config newConfig) {
+        logger.info("RE2: Reconfiguring cache with new settings");
+
+        // Stop existing eviction task
+        if (evictionTask != null) {
+            evictionTask.stop();
+        }
+
+        // Shutdown existing LRU executor
+        if (lruEvictionExecutor != null) {
+            lruEvictionExecutor.shutdown();
+        }
+
+        // Clear existing cache
+        clear();
+        resetStatistics();
+        com.axonops.libre2.util.ResourceTracker.reset();
+
+        // Update config
+        this.config = newConfig;
+
+        // Reinitialize if cache enabled
+        if (newConfig.cacheEnabled()) {
+            this.cache = new ConcurrentHashMap<>(newConfig.maxCacheSize());
+
+            this.lruEvictionExecutor = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "RE2-LRU-Eviction");
+                t.setDaemon(true);
+                t.setPriority(Thread.MIN_PRIORITY);
+                return t;
+            });
+
+            this.evictionTask = new IdleEvictionTask(this, newConfig);
+            this.evictionTask.start();
+
+            logger.info("RE2: Cache reconfigured - maxSize: {}, idleTimeout: {}s, maxSimultaneousPatterns: {}",
+                newConfig.maxCacheSize(),
+                newConfig.idleTimeoutSeconds(),
+                newConfig.maxSimultaneousCompiledPatterns());
+        } else {
+            this.cache = null;
+            this.evictionTask = null;
+            this.lruEvictionExecutor = null;
+            logger.info("RE2: Cache disabled after reconfiguration");
+        }
     }
 
     /**

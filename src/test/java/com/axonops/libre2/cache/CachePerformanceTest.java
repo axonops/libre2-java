@@ -32,12 +32,22 @@ class CachePerformanceTest {
 
     @AfterEach
     void tearDown() {
+        // Restore default configuration for other tests
+        Pattern.configureCache(RE2Config.DEFAULT);
         Pattern.resetCache();
     }
 
     @Test
     @Timeout(value = 120, unit = TimeUnit.SECONDS)
     void testHighConcurrencyThroughput() throws InterruptedException {
+        // Configure higher limit for this test
+        // 100 threads × 10,000 ops × 10% new = 100,000 unique patterns + 1,000 pre-warmed
+        RE2Config testConfig = RE2Config.builder()
+            .maxCacheSize(150000)
+            .maxSimultaneousCompiledPatterns(200000)
+            .build();
+        Pattern.configureCache(testConfig);
+
         // Pre-warm cache with patterns
         for (int i = 0; i < 1000; i++) {
             Pattern.compile("pattern" + i);
@@ -68,10 +78,6 @@ class CachePerformanceTest {
                         }
                         totalOps.incrementAndGet();
                     }
-                } catch (com.axonops.libre2.api.ResourceException e) {
-                    // Resource limit exceeded is expected under extreme load
-                    // Don't count as error - we're testing throughput, not limits
-                    logger.debug("Thread hit resource limit (expected under heavy load)", e);
                 } catch (Exception e) {
                     errors.incrementAndGet();
                     logger.error("Thread error", e);
@@ -101,13 +107,10 @@ class CachePerformanceTest {
         logger.info("Hit rate: {}%", String.format("%.1f", stats.hitRate() * 100));
         logger.info("========================================");
 
-        // Verify operations completed without fatal errors
-        // (ResourceException is expected under extreme load and not counted as error)
+        // Verify ALL operations completed without errors
         assertThat(errors.get()).isEqualTo(0);
         long expected = (long) threadCount * operationsPerThread;
-        // At least 90% of operations should complete
-        // (some may be skipped due to resource limits under extreme load)
-        assertThat(totalOps.get()).isGreaterThanOrEqualTo((long)(expected * 0.9));
+        assertThat(totalOps.get()).isEqualTo(expected);
         // With lock-free implementation, should achieve high throughput
         assertThat(opsPerSecond).isGreaterThan(50000); // At least 50K ops/sec
     }

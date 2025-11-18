@@ -309,6 +309,27 @@ public final class Pattern implements AutoCloseable {
         cache.reset();
     }
 
+    /**
+     * Reconfigures the cache with new settings (for testing only).
+     *
+     * This replaces the existing cache with a new one using the provided config.
+     * All cached patterns are cleared.
+     *
+     * @param config the new configuration
+     */
+    public static void configureCache(RE2Config config) {
+        cache.reconfigure(config);
+    }
+
+    /**
+     * Gets the current cache configuration.
+     *
+     * @return the current RE2Config
+     */
+    public static RE2Config getCacheConfig() {
+        return cache.getConfig();
+    }
+
     private void checkNotClosed() {
         if (closed.get()) {
             throw new IllegalStateException("RE2: Pattern is closed");

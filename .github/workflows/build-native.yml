@@ -169,7 +169,7 @@ jobs:
   # ============================================================================
 
   build-linux-x86_64:
-    name: Build Linux x86_64
+    name: Build Linux x86_64 (Rocky 8)
     runs-on: ubuntu-latest
     environment: native-builds  # Use protected environment for commit hashes
 
@@ -237,7 +237,7 @@ jobs:
           retention-days: 30
 
   build-linux-aarch64:
-    name: Build Linux aarch64 (ARM64)
+    name: Build Linux aarch64 (Rocky 8 ARM64)
     runs-on: ubuntu-latest
     environment: native-builds  # Use protected environment for commit hashes
 

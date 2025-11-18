@@ -167,10 +167,18 @@ jobs:
           name: libre2-java-jar
           path: target/
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('pom.xml') }}
+          restore-keys: maven-
+
       - name: Test in Ubuntu 20.04 container
         run: |
           docker run --rm \
             -v "$(pwd):/workspace" \
+            -v ~/.m2:/root/.m2 \
             -w /workspace \
             ubuntu:20.04 \
             bash -c "
@@ -247,10 +255,18 @@ jobs:
           name: libre2-java-jar
           path: target/
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('pom.xml') }}
+          restore-keys: maven-
+
       - name: Test in Ubuntu 24.04 container
         run: |
           docker run --rm \
             -v "$(pwd):/workspace" \
+            -v ~/.m2:/root/.m2 \
             -w /workspace \
             ubuntu:24.04 \
             bash -c "
@@ -291,10 +307,18 @@ jobs:
           name: libre2-java-jar
           path: target/
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('pom.xml') }}
+          restore-keys: maven-
+
       - name: Test in Rocky Linux 8 container
         run: |
           docker run --rm \
             -v "$(pwd):/workspace" \
+            -v ~/.m2:/root/.m2 \
             -w /workspace \
             rockylinux:8 \
             bash -c "
@@ -334,11 +358,19 @@ jobs:
           name: libre2-java-jar
           path: target/
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('pom.xml') }}
+          restore-keys: maven-
+
       - name: Test in Rocky Linux container
         run: |
           # Run tests in Rocky Linux 9 container with JDK 17
           docker run --rm \
             -v "$(pwd):/workspace" \
+            -v ~/.m2:/root/.m2 \
             -w /workspace \
             rockylinux:9 \
             bash -c "
@@ -378,6 +410,13 @@ jobs:
           name: libre2-java-jar
           path: target/
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('pom.xml') }}
+          restore-keys: maven-
+
       - name: Set up QEMU for ARM64
         uses: docker/setup-qemu-action@v3
         with:
@@ -388,6 +427,7 @@ jobs:
           # Run tests in Ubuntu 22.04 ARM64 Docker container with JDK 17
           docker run --rm --platform linux/arm64 \
             -v "$(pwd):/workspace" \
+            -v ~/.m2:/root/.m2 \
             -w /workspace \
             eclipse-temurin:17-jdk \
             bash -c "
@@ -420,6 +460,13 @@ jobs:
           name: libre2-java-jar
           path: target/
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('pom.xml') }}
+          restore-keys: maven-
+
       - name: Set up QEMU for ARM64
         uses: docker/setup-qemu-action@v3
         with:
@@ -430,6 +477,7 @@ jobs:
           # Run tests in Ubuntu 24.04 ARM64 Docker container with JDK 17
           docker run --rm --platform linux/arm64 \
             -v "$(pwd):/workspace" \
+            -v ~/.m2:/root/.m2 \
             -w /workspace \
             ubuntu:24.04 \
             bash -c "
@@ -466,6 +514,13 @@ jobs:
           name: libre2-java-jar
           path: target/
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('pom.xml') }}
+          restore-keys: maven-
+
       - name: Set up QEMU for ARM64
         uses: docker/setup-qemu-action@v3
         with:
@@ -476,6 +531,7 @@ jobs:
           # Run tests in Rocky Linux 9 ARM64 container with JDK 17
           docker run --rm --platform linux/arm64 \
             -v "$(pwd):/workspace" \
+            -v ~/.m2:/root/.m2 \
             -w /workspace \
             rockylinux:9 \
             bash -c "

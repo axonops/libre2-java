@@ -186,8 +186,8 @@ jobs:
           context: ./native
           load: true
           tags: re2-builder
-          cache-from: type=gha,scope=linux-x86_64
-          cache-to: type=gha,mode=max,scope=linux-x86_64
+          cache-from: type=gha,scope=linux-x86_64-${{ hashFiles('native/Dockerfile') }}
+          cache-to: type=gha,mode=max,scope=linux-x86_64-${{ hashFiles('native/Dockerfile') }}
 
       - name: Build RE2 wrapper
         env:
@@ -266,8 +266,8 @@ jobs:
           platforms: linux/arm64
           load: true
           tags: re2-builder-arm64
-          cache-from: type=gha,scope=linux-aarch64
-          cache-to: type=gha,mode=max,scope=linux-aarch64
+          cache-from: type=gha,scope=linux-aarch64-${{ hashFiles('native/Dockerfile') }}
+          cache-to: type=gha,mode=max,scope=linux-aarch64-${{ hashFiles('native/Dockerfile') }}
 
       - name: Build RE2 wrapper (ARM64)
         env:

@@ -11,6 +11,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * High-concurrency tests for pattern compilation and matching.
@@ -18,6 +19,14 @@ import static org.assertj.core.api.Assertions.*;
  * Tests library behavior under extreme Cassandra-level concurrent load.
  */
 class ConcurrencyTest {
+
+    /**
+     * Detects if running under QEMU emulation (set by CI workflow).
+     * Performance tests are skipped under QEMU as results are not representative.
+     */
+    private static boolean isQemuEmulation() {
+        return "true".equals(System.getenv("QEMU_EMULATION"));
+    }
 
     @BeforeEach
     void setUp() {
@@ -102,8 +111,9 @@ class ConcurrencyTest {
         assertThat(stats.currentSize()).isEqualTo(1);
         assertThat(stats.totalRequests()).isEqualTo(100);
         // Most should be hits, but exact split depends on timing
-        // Relaxed to 50% for QEMU-emulated ARM64 environments (slower thread scheduling)
-        assertThat(stats.hits()).isGreaterThanOrEqualTo(50);
+        // Skip hit rate assertion under QEMU (too slow for meaningful measurement)
+        assumeTrue(!isQemuEmulation(), "Skipping hit rate assertion under QEMU emulation");
+        assertThat(stats.hits()).isGreaterThanOrEqualTo(90);
     }
 
     @Test

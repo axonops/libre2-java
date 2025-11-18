@@ -426,6 +426,7 @@ jobs:
         run: |
           # Run tests in Ubuntu 22.04 ARM64 Docker container with JDK 17
           docker run --rm --platform linux/arm64 \
+            -e QEMU_EMULATION=true \
             -v "$(pwd):/workspace" \
             -v ~/.m2:/root/.m2 \
             -w /workspace \
@@ -476,6 +477,7 @@ jobs:
         run: |
           # Run tests in Ubuntu 24.04 ARM64 Docker container with JDK 17
           docker run --rm --platform linux/arm64 \
+            -e QEMU_EMULATION=true \
             -v "$(pwd):/workspace" \
             -v ~/.m2:/root/.m2 \
             -w /workspace \
@@ -530,6 +532,7 @@ jobs:
         run: |
           # Run tests in Rocky Linux 9 ARM64 container with JDK 17
           docker run --rm --platform linux/arm64 \
+            -e QEMU_EMULATION=true \
             -v "$(pwd):/workspace" \
             -v ~/.m2:/root/.m2 \
             -w /workspace \

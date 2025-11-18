@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Performance benchmark tests for the optimized PatternCache.
@@ -24,6 +25,14 @@ import static org.assertj.core.api.Assertions.*;
  */
 class CachePerformanceTest {
     private static final Logger logger = LoggerFactory.getLogger(CachePerformanceTest.class);
+
+    /**
+     * Detects if running under QEMU emulation (set by CI workflow).
+     * Performance tests are skipped under QEMU as results are not representative.
+     */
+    private static boolean isQemuEmulation() {
+        return "true".equals(System.getenv("QEMU_EMULATION"));
+    }
 
     @BeforeEach
     void setUp() {
@@ -295,14 +304,16 @@ class CachePerformanceTest {
             // Key test: throughput should NOT collapse with more threads
             // Old synchronized implementation would collapse to near-zero
             // With lock-free implementation, throughput scales with thread count
-            // Thresholds relaxed for QEMU-emulated ARM64 environments (10-20x slower)
-            if (threadCount == 1) {
-                // Single thread does cold compilation - expect at least 5K ops/sec
-                assertThat(throughput).isGreaterThan(5000);
-            } else {
-                // Multi-threaded should scale - at least 10K ops/sec
-                // (each thread compiles its own unique patterns, no contention)
-                assertThat(throughput).isGreaterThan(10000);
+            // Skip throughput assertions under QEMU (too slow for meaningful measurement)
+            if (!isQemuEmulation()) {
+                if (threadCount == 1) {
+                    // Single thread does cold compilation - expect at least 50K ops/sec
+                    assertThat(throughput).isGreaterThan(50000);
+                } else {
+                    // Multi-threaded should scale - at least 100K ops/sec
+                    // (each thread compiles its own unique patterns, no contention)
+                    assertThat(throughput).isGreaterThan(100000);
+                }
             }
 
             previousThroughput = throughput;

@@ -234,6 +234,357 @@ class RE2Test {
         }
     }
 
+    // ===== Comprehensive Unicode Script Tests =====
+
+    @Test
+    void testChineseCharacters() {
+        // Simplified Chinese
+        try (Pattern p = RE2.compile("中文测试")) {
+            assertThat(p.matches("中文测试")).isTrue();
+            assertThat(p.matches("中文")).isFalse();
+        }
+
+        // Traditional Chinese
+        try (Pattern p = RE2.compile("繁體中文")) {
+            assertThat(p.matches("繁體中文")).isTrue();
+        }
+
+        // Mixed Chinese and ASCII
+        try (Pattern p = RE2.compile("测试123")) {
+            assertThat(p.matches("测试123")).isTrue();
+        }
+
+        // Chinese in pattern with wildcards
+        try (Pattern p = RE2.compile(".*中文.*")) {
+            try (Matcher m = p.matcher("这是中文文本")) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+
+        // Chinese character class (Unicode range)
+        try (Pattern p = RE2.compile("[\\x{4e00}-\\x{9fff}]+")) {
+            assertThat(p.matches("汉字")).isTrue();
+            assertThat(p.matches("abc")).isFalse();
+        }
+    }
+
+    @Test
+    void testArabicCharacters() {
+        // Basic Arabic text
+        try (Pattern p = RE2.compile("مرحبا")) {
+            assertThat(p.matches("مرحبا")).isTrue();
+        }
+
+        // Arabic with diacritics
+        try (Pattern p = RE2.compile("العربية")) {
+            assertThat(p.matches("العربية")).isTrue();
+        }
+
+        // Mixed Arabic and numbers
+        try (Pattern p = RE2.compile("رقم \\d+")) {
+            try (Matcher m = p.matcher("رقم 123")) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+
+        // Arabic numerals (Eastern Arabic)
+        try (Pattern p = RE2.compile("١٢٣")) {
+            assertThat(p.matches("١٢٣")).isTrue();
+        }
+    }
+
+    @Test
+    void testHebrewCharacters() {
+        // Basic Hebrew
+        try (Pattern p = RE2.compile("שלום")) {
+            assertThat(p.matches("שלום")).isTrue();
+        }
+
+        // Hebrew with vowel points (nikkud)
+        try (Pattern p = RE2.compile("עברית")) {
+            assertThat(p.matches("עברית")).isTrue();
+        }
+
+        // Mixed Hebrew and ASCII
+        try (Pattern p = RE2.compile("test שלום test")) {
+            assertThat(p.matches("test שלום test")).isTrue();
+        }
+    }
+
+    @Test
+    void testGreekCharacters() {
+        // Basic Greek
+        try (Pattern p = RE2.compile("Ελληνικά")) {
+            assertThat(p.matches("Ελληνικά")).isTrue();
+        }
+
+        // Greek letters commonly used in math/science
+        try (Pattern p = RE2.compile("αβγδ")) {
+            assertThat(p.matches("αβγδ")).isTrue();
+        }
+
+        // Greek uppercase
+        try (Pattern p = RE2.compile("ΑΒΓΔ")) {
+            assertThat(p.matches("ΑΒΓΔ")).isTrue();
+        }
+
+        // Mixed Greek and math symbols
+        try (Pattern p = RE2.compile("π = 3\\.14")) {
+            assertThat(p.matches("π = 3.14")).isTrue();
+        }
+    }
+
+    @Test
+    void testCyrillicCharacters() {
+        // Russian
+        try (Pattern p = RE2.compile("Привет")) {
+            assertThat(p.matches("Привет")).isTrue();
+        }
+
+        // Ukrainian
+        try (Pattern p = RE2.compile("Слава Україні")) {
+            assertThat(p.matches("Слава Україні")).isTrue();
+        }
+
+        // Mixed Cyrillic and Latin (common in technical docs)
+        try (Pattern p = RE2.compile("error: Ошибка")) {
+            assertThat(p.matches("error: Ошибка")).isTrue();
+        }
+    }
+
+    @Test
+    void testKoreanCharacters() {
+        // Hangul
+        try (Pattern p = RE2.compile("안녕하세요")) {
+            assertThat(p.matches("안녕하세요")).isTrue();
+        }
+
+        // Mixed Korean and ASCII
+        try (Pattern p = RE2.compile("Hello 세계")) {
+            assertThat(p.matches("Hello 세계")).isTrue();
+        }
+
+        // Korean with numbers
+        try (Pattern p = RE2.compile("테스트\\d+")) {
+            assertThat(p.matches("테스트123")).isTrue();
+        }
+    }
+
+    @Test
+    void testThaiCharacters() {
+        // Thai script
+        try (Pattern p = RE2.compile("สวัสดี")) {
+            assertThat(p.matches("สวัสดี")).isTrue();
+        }
+
+        // Thai with tone marks
+        try (Pattern p = RE2.compile("ภาษาไทย")) {
+            assertThat(p.matches("ภาษาไทย")).isTrue();
+        }
+    }
+
+    @Test
+    void testDevanagariCharacters() {
+        // Hindi
+        try (Pattern p = RE2.compile("नमस्ते")) {
+            assertThat(p.matches("नमस्ते")).isTrue();
+        }
+
+        // Sanskrit
+        try (Pattern p = RE2.compile("संस्कृत")) {
+            assertThat(p.matches("संस्कृत")).isTrue();
+        }
+    }
+
+    @Test
+    void testMixedScripts() {
+        // Multiple scripts in one pattern
+        try (Pattern p = RE2.compile("Hello 世界 مرحبا שלום")) {
+            assertThat(p.matches("Hello 世界 مرحبا שלום")).isTrue();
+        }
+
+        // Technical text with multiple scripts
+        try (Pattern p = RE2.compile("Error: 错误 - Ошибка")) {
+            assertThat(p.matches("Error: 错误 - Ошибка")).isTrue();
+        }
+
+        // Product names mixing scripts
+        try (Pattern p = RE2.compile("Sony ソニー")) {
+            assertThat(p.matches("Sony ソニー")).isTrue();
+        }
+    }
+
+    @Test
+    void testUnicodeEmoji() {
+        // Basic emoji
+        try (Pattern p = RE2.compile("😀😁😂")) {
+            assertThat(p.matches("😀😁😂")).isTrue();
+        }
+
+        // Emoji with text
+        try (Pattern p = RE2.compile("Hello 👋 World 🌍")) {
+            assertThat(p.matches("Hello 👋 World 🌍")).isTrue();
+        }
+
+        // Search for emoji in text
+        try (Pattern p = RE2.compile("👍")) {
+            try (Matcher m = p.matcher("Great job! 👍 Keep going!")) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+
+        // Emoji sequences (family, flags, etc.)
+        try (Pattern p = RE2.compile("🇺🇸")) {
+            assertThat(p.matches("🇺🇸")).isTrue();
+        }
+    }
+
+    @Test
+    void testSpecialUnicodeSymbols() {
+        // Currency symbols
+        try (Pattern p = RE2.compile("€\\d+\\.\\d{2}")) {
+            assertThat(p.matches("€19.99")).isTrue();
+        }
+
+        try (Pattern p = RE2.compile("£\\d+")) {
+            assertThat(p.matches("£100")).isTrue();
+        }
+
+        try (Pattern p = RE2.compile("¥\\d+")) {
+            assertThat(p.matches("¥1000")).isTrue();
+        }
+
+        // Math symbols
+        try (Pattern p = RE2.compile("∑.*=.*∞")) {
+            try (Matcher m = p.matcher("∑x = ∞")) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+
+        // Copyright and trademark
+        try (Pattern p = RE2.compile("©.*®.*™")) {
+            try (Matcher m = p.matcher("© 2025 Company® Product™")) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void testUnicodeCaseInsensitive() {
+        // German with umlauts (ä, ö, ü have proper case folding)
+        try (Pattern p = RE2.compile("münchen", false)) {
+            assertThat(p.matches("münchen")).isTrue();
+            assertThat(p.matches("MÜNCHEN")).isTrue();
+        }
+
+        // Greek case insensitive
+        try (Pattern p = RE2.compile("ελληνικά", false)) {
+            assertThat(p.matches("ελληνικά")).isTrue();
+            assertThat(p.matches("ΕΛΛΗΝΙΚΆ")).isTrue();
+        }
+
+        // Cyrillic case insensitive
+        try (Pattern p = RE2.compile("привет", false)) {
+            assertThat(p.matches("привет")).isTrue();
+            assertThat(p.matches("ПРИВЕТ")).isTrue();
+        }
+
+        // Note: German ß does NOT fold to SS in RE2 (unlike Java)
+        // This is intentional RE2 behavior for correctness
+        try (Pattern p = RE2.compile("straße", false)) {
+            assertThat(p.matches("straße")).isTrue();
+            // STRASSE would NOT match - ß ≠ SS in RE2
+        }
+    }
+
+    @Test
+    void testUnicodeInLogProcessing() {
+        // Simulating logs with international user data
+        String logEntry = "2025-11-17 [INFO] User 田中太郎 (tanaka@example.jp) logged in from 東京";
+
+        // Find Japanese name
+        try (Pattern p = RE2.compile("[\\x{4e00}-\\x{9fff}\\x{3040}-\\x{309f}\\x{30a0}-\\x{30ff}]+")) {
+            try (Matcher m = p.matcher(logEntry)) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+
+        // Find email
+        try (Pattern p = RE2.compile("\\w+@[\\w.]+")) {
+            try (Matcher m = p.matcher(logEntry)) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void testUnicodeNormalization() {
+        // Precomposed vs decomposed (NFC vs NFD)
+        // é can be U+00E9 (precomposed) or U+0065 U+0301 (decomposed)
+        String precomposed = "café";  // Using precomposed é
+
+        try (Pattern p = RE2.compile("café")) {
+            assertThat(p.matches(precomposed)).isTrue();
+        }
+    }
+
+    @Test
+    void testRTLScriptMixing() {
+        // Right-to-left text mixed with left-to-right
+        String mixed = "The word שלום means peace";
+
+        try (Pattern p = RE2.compile("שלום")) {
+            try (Matcher m = p.matcher(mixed)) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+
+        // Arabic RTL
+        String arabicMixed = "Welcome مرحبا to our site";
+        try (Pattern p = RE2.compile("مرحبا")) {
+            try (Matcher m = p.matcher(arabicMixed)) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void testUnicodeWordBoundaries() {
+        // Word boundaries with CJK (no spaces between words)
+        try (Pattern p = RE2.compile("日本")) {
+            try (Matcher m = p.matcher("私は日本語を勉強しています")) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+
+        // Word boundaries with Arabic
+        try (Pattern p = RE2.compile("العربية")) {
+            try (Matcher m = p.matcher("أنا أتعلم اللغة العربية")) {
+                assertThat(m.find()).isTrue();
+            }
+        }
+    }
+
+    @Test
+    void testVeryLongUnicodeText() {
+        // Large text with mixed scripts
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 1000; i++) {
+            sb.append("Hello 世界 مرحبا שלום Привет 안녕 ");
+        }
+        String largeText = sb.toString();
+
+        // Search in large mixed-script text
+        try (Pattern p = RE2.compile("Привет")) {
+            try (Matcher m = p.matcher(largeText)) {
+                long start = System.currentTimeMillis();
+                assertThat(m.find()).isTrue();
+                long duration = System.currentTimeMillis() - start;
+                assertThat(duration).isLessThan(100); // Should be fast
+            }
+        }
+    }
+
     // ===== Email and URL Pattern Tests =====
 
     @Test

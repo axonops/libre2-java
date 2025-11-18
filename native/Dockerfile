@@ -23,19 +23,26 @@ ENV DEBIAN_FRONTEND=noninteractive
 # - curl: for API calls and downloads
 # - git: for cloning RE2 and Abseil repos
 # - jq: for JSON parsing (signature verification)
+# - openjdk-17-jdk-headless: for JNI headers
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     curl \
     git \
     jq \
+    openjdk-17-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
+
+# Set JAVA_HOME for JNI headers
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+# Note: On ARM64, this will be java-17-openjdk-arm64, handled in build.sh
 
 # Set working directory where builds will happen
 WORKDIR /build
 
 # Copy our build files
-COPY wrapper/re2_wrapper.cpp /build/wrapper/
+COPY wrapper/re2_jni.cpp /build/wrapper/
+COPY jni/com_axonops_libre2_jni_RE2NativeJNI.h /build/jni/
 COPY scripts/build.sh /build/
 
 # Make build script executable

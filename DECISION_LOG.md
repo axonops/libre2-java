@@ -194,3 +194,26 @@
 - **Impact:** Prevents "Pattern is closed" race conditions under concurrent eviction
 - **Date:** 2025-11-18
 - **Status:** Implemented
+
+## Phase 3: Timeout Support
+
+### Decision: Skip Phase 3 - Timeout Not Needed at Library Level
+- **What:** Should libre2-java implement per-pattern timeout support?
+- **Options:**
+  - ExecutorService-based timeout with Future.get()
+  - Cooperative cancellation token
+  - No timeout support (skip Phase 3)
+- **Chosen:** Skip Phase 3 entirely
+- **Rationale:**
+  - RE2 already guarantees linear-time complexity (no catastrophic backtracking)
+  - The primary reason for regex timeouts (ReDoS) is eliminated
+  - SAI index has query-wide timeout, not per-pattern timeout
+  - Timeout logic belongs in SAI index code where query context is available
+  - Adding timeout here would add complexity for no real benefit
+  - Caller can simply stop calling the library when query times out
+- **Impact:**
+  - Simpler library with no ExecutorService overhead
+  - SAI index handles timeout coordination with Cassandra
+  - Phase numbering: Skip to Phase 4 (Logging/Metrics)
+- **Date:** 2025-11-18
+- **Status:** Decision recorded, Phase 3 skipped

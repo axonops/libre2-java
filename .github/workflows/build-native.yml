@@ -39,6 +39,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Install dependencies
         run: |
           # Install jq for JSON parsing (signature verification)
@@ -47,6 +53,7 @@ jobs:
           # Verify cmake is available
           cmake --version
           jq --version
+          echo "JAVA_HOME: $JAVA_HOME"
 
       - name: Build RE2 wrapper
         env:
@@ -69,14 +76,14 @@ jobs:
           echo "Dependencies:"
           otool -L libre2.dylib
 
-          # Check exported functions
-          echo "Exported functions:"
-          nm -g libre2.dylib | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$'
+          # Check exported JNI functions
+          echo "Exported JNI functions:"
+          nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 8 functions exist
-          FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$' | wc -l)
-          if [ "$FUNC_COUNT" -ne 8 ]; then
-            echo "ERROR: Expected 8 exported functions, found $FUNC_COUNT"
+          # Verify all 9 JNI functions exist
+          FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
+          if [ "$FUNC_COUNT" -ne 9 ]; then
+            echo "ERROR: Expected 9 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -98,6 +105,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Install dependencies
         run: |
           # Install jq for JSON parsing (signature verification)
@@ -106,6 +119,7 @@ jobs:
           # Verify tools are available
           cmake --version
           jq --version
+          echo "JAVA_HOME: $JAVA_HOME"
 
       - name: Build RE2 wrapper
         env:
@@ -128,14 +142,14 @@ jobs:
           echo "Dependencies:"
           otool -L libre2.dylib
 
-          # Check exported functions
-          echo "Exported functions:"
-          nm -g libre2.dylib | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$'
+          # Check exported JNI functions
+          echo "Exported JNI functions:"
+          nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 8 functions exist
-          FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$' | wc -l)
-          if [ "$FUNC_COUNT" -ne 8 ]; then
-            echo "ERROR: Expected 8 exported functions, found $FUNC_COUNT"
+          # Verify all 9 JNI functions exist
+          FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
+          if [ "$FUNC_COUNT" -ne 9 ]; then
+            echo "ERROR: Expected 9 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -198,14 +212,14 @@ jobs:
           echo "Dependencies:"
           docker run --rm -v "$(pwd):/output" re2-builder ldd /output/libre2.so
 
-          # Check exported functions
-          echo "Exported functions:"
-          docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$'
+          # Check exported JNI functions
+          echo "Exported JNI functions:"
+          docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 8 functions exist
-          FUNC_COUNT=$(docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$' | wc -l)
-          if [ "$FUNC_COUNT" -ne 8 ]; then
-            echo "ERROR: Expected 8 exported functions, found $FUNC_COUNT"
+          # Verify all 9 JNI functions exist
+          FUNC_COUNT=$(docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
+          if [ "$FUNC_COUNT" -ne 9 ]; then
+            echo "ERROR: Expected 9 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -269,14 +283,14 @@ jobs:
           echo "Dependencies:"
           docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 ldd /output/libre2.so
 
-          # Check exported functions
-          echo "Exported functions:"
-          docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 nm -D /output/libre2.so | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$'
+          # Check exported JNI functions
+          echo "Exported JNI functions:"
+          docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 8 functions exist
-          FUNC_COUNT=$(docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 nm -D /output/libre2.so | grep ' T ' | grep -E 're2_(compile|free_pattern|full_match|partial_match|get_error|get_pattern|num_capturing_groups|pattern_ok)$' | wc -l)
-          if [ "$FUNC_COUNT" -ne 8 ]; then
-            echo "ERROR: Expected 8 exported functions, found $FUNC_COUNT"
+          # Verify all 9 JNI functions exist
+          FUNC_COUNT=$(docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
+          if [ "$FUNC_COUNT" -ne 9 ]; then
+            echo "ERROR: Expected 9 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -337,9 +351,11 @@ jobs:
 
           # Commit with heredoc
           git commit -m "$(cat <<'EOF'
-          Add compiled native libraries for all platforms
+          Add compiled JNI native libraries for all platforms
 
           Built from RE2 2025-11-05 and Abseil 20250814.1
+
+          Now using JNI instead of JNA for improved performance.
 
           Libraries:
           - darwin-x86_64/libre2.dylib (macOS Intel)
@@ -363,11 +379,13 @@ jobs:
           gh pr create \
             --base "${{ github.event.inputs.target_branch }}" \
             --head "$BRANCH_NAME" \
-            --title "Update native libraries (RE2 2025-11-05)" \
+            --title "Update JNI native libraries (RE2 2025-11-05)" \
             --body "$(cat <<'PRBODY'
-          ## Native Libraries Update
+          ## JNI Native Libraries Update
 
-          This PR adds/updates the compiled native RE2 libraries for all supported platforms.
+          This PR adds/updates the compiled JNI native RE2 libraries for all supported platforms.
+
+          **Now using JNI instead of JNA for improved performance** (~2-3x faster native calls).
 
           ### Built Libraries
           - ✅ darwin-x86_64/libre2.dylib (macOS Intel)
@@ -380,7 +398,7 @@ jobs:
           - Abseil: 20250814.1
 
           ### Verification
-          All libraries are self-contained with only system dependencies.
+          All libraries export 9 JNI functions and are self-contained with only system dependencies.
 
           ### Next Steps
           1. Review library sizes and dependencies

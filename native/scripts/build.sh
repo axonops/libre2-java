@@ -160,16 +160,51 @@ cmake ../re2 \
 cmake --build . -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 cd ..
 
-# Build our wrapper
-echo "Building wrapper..."
+# Build our JNI wrapper
+echo "Building JNI wrapper..."
 # Script must be run from native/ directory
-# Wrapper source is in native/wrapper/re2_wrapper.cpp
-if [ ! -f "../wrapper/re2_wrapper.cpp" ]; then
-    echo "Error: wrapper source not found. Run this script from the native/ directory"
+# Wrapper source is in native/wrapper/re2_jni.cpp
+if [ ! -f "../wrapper/re2_jni.cpp" ]; then
+    echo "Error: JNI wrapper source not found. Run this script from the native/ directory"
     exit 1
 fi
-WRAPPER_SRC="$(pwd)/../wrapper/re2_wrapper.cpp"
+WRAPPER_SRC="$(pwd)/../wrapper/re2_jni.cpp"
 
+# JNI header is in native/jni/
+JNI_HEADER_DIR="$(pwd)/../jni"
+if [ ! -f "$JNI_HEADER_DIR/com_axonops_libre2_jni_RE2NativeJNI.h" ]; then
+    echo "Error: JNI header not found at $JNI_HEADER_DIR"
+    echo "Generate it with: javac -h native/jni src/main/java/com/axonops/libre2/jni/RE2NativeJNI.java"
+    exit 1
+fi
+
+# Find JAVA_HOME for JNI headers
+if [ -z "$JAVA_HOME" ]; then
+    if [ "$OS" = "darwin" ]; then
+        JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || echo "")
+    elif [ -d "/usr/lib/jvm/java-17-openjdk-amd64" ]; then
+        JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+    elif [ -d "/usr/lib/jvm/java-17-openjdk-arm64" ]; then
+        JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"
+    fi
+fi
+
+if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME/include" ]; then
+    echo "ERROR: JAVA_HOME not set or JNI headers not found"
+    echo "Set JAVA_HOME to a JDK installation with include/jni.h"
+    exit 1
+fi
+
+JNI_INCLUDE="$JAVA_HOME/include"
+if [ "$OS" = "darwin" ]; then
+    JNI_PLATFORM_INCLUDE="$JAVA_HOME/include/darwin"
+else
+    JNI_PLATFORM_INCLUDE="$JAVA_HOME/include/linux"
+fi
+
+echo "JNI headers: $JNI_INCLUDE"
+echo "JNI platform headers: $JNI_PLATFORM_INCLUDE"
+echo "JNI wrapper header: $JNI_HEADER_DIR"
 echo "Wrapper source: $WRAPPER_SRC"
 
 if [ "$OS" = "darwin" ]; then
@@ -181,6 +216,9 @@ if [ "$OS" = "darwin" ]; then
         abseil-build/absl/*/*.a \
         -Ire2 \
         -Iabseil-cpp \
+        -I"$JNI_INCLUDE" \
+        -I"$JNI_PLATFORM_INCLUDE" \
+        -I"$JNI_HEADER_DIR" \
         -framework CoreFoundation \
         -Wl,-dead_strip
 
@@ -197,6 +235,9 @@ else
         -Wl,--whole-archive abseil-build/absl/*/*.a -Wl,--no-whole-archive \
         -Ire2 \
         -Iabseil-cpp \
+        -I"$JNI_INCLUDE" \
+        -I"$JNI_PLATFORM_INCLUDE" \
+        -I"$JNI_HEADER_DIR" \
         -Wl,--gc-sections \
         -static-libgcc \
         -static-libstdc++ \

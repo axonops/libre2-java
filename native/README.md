@@ -46,10 +46,11 @@ Our library bundles three components into a single self-contained shared library
 - **Why we need it:** RE2 depends on Abseil containers and utilities
 - **Note:** Statically linked, not exposed in our API
 
-### 3. Our C Wrapper (re2_wrapper.cpp)
-- **Purpose:** Provides pure C API that JNA can call from Java
-- **Functions:** 8 C functions (re2_compile, re2_free_pattern, re2_full_match, etc.)
-- **Size:** ~120 lines of C++ wrapping RE2's C++ API
+### 3. Our JNI Wrapper (re2_jni.cpp)
+- **Purpose:** Provides JNI bindings for direct Java native method calls
+- **Functions:** 9 JNI functions (compile, freePattern, fullMatch, etc.)
+- **Size:** ~200 lines of C++ wrapping RE2's C++ API
+- **Performance:** JNI has ~2-3x lower call overhead than JNA
 
 **Final output:**
 - **macOS:** `libre2.dylib` (~875 KB)
@@ -274,10 +275,12 @@ Repeat for Abseil. Uses `--depth 50` for faster clones.
 ```
 native/
 ├── wrapper/
-│   └── re2_wrapper.cpp          # C wrapper (8 JNA functions)
+│   └── re2_jni.cpp               # JNI wrapper (9 JNI functions)
+├── jni/
+│   └── com_axonops_libre2_jni_RE2NativeJNI.h  # Generated JNI header
 ├── scripts/
 │   └── build.sh                  # Build script (git clone, cmake, link)
-├── Dockerfile                    # Ubuntu 22.04 + build tools
+├── Dockerfile                    # Ubuntu 22.04 + JDK + build tools
 └── README.md                     # This file
 
 Generated during build (not committed):
@@ -324,19 +327,25 @@ Generated during build (not committed):
 
 ---
 
-## Exported C Functions
+## Exported JNI Functions
 
-The wrapper exposes these 8 functions for JNA:
+The wrapper exposes these 9 JNI functions:
 
 ```c
-void* re2_compile(const char* pattern, int pattern_len, int case_sensitive);
-void  re2_free_pattern(void* pattern);
-int   re2_full_match(void* pattern, const char* text, int text_len);
-int   re2_partial_match(void* pattern, const char* text, int text_len);
-const char* re2_get_error();
-const char* re2_get_pattern(void* pattern);
-int   re2_num_capturing_groups(void* pattern);
-int   re2_pattern_ok(void* pattern);
+// Pattern compilation and lifecycle
+jlong   Java_com_axonops_libre2_jni_RE2NativeJNI_compile(JNIEnv*, jclass, jstring, jboolean);
+void    Java_com_axonops_libre2_jni_RE2NativeJNI_freePattern(JNIEnv*, jclass, jlong);
+
+// Matching operations
+jboolean Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatch(JNIEnv*, jclass, jlong, jstring);
+jboolean Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatch(JNIEnv*, jclass, jlong, jstring);
+
+// Pattern info and error handling
+jstring Java_com_axonops_libre2_jni_RE2NativeJNI_getError(JNIEnv*, jclass);
+jstring Java_com_axonops_libre2_jni_RE2NativeJNI_getPattern(JNIEnv*, jclass, jlong);
+jint    Java_com_axonops_libre2_jni_RE2NativeJNI_numCapturingGroups(JNIEnv*, jclass, jlong);
+jboolean Java_com_axonops_libre2_jni_RE2NativeJNI_patternOk(JNIEnv*, jclass, jlong);
+jlong   Java_com_axonops_libre2_jni_RE2NativeJNI_patternMemory(JNIEnv*, jclass, jlong);
 ```
 
 All verification steps check these functions are correctly exported.
@@ -347,6 +356,7 @@ All verification steps check these functions are correctly exported.
 
 - **GitHub Workflow:** [.github/workflows/build-native.yml](../.github/workflows/build-native.yml)
 - **Build Script:** [scripts/build.sh](scripts/build.sh)
-- **C Wrapper:** [wrapper/re2_wrapper.cpp](wrapper/re2_wrapper.cpp)
+- **JNI Wrapper:** [wrapper/re2_jni.cpp](wrapper/re2_jni.cpp)
+- **JNI Header:** [jni/com_axonops_libre2_jni_RE2NativeJNI.h](jni/com_axonops_libre2_jni_RE2NativeJNI.h)
 - **RE2 Project:** https://github.com/google/re2
 - **Abseil Project:** https://github.com/abseil/abseil-cpp

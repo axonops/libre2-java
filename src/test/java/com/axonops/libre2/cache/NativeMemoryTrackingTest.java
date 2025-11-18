@@ -85,17 +85,17 @@ class NativeMemoryTrackingTest {
     void testCache_TracksTotalMemory() {
         // Compile first pattern
         Pattern p1 = Pattern.compile("pattern1");
+        long p1Memory = p1.getNativeMemoryBytes();
         CacheStatistics stats1 = Pattern.getCacheStatistics();
 
-        assertThat(stats1.nativeMemoryBytes()).isGreaterThan(0);
-        assertThat(stats1.nativeMemoryBytes()).isEqualTo(p1.getNativeMemoryBytes());
+        assertThat(stats1.nativeMemoryBytes()).isEqualTo(p1Memory);
 
         // Compile second pattern
         Pattern p2 = Pattern.compile("pattern2");
+        long p2Memory = p2.getNativeMemoryBytes();
         CacheStatistics stats2 = Pattern.getCacheStatistics();
 
-        assertThat(stats2.nativeMemoryBytes())
-            .isEqualTo(p1.getNativeMemoryBytes() + p2.getNativeMemoryBytes());
+        assertThat(stats2.nativeMemoryBytes()).isEqualTo(p1Memory + p2Memory);
     }
 
     @Test
@@ -103,39 +103,48 @@ class NativeMemoryTrackingTest {
         CacheStatistics before = Pattern.getCacheStatistics();
         assertThat(before.nativeMemoryBytes()).isEqualTo(0);
 
-        // Compile 10 patterns
+        // Compile 10 patterns and track exact memory
+        long expectedMemory = 0;
+        Pattern[] patterns = new Pattern[10];
         for (int i = 0; i < 10; i++) {
-            Pattern.compile("pattern" + i);
+            patterns[i] = Pattern.compile("pattern" + i);
+            expectedMemory += patterns[i].getNativeMemoryBytes();
         }
 
         CacheStatistics after = Pattern.getCacheStatistics();
-        assertThat(after.nativeMemoryBytes()).isGreaterThan(0);
+        assertThat(after.nativeMemoryBytes()).isEqualTo(expectedMemory);
         assertThat(after.currentSize()).isEqualTo(10);
     }
 
     @Test
     void testCache_CacheHitDoesNotIncreaseMemory() {
-        Pattern.compile("test");
+        Pattern p = Pattern.compile("test");
+        long patternMemory = p.getNativeMemoryBytes();
         CacheStatistics stats1 = Pattern.getCacheStatistics();
-        long memory1 = stats1.nativeMemoryBytes();
+
+        assertThat(stats1.nativeMemoryBytes()).isEqualTo(patternMemory);
 
         // Cache hit - should not change memory
-        Pattern.compile("test");
+        Pattern p2 = Pattern.compile("test");
         CacheStatistics stats2 = Pattern.getCacheStatistics();
 
-        assertThat(stats2.nativeMemoryBytes()).isEqualTo(memory1);
+        assertThat(p2).isSameAs(p); // Same instance
+        assertThat(stats2.nativeMemoryBytes()).isEqualTo(patternMemory);
         assertThat(stats2.hits()).isEqualTo(1);
     }
 
     @Test
     void testCache_ClearResetsMemoryToZero() {
-        // Compile some patterns
+        // Compile some patterns and track exact memory
+        long expectedMemory = 0;
         for (int i = 0; i < 5; i++) {
-            Pattern.compile("pattern" + i);
+            Pattern p = Pattern.compile("pattern" + i);
+            expectedMemory += p.getNativeMemoryBytes();
         }
 
         CacheStatistics before = Pattern.getCacheStatistics();
-        assertThat(before.nativeMemoryBytes()).isGreaterThan(0);
+        assertThat(before.nativeMemoryBytes()).isEqualTo(expectedMemory);
+        assertThat(before.currentSize()).isEqualTo(5);
 
         // Clear cache
         Pattern.clearCache();
@@ -147,16 +156,18 @@ class NativeMemoryTrackingTest {
 
     @Test
     void testCache_PeakMemoryTracked() {
-        // Compile patterns to establish peak
+        // Compile patterns and track exact memory
+        long expectedMemory = 0;
         for (int i = 0; i < 10; i++) {
-            Pattern.compile("pattern" + i);
+            Pattern p = Pattern.compile("pattern" + i);
+            expectedMemory += p.getNativeMemoryBytes();
         }
 
         CacheStatistics stats = Pattern.getCacheStatistics();
-        long peak = stats.peakNativeMemoryBytes();
 
-        assertThat(peak).isGreaterThan(0);
-        assertThat(peak).isGreaterThanOrEqualTo(stats.nativeMemoryBytes());
+        // Peak should equal current (no evictions yet)
+        assertThat(stats.nativeMemoryBytes()).isEqualTo(expectedMemory);
+        assertThat(stats.peakNativeMemoryBytes()).isEqualTo(expectedMemory);
     }
 
     @Test
@@ -212,13 +223,18 @@ class NativeMemoryTrackingTest {
         CountDownLatch done = new CountDownLatch(threadCount);
         AtomicInteger errors = new AtomicInteger(0);
 
+        // Collect all patterns to calculate exact expected memory
+        java.util.concurrent.ConcurrentHashMap<String, Pattern> allPatterns = new java.util.concurrent.ConcurrentHashMap<>();
+
         for (int i = 0; i < threadCount; i++) {
             int threadId = i;
             new Thread(() -> {
                 try {
                     start.await();
                     for (int j = 0; j < patternsPerThread; j++) {
-                        Pattern.compile("t" + threadId + "_p" + j);
+                        String key = "t" + threadId + "_p" + j;
+                        Pattern p = Pattern.compile(key);
+                        allPatterns.put(key, p);
                     }
                 } catch (Exception e) {
                     errors.incrementAndGet();
@@ -233,39 +249,45 @@ class NativeMemoryTrackingTest {
 
         assertThat(errors.get()).isEqualTo(0);
 
+        // Calculate exact expected memory from all patterns
+        long expectedMemory = allPatterns.values().stream()
+            .mapToLong(Pattern::getNativeMemoryBytes)
+            .sum();
+
         CacheStatistics stats = Pattern.getCacheStatistics();
         int expectedPatterns = threadCount * patternsPerThread;
 
         assertThat(stats.currentSize()).isEqualTo(expectedPatterns);
-        assertThat(stats.nativeMemoryBytes()).isGreaterThan(0);
-
-        // Memory should be roughly proportional to pattern count
-        long avgBytesPerPattern = stats.nativeMemoryBytes() / expectedPatterns;
-        assertThat(avgBytesPerPattern).isGreaterThan(0);
+        assertThat(stats.nativeMemoryBytes()).isEqualTo(expectedMemory);
     }
 
     @Test
     void testCache_DifferentCaseSensitivityTracksSeparately() {
         Pattern p1 = Pattern.compile("TEST", true);
+        long p1Memory = p1.getNativeMemoryBytes();
         CacheStatistics stats1 = Pattern.getCacheStatistics();
-        long mem1 = stats1.nativeMemoryBytes();
+
+        assertThat(stats1.nativeMemoryBytes()).isEqualTo(p1Memory);
 
         Pattern p2 = Pattern.compile("TEST", false);
+        long p2Memory = p2.getNativeMemoryBytes();
         CacheStatistics stats2 = Pattern.getCacheStatistics();
 
-        // Two separate patterns, memory should roughly double
-        assertThat(stats2.nativeMemoryBytes()).isGreaterThan(mem1);
+        // Two separate patterns - exact sum
+        assertThat(stats2.nativeMemoryBytes()).isEqualTo(p1Memory + p2Memory);
         assertThat(stats2.currentSize()).isEqualTo(2);
     }
 
     @Test
     void testCache_ResetClearsMemory() {
-        // Compile patterns
+        // Compile patterns and track exact memory
+        long expectedMemory = 0;
         for (int i = 0; i < 5; i++) {
-            Pattern.compile("pattern" + i);
+            Pattern p = Pattern.compile("pattern" + i);
+            expectedMemory += p.getNativeMemoryBytes();
         }
 
-        assertThat(Pattern.getCacheStatistics().nativeMemoryBytes()).isGreaterThan(0);
+        assertThat(Pattern.getCacheStatistics().nativeMemoryBytes()).isEqualTo(expectedMemory);
 
         // Full reset
         Pattern.resetCache();
@@ -278,19 +300,17 @@ class NativeMemoryTrackingTest {
 
     @Test
     void testCache_MemoryConsistentWithPatternCount() {
-        // Compile identical-length patterns for consistent sizing
+        // Compile patterns and track exact memory
         int count = 100;
+        long expectedMemory = 0;
         for (int i = 0; i < count; i++) {
-            Pattern.compile(String.format("pat%03d", i)); // pat000, pat001, etc.
+            Pattern p = Pattern.compile(String.format("pat%03d", i)); // pat000, pat001, etc.
+            expectedMemory += p.getNativeMemoryBytes();
         }
 
         CacheStatistics stats = Pattern.getCacheStatistics();
         assertThat(stats.currentSize()).isEqualTo(count);
-
-        // Average bytes per pattern should be reasonable
-        long avgBytes = stats.nativeMemoryBytes() / count;
-        assertThat(avgBytes).isGreaterThanOrEqualTo(10);  // At least 10 bytes
-        assertThat(avgBytes).isLessThan(10000);           // Less than 10KB
+        assertThat(stats.nativeMemoryBytes()).isEqualTo(expectedMemory);
     }
 
     @Test
@@ -312,17 +332,20 @@ class NativeMemoryTrackingTest {
 
     @Test
     void testCache_StatisticsSnapshotIsConsistent() {
-        // Compile some patterns
+        // Compile patterns and track exact memory
+        long expectedMemory = 0;
         for (int i = 0; i < 10; i++) {
-            Pattern.compile("pattern" + i);
+            Pattern p = Pattern.compile("pattern" + i);
+            expectedMemory += p.getNativeMemoryBytes();
         }
 
         CacheStatistics stats = Pattern.getCacheStatistics();
 
-        // Snapshot should be internally consistent
+        // Snapshot should have exact values
         assertThat(stats.currentSize()).isEqualTo(10);
-        assertThat(stats.nativeMemoryBytes()).isGreaterThan(0);
-        assertThat(stats.peakNativeMemoryBytes()).isGreaterThanOrEqualTo(stats.nativeMemoryBytes());
+        assertThat(stats.nativeMemoryBytes()).isEqualTo(expectedMemory);
+        assertThat(stats.peakNativeMemoryBytes()).isEqualTo(expectedMemory);
         assertThat(stats.misses()).isEqualTo(10);
+        assertThat(stats.hits()).isEqualTo(0);
     }
 }

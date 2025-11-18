@@ -180,7 +180,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build in Docker container
+      - name: Build Docker image with cache
+        uses: docker/build-push-action@v5
+        with:
+          context: ./native
+          load: true
+          tags: re2-builder
+          cache-from: type=gha,scope=linux-x86_64
+          cache-to: type=gha,mode=max,scope=linux-x86_64
+
+      - name: Build RE2 wrapper
         env:
           RE2_COMMIT: ${{ vars.RE2_COMMIT }}
           RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
@@ -189,9 +198,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd native
-
-          # Build the Docker image with our build environment
-          docker build -t re2-builder .
 
           # Run the container to compile RE2 + wrapper
           # Pass environment variables into container
@@ -253,7 +259,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build in Docker container (ARM64 via QEMU)
+      - name: Build Docker image with cache (ARM64)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./native
+          platforms: linux/arm64
+          load: true
+          tags: re2-builder-arm64
+          cache-from: type=gha,scope=linux-aarch64
+          cache-to: type=gha,mode=max,scope=linux-aarch64
+
+      - name: Build RE2 wrapper (ARM64)
         env:
           RE2_COMMIT: ${{ vars.RE2_COMMIT }}
           RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
@@ -262,9 +278,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd native
-
-          # Build Docker image for ARM64 platform
-          docker buildx build --platform linux/arm64 -t re2-builder-arm64 --load .
 
           # Run ARM64 container (QEMU will emulate if not native ARM)
           # Pass environment variables into container

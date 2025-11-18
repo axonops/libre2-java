@@ -71,7 +71,7 @@ public final class Pattern implements AutoCloseable {
         RE2Native lib = RE2LibraryLoader.loadLibrary();
         this.nativeMemoryBytes = lib.re2_pattern_memory(nativePattern);
 
-        logger.debug("RE2: Pattern created - length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}",
+        logger.trace("RE2: Pattern created - length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}",
             patternString.length(), caseSensitive, fromCache, nativeMemoryBytes);
     }
 
@@ -276,7 +276,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         if (closed.compareAndSet(false, true)) {
-            logger.debug("RE2: Force closing pattern");
+            logger.trace("RE2: Force closing pattern");
             RE2Native lib = RE2LibraryLoader.loadLibrary();
             lib.re2_free_pattern(nativePattern);
 

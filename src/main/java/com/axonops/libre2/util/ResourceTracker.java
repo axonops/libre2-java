@@ -67,7 +67,7 @@ public final class ResourceTracker {
                 " (this is ACTIVE count, not cumulative - patterns can be freed and recompiled)");
         }
 
-        logger.debug("RE2: Pattern allocated - active: {}, cumulative: {}", current, totalPatternsCompiled.get());
+        logger.trace("RE2: Pattern allocated - active: {}, cumulative: {}", current, totalPatternsCompiled.get());
     }
 
     /**
@@ -82,7 +82,7 @@ public final class ResourceTracker {
             activePatternsCount.set(0);
         }
 
-        logger.debug("RE2: Pattern freed - active: {}, cumulative closed: {}", current, totalPatternsClosed.get());
+        logger.trace("RE2: Pattern freed - active: {}, cumulative closed: {}", current, totalPatternsClosed.get());
     }
 
     /**
@@ -131,7 +131,7 @@ public final class ResourceTracker {
         totalPatternsClosed.set(0);
         patternLimitRejections.set(0);
         matcherLimitRejections.set(0);
-        logger.debug("RE2: ResourceTracker reset");
+        logger.trace("RE2: ResourceTracker reset");
     }
 
     /**

@@ -178,3 +178,19 @@
 - **Impact:** Production resilience against edge cases
 - **Date:** 2025-11-18
 - **Status:** Implemented
+
+### Decision: Eviction Protection Period
+- **What:** Should newly added patterns be protected from immediate eviction?
+- **Options:**
+  - No protection (evict any pattern meeting LRU criteria)
+  - Fixed protection period (e.g., 100ms)
+  - Configurable protection period
+- **Chosen:** Configurable protection period, default 1000ms
+- **Rationale:**
+  - Race condition discovered: pattern evicted before caller can use it
+  - Pattern.compile() returns pattern, but async LRU evicts it immediately
+  - Caller then sees "Pattern is closed" error
+  - 1 second gives caller time to use pattern even under heavy load
+- **Impact:** Prevents "Pattern is closed" race conditions under concurrent eviction
+- **Date:** 2025-11-18
+- **Status:** Implemented

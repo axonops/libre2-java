@@ -1,8 +1,8 @@
 # Development Status
 
-**Last Updated:** 2025-11-18 08:15 UTC
-**Current Phase:** 2 (Pattern Caching - COMPLETE with major performance optimizations)
-**Overall Progress:** 45% (Phases 1-2 complete, 187 tests passing, lock-free, memory-tracked)
+**Last Updated:** 2025-11-18 09:05 UTC
+**Current Phase:** 2 (Pattern Caching - COMPLETE with eviction protection)
+**Overall Progress:** 45% (Phases 1-2 complete, 187 tests passing, lock-free, memory-tracked, eviction-protected)
 
 ## Phase Completion
 
@@ -16,7 +16,35 @@
 
 ## Current Session
 
-**Date:** 2025-11-18
+**Date:** 2025-11-18 (Session 2)
+**Work Done:**
+- **Eviction Protection Period:**
+  - Fixed race condition where patterns were evicted immediately after being added
+  - Added `evictionProtectionMs` config parameter (default 1000ms)
+  - Patterns must be at least evictionProtectionMs old before LRU eviction
+  - Prevents caller from getting closed pattern after Pattern.compile()
+- **Logging Optimization:**
+  - Changed high-frequency DEBUG logs to TRACE level
+  - Reduces CI log flooding while keeping info available for debugging
+  - Pattern created/freed, cache hit/miss, eviction details now TRACE
+- **Test Accuracy:**
+  - Fixed CachePerformanceTest for 100% accuracy (was 95% threshold)
+  - Added proper error tracking and assertions
+  - Updated sleep times to exceed eviction protection period
+- All 187 tests passing locally
+
+**Commits:**
+- c2eeea4: Add configurable eviction protection period (default 1s)
+- a4c0ddc: Change cached pattern close() warning to TRACE level
+- c739b42: Reduce verbose DEBUG logging to TRACE for CI and fix flaky test
+
+**Blockers:** None
+
+---
+
+## Previous Session
+
+**Date:** 2025-11-18 (Session 1)
 **Work Done:**
 - **Major Performance Optimization:** Lock-free ConcurrentHashMap cache
   - Replaced synchronized LinkedHashMap with ConcurrentHashMap
@@ -41,22 +69,20 @@
   - NativeMemoryTrackingTest with 17 comprehensive tests
 - All 187 tests passing
 
-**Blockers:** None
-
 **Phase 2 Enhancements Complete**
 
-**What We Built This Session:**
+**What We Built:**
 - ✅ Lock-free ConcurrentHashMap cache (major performance improvement)
 - ✅ Native memory tracking (off-heap monitoring)
 - ✅ Defensive pattern validation (auto-heal corrupted patterns)
+- ✅ Eviction protection period (race condition fix)
 - ✅ Performance benchmarks (throughput, latency, scalability)
-- ✅ 27 new tests (CachePerformanceTest + NativeMemoryTrackingTest)
 - ✅ 187 total tests passing
 
 **Performance Results:**
-- Throughput: 121K ops/sec with 100 threads
-- P50 latency: 0.46μs
-- P99 latency: 0.79μs
+- Throughput: 600K+ ops/sec with 100 threads
+- P50 latency: 0.6μs
+- P99 latency: 1.0μs
 - Max eviction block: <100ms
 
 **Next Session:** Phase 3 (Timeout Support) or memory-based eviction

@@ -108,6 +108,15 @@ class ConcurrencyTest {
     @Test
     @Timeout(value = 60, unit = TimeUnit.SECONDS)
     void testConcurrentCompilation_RepeatingPattern_100Threads() throws InterruptedException {
+        // This test verifies that concurrent compilation of the SAME patterns
+        // results in deduplication - only 3 patterns compiled, not 100.
+        //
+        // Key behavior with lock-free ConcurrentHashMap:
+        // - 100 threads call cache.get() simultaneously, all see null (miss)
+        // - All threads call computeIfAbsent(), but only 1 per key compiles
+        // - Metric: hits=0, misses=100 is VALID (all threads saw empty cache)
+        // - What matters: only 3 patterns in cache (deduplication works)
+
         int threadCount = 100;
         String[] patterns = {"A", "B", "C"};
         CountDownLatch start = new CountDownLatch(1);
@@ -135,18 +144,20 @@ class ConcurrencyTest {
 
         assertThat(errors.get()).isEqualTo(0);
 
-        // Should have 3 patterns in cache
         CacheStatistics stats = Pattern.getCacheStatistics();
+
+        // CRITICAL: Only 3 patterns compiled despite 100 concurrent requests
+        // This proves computeIfAbsent deduplication works
         assertThat(stats.currentSize()).isEqualTo(3);
 
-        // With lock-free implementation, hit/miss counts depend on timing
-        // Multiple threads may call get() before any pattern is cached, leading to
-        // more misses being recorded. The key invariant is that only 3 patterns
-        // end up in cache and all operations complete successfully.
+        // All requests processed
         assertThat(stats.totalRequests()).isEqualTo(100);
-        // At minimum we have 3 misses (one per pattern)
-        // Hits may be 0 if all threads race and see miss before any pattern is cached
-        assertThat(stats.misses()).isGreaterThanOrEqualTo(3);
+
+        // At minimum 3 misses (one per unique pattern)
+        // With racing threads, could be up to 100 misses (all threads saw empty cache)
+        assertThat(stats.misses()).isBetween(3L, 100L);
+
+        // Total must equal 100
         assertThat(stats.hits() + stats.misses()).isEqualTo(100);
     }
 

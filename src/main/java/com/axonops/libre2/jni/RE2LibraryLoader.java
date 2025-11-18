@@ -16,7 +16,6 @@
 
 package com.axonops.libre2.jni;
 
-import com.sun.jna.Native;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +45,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class RE2LibraryLoader {
     private static final Logger logger = LoggerFactory.getLogger(RE2LibraryLoader.class);
     private static final AtomicBoolean loaded = new AtomicBoolean(false);
-    private static volatile RE2Native library = null;
     private static volatile Exception loadError = null;
 
     private RE2LibraryLoader() {
@@ -56,15 +54,14 @@ public final class RE2LibraryLoader {
     /**
      * Loads the native library (idempotent).
      *
-     * @return RE2Native interface
      * @throws IllegalStateException if library cannot be loaded
      */
-    public static RE2Native loadLibrary() {
+    public static void loadLibrary() {
         if (loaded.get()) {
             if (loadError != null) {
                 throw new IllegalStateException("RE2: Previous library load failed", loadError);
             }
-            return library;
+            return;
         }
 
         synchronized (RE2LibraryLoader.class) {
@@ -72,7 +69,7 @@ public final class RE2LibraryLoader {
                 if (loadError != null) {
                     throw new IllegalStateException("RE2: Previous library load failed", loadError);
                 }
-                return library;
+                return;
             }
 
             try {
@@ -87,12 +84,11 @@ public final class RE2LibraryLoader {
                 // Extract from JAR to temp directory
                 Path tempLib = extractLibrary(resourcePath, libraryName);
 
-                // Load via JNA
-                library = Native.load(tempLib.toString(), RE2Native.class);
+                // Load via System.load (JNI)
+                System.load(tempLib.toString());
                 loaded.set(true);
 
                 logger.info("RE2: Native library loaded successfully");
-                return library;
 
             } catch (Exception e) {
                 loadError = e;

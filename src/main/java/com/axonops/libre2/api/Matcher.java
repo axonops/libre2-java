@@ -16,13 +16,10 @@
 
 package com.axonops.libre2.api;
 
-import com.axonops.libre2.jni.RE2LibraryLoader;
-import com.axonops.libre2.jni.RE2Native;
+import com.axonops.libre2.jni.RE2NativeJNI;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Performs regex matching operations.
@@ -67,33 +64,19 @@ public final class Matcher implements AutoCloseable {
     public boolean matches() {
         checkNotClosed();
 
-        RE2Native lib = RE2LibraryLoader.loadLibrary();
-        byte[] bytes = input.getBytes(StandardCharsets.UTF_8);
+        boolean result = RE2NativeJNI.fullMatch(pattern.getNativeHandle(), input);
 
-        int result = lib.re2_full_match(pattern.getNativePattern(), input, bytes.length);
-
-        if (result == -1) {
-            String error = lib.re2_get_error();
-            throw new NativeLibraryException("Match failed: " + (error != null ? error : "Unknown error"));
-        }
-
-        return result == 1;
+        // JNI version returns boolean directly, no error code
+        return result;
     }
 
     public boolean find() {
         checkNotClosed();
 
-        RE2Native lib = RE2LibraryLoader.loadLibrary();
-        byte[] bytes = input.getBytes(StandardCharsets.UTF_8);
+        boolean result = RE2NativeJNI.partialMatch(pattern.getNativeHandle(), input);
 
-        int result = lib.re2_partial_match(pattern.getNativePattern(), input, bytes.length);
-
-        if (result == -1) {
-            String error = lib.re2_get_error();
-            throw new NativeLibraryException("Partial match failed: " + (error != null ? error : "Unknown error"));
-        }
-
-        return result == 1;
+        // JNI version returns boolean directly, no error code
+        return result;
     }
 
     public Pattern pattern() {

@@ -43,7 +43,6 @@
         <maven.compiler.release>17</maven.compiler.release>
 
         <!-- Dependency versions -->
-        <jna.version>5.13.0</jna.version>
         <slf4j.version>2.0.9</slf4j.version>
         <dropwizard-metrics.version>4.2.19</dropwizard-metrics.version>
 
@@ -54,15 +53,6 @@
     </properties>
 
     <dependencies>
-        <!-- JNA - provided scope (available at compile time, not packaged in JAR) -->
-        <!-- Cassandra 5.0+ and other users must provide JNA 5.13.0+ -->
-        <dependency>
-            <groupId>net.java.dev.jna</groupId>
-            <artifactId>jna</artifactId>
-            <version>${jna.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
         <!-- SLF4J API for logging - users must provide -->
         <dependency>
             <groupId>org.slf4j</groupId>

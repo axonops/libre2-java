@@ -19,13 +19,11 @@ package com.axonops.libre2.api;
 import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.cache.RE2Config;
 import com.axonops.libre2.jni.RE2LibraryLoader;
-import com.axonops.libre2.jni.RE2Native;
+import com.axonops.libre2.jni.RE2NativeJNI;
 import com.axonops.libre2.util.ResourceTracker;
-import com.sun.jna.Pointer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -45,31 +43,35 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class Pattern implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(Pattern.class);
 
+    // Ensure native library is loaded
+    static {
+        RE2LibraryLoader.loadLibrary();
+    }
+
     // Global pattern cache
     private static final PatternCache cache = new PatternCache(RE2Config.DEFAULT);
 
     private final String patternString;
     private final boolean caseSensitive;
-    private final Pointer nativePattern;
+    private final long nativeHandle;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final boolean fromCache;
     private final java.util.concurrent.atomic.AtomicInteger refCount = new java.util.concurrent.atomic.AtomicInteger(0);
     private static final int maxMatchersPerPattern = RE2Config.DEFAULT.maxMatchersPerPattern();
     private final long nativeMemoryBytes;
 
-    Pattern(String patternString, boolean caseSensitive, Pointer nativePattern) {
-        this(patternString, caseSensitive, nativePattern, false);
+    Pattern(String patternString, boolean caseSensitive, long nativeHandle) {
+        this(patternString, caseSensitive, nativeHandle, false);
     }
 
-    Pattern(String patternString, boolean caseSensitive, Pointer nativePattern, boolean fromCache) {
+    Pattern(String patternString, boolean caseSensitive, long nativeHandle, boolean fromCache) {
         this.patternString = Objects.requireNonNull(patternString);
         this.caseSensitive = caseSensitive;
-        this.nativePattern = Objects.requireNonNull(nativePattern);
+        this.nativeHandle = nativeHandle;
         this.fromCache = fromCache;
 
         // Query native memory size
-        RE2Native lib = RE2LibraryLoader.loadLibrary();
-        this.nativeMemoryBytes = lib.re2_pattern_memory(nativePattern);
+        this.nativeMemoryBytes = RE2NativeJNI.patternMemory(nativeHandle);
 
         logger.trace("RE2: Pattern created - length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}",
             patternString.length(), caseSensitive, fromCache, nativeMemoryBytes);
@@ -124,27 +126,29 @@ public final class Pattern implements AutoCloseable {
      * Actual compilation logic.
      */
     private static Pattern doCompile(String pattern, boolean caseSensitive, boolean fromCache) {
+        // Reject empty patterns (matches old wrapper behavior)
+        if (pattern.isEmpty()) {
+            throw new PatternCompilationException(pattern, "Pattern is null or empty");
+        }
+
         // Track allocation and enforce maxSimultaneousCompiledPatterns limit
         // This is ACTIVE count, not cumulative - patterns can be freed and recompiled
         ResourceTracker.trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns());
 
         try {
-            RE2Native lib = RE2LibraryLoader.loadLibrary();
-            byte[] bytes = pattern.getBytes(StandardCharsets.UTF_8);
+            long handle = RE2NativeJNI.compile(pattern, caseSensitive);
 
-            Pointer ptr = lib.re2_compile(pattern, bytes.length, caseSensitive ? 1 : 0);
-
-            if (ptr == null || lib.re2_pattern_ok(ptr) != 1) {
-                String error = lib.re2_get_error();
-                if (ptr != null) {
-                    lib.re2_free_pattern(ptr);
+            if (handle == 0 || !RE2NativeJNI.patternOk(handle)) {
+                String error = RE2NativeJNI.getError();
+                if (handle != 0) {
+                    RE2NativeJNI.freePattern(handle);
                 }
                 // Compilation failed - decrement count
                 ResourceTracker.trackPatternFreed();
                 throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
             }
 
-            return new Pattern(pattern, caseSensitive, ptr, fromCache);
+            return new Pattern(pattern, caseSensitive, handle, fromCache);
         } catch (Exception e) {
             // If any exception, decrement count (unless it was ResourceException from limit)
             if (!(e instanceof ResourceException)) {
@@ -185,9 +189,9 @@ public final class Pattern implements AutoCloseable {
         return nativeMemoryBytes;
     }
 
-    Pointer getNativePattern() {
+    long getNativeHandle() {
         checkNotClosed();
-        return nativePattern;
+        return nativeHandle;
     }
 
     /**
@@ -239,8 +243,7 @@ public final class Pattern implements AutoCloseable {
             return false;
         }
         try {
-            RE2Native lib = RE2LibraryLoader.loadLibrary();
-            return lib.re2_pattern_ok(nativePattern) == 1;
+            return RE2NativeJNI.patternOk(nativeHandle);
         } catch (Exception e) {
             logger.warn("RE2: Exception while validating pattern", e);
             return false;
@@ -278,8 +281,7 @@ public final class Pattern implements AutoCloseable {
 
         if (closed.compareAndSet(false, true)) {
             logger.trace("RE2: Force closing pattern");
-            RE2Native lib = RE2LibraryLoader.loadLibrary();
-            lib.re2_free_pattern(nativePattern);
+            RE2NativeJNI.freePattern(nativeHandle);
 
             // Track that pattern was freed (decrements active count)
             ResourceTracker.trackPatternFreed();

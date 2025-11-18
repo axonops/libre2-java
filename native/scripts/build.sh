@@ -74,10 +74,15 @@ if [ ! -d "re2" ]; then
     fi
 
     # Fetch commit info from GitHub API
+    # Use GITHUB_TOKEN if available to avoid rate limiting
     API_URL="https://api.github.com/repos/google/re2/commits/$RE2_COMMIT"
     echo "  Calling: $API_URL"
 
-    API_JSON=$(curl -s "$API_URL")
+    if [ -n "$GITHUB_TOKEN" ]; then
+        API_JSON=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API_URL")
+    else
+        API_JSON=$(curl -s "$API_URL")
+    fi
 
     # Debug: Show what we got
     echo "  API response length: ${#API_JSON} bytes"
@@ -113,7 +118,11 @@ if [ ! -d "abseil-cpp" ]; then
     API_URL="https://api.github.com/repos/abseil/abseil-cpp/commits/$ABSEIL_COMMIT"
     echo "  Calling: $API_URL"
 
-    API_JSON=$(curl -s "$API_URL")
+    if [ -n "$GITHUB_TOKEN" ]; then
+        API_JSON=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API_URL")
+    else
+        API_JSON=$(curl -s "$API_URL")
+    fi
     echo "  API response length: ${#API_JSON} bytes"
 
     VERIFIED=$(echo "$API_JSON" | jq -r '.commit.verification.verified // empty')

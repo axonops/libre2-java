@@ -61,6 +61,7 @@ jobs:
           RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
           ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
           ABSEIL_RELEASE_VERSION: ${{ vars.ABSEIL_RELEASE_VERSION }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd native
           ./scripts/build.sh
@@ -127,6 +128,7 @@ jobs:
           RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
           ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
           ABSEIL_RELEASE_VERSION: ${{ vars.ABSEIL_RELEASE_VERSION }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd native
           ./scripts/build.sh
@@ -184,6 +186,7 @@ jobs:
           RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
           ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
           ABSEIL_RELEASE_VERSION: ${{ vars.ABSEIL_RELEASE_VERSION }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd native
 
@@ -197,6 +200,7 @@ jobs:
             -e RE2_RELEASE_VERSION \
             -e ABSEIL_COMMIT \
             -e ABSEIL_RELEASE_VERSION \
+            -e GITHUB_TOKEN \
             -v "$(pwd):/output" \
             re2-builder \
             sh -c "./build.sh && cp build/libre2.so /output/"
@@ -255,6 +259,7 @@ jobs:
           RE2_RELEASE_VERSION: ${{ vars.RE2_RELEASE_VERSION }}
           ABSEIL_COMMIT: ${{ vars.ABSEIL_COMMIT }}
           ABSEIL_RELEASE_VERSION: ${{ vars.ABSEIL_RELEASE_VERSION }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd native
 
@@ -268,6 +273,7 @@ jobs:
             -e RE2_RELEASE_VERSION \
             -e ABSEIL_COMMIT \
             -e ABSEIL_RELEASE_VERSION \
+            -e GITHUB_TOKEN \
             -v "$(pwd):/output" \
             re2-builder-arm64 \
             sh -c "./build.sh && cp build/libre2.so /output/"

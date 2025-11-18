@@ -71,6 +71,10 @@ public final class PatternCache {
     private final AtomicLong evictionsIdle = new AtomicLong(0);
     private final AtomicLong evictionsDeferred = new AtomicLong(0);
 
+    // Native memory tracking (off-heap memory consumed by patterns)
+    private final AtomicLong totalNativeMemoryBytes = new AtomicLong(0);
+    private final AtomicLong peakNativeMemoryBytes = new AtomicLong(0);
+
     public PatternCache(RE2Config config) {
         this.config = config;
 
@@ -144,12 +148,23 @@ public final class PatternCache {
         misses.incrementAndGet();
         logger.debug("RE2: Cache miss - compiling pattern: {}", key);
 
+        // Track whether this thread compiled a new pattern
+        final long[] addedMemory = {0};
+
         CachedPattern newCached = cache.computeIfAbsent(key, k -> {
             // This lambda executes atomically for this key only
             // Other keys can be accessed concurrently
             Pattern pattern = compiler.get();
-            return new CachedPattern(pattern);
+            CachedPattern created = new CachedPattern(pattern);
+            addedMemory[0] = created.memoryBytes();
+            return created;
         });
+
+        // If we compiled a new pattern, update memory tracking
+        if (addedMemory[0] > 0) {
+            totalNativeMemoryBytes.addAndGet(addedMemory[0]);
+            updatePeakMemory();
+        }
 
         // If we just added a new pattern, check if we need async LRU eviction
         // Soft limit: trigger eviction if over, but don't block
@@ -206,6 +221,9 @@ public final class PatternCache {
 
             // Only evict if we successfully remove from map
             if (cache.remove(entry.getKey(), cached)) {
+                // Decrement memory tracking (pattern removed from cache)
+                totalNativeMemoryBytes.addAndGet(-cached.memoryBytes());
+
                 if (cached.pattern().getRefCount() > 0) {
                     // Pattern in use - defer cleanup
                     deferredCleanup.add(cached);
@@ -248,6 +266,9 @@ public final class PatternCache {
             CachedPattern cached = entry.getValue();
 
             if (cached.lastAccessTimeNanos() < cutoffNanos) {
+                // Decrement memory tracking (pattern removed from cache)
+                totalNativeMemoryBytes.addAndGet(-cached.memoryBytes());
+
                 if (cached.pattern().getRefCount() > 0) {
                     // Pattern idle but still in use - defer cleanup
                     logger.debug("RE2: Idle evicting pattern (deferred - {} active matchers): {}",
@@ -314,7 +335,9 @@ public final class PatternCache {
             evictionsDeferred.get(),
             currentSize,
             config.maxCacheSize(),
-            deferredSize
+            deferredSize,
+            totalNativeMemoryBytes.get(),
+            peakNativeMemoryBytes.get()
         );
     }
 
@@ -343,6 +366,9 @@ public final class PatternCache {
             deferred.forceClose();
         }
         deferredCleanup.clear();
+
+        // Reset memory tracking (all patterns removed)
+        totalNativeMemoryBytes.set(0);
     }
 
     /**
@@ -354,6 +380,7 @@ public final class PatternCache {
         evictionsLRU.set(0);
         evictionsIdle.set(0);
         evictionsDeferred.set(0);
+        peakNativeMemoryBytes.set(totalNativeMemoryBytes.get());
         logger.debug("RE2: Cache statistics reset");
     }
 
@@ -404,10 +431,12 @@ public final class PatternCache {
     private static class CachedPattern {
         private final Pattern pattern;
         private final AtomicLong lastAccessTimeNanos;
+        private final long memoryBytes;
 
         CachedPattern(Pattern pattern) {
             this.pattern = pattern;
             this.lastAccessTimeNanos = new AtomicLong(System.nanoTime());
+            this.memoryBytes = pattern.getNativeMemoryBytes();
         }
 
         Pattern pattern() {
@@ -418,6 +447,10 @@ public final class PatternCache {
             return lastAccessTimeNanos.get();
         }
 
+        long memoryBytes() {
+            return memoryBytes;
+        }
+
         void touch() {
             lastAccessTimeNanos.set(System.nanoTime());
         }
@@ -425,5 +458,16 @@ public final class PatternCache {
         void forceClose() {
             pattern.forceClose();
         }
+    }
+
+    /**
+     * Updates peak memory if current total exceeds it.
+     */
+    private void updatePeakMemory() {
+        long current = totalNativeMemoryBytes.get();
+        long peak;
+        do {
+            peak = peakNativeMemoryBytes.get();
+        } while (current > peak && !peakNativeMemoryBytes.compareAndSet(peak, current));
     }
 }

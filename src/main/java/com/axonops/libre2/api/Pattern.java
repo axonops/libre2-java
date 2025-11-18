@@ -55,6 +55,7 @@ public final class Pattern implements AutoCloseable {
     private final boolean fromCache;
     private final java.util.concurrent.atomic.AtomicInteger refCount = new java.util.concurrent.atomic.AtomicInteger(0);
     private static final int maxMatchersPerPattern = RE2Config.DEFAULT.maxMatchersPerPattern();
+    private final long nativeMemoryBytes;
 
     Pattern(String patternString, boolean caseSensitive, Pointer nativePattern) {
         this(patternString, caseSensitive, nativePattern, false);
@@ -66,8 +67,12 @@ public final class Pattern implements AutoCloseable {
         this.nativePattern = Objects.requireNonNull(nativePattern);
         this.fromCache = fromCache;
 
-        logger.debug("RE2: Pattern created - length: {}, caseSensitive: {}, fromCache: {}",
-            patternString.length(), caseSensitive, fromCache);
+        // Query native memory size
+        RE2Native lib = RE2LibraryLoader.loadLibrary();
+        this.nativeMemoryBytes = lib.re2_pattern_memory(nativePattern);
+
+        logger.debug("RE2: Pattern created - length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}",
+            patternString.length(), caseSensitive, fromCache, nativeMemoryBytes);
     }
 
     public static Pattern compile(String pattern) {
@@ -166,6 +171,18 @@ public final class Pattern implements AutoCloseable {
 
     public boolean isCaseSensitive() {
         return caseSensitive;
+    }
+
+    /**
+     * Gets the native (off-heap) memory consumed by this compiled pattern.
+     *
+     * This is the size of the compiled DFA/NFA program in bytes.
+     * Useful for monitoring memory pressure from pattern compilation.
+     *
+     * @return size in bytes
+     */
+    public long getNativeMemoryBytes() {
+        return nativeMemoryBytes;
     }
 
     Pointer getNativePattern() {

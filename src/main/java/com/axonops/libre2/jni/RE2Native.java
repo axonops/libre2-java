@@ -104,4 +104,15 @@ public interface RE2Native extends Library {
      * @return 1 if valid, 0 if invalid/null
      */
     int re2_pattern_ok(Pointer pattern);
+
+    /**
+     * Gets the native memory size of a compiled pattern.
+     *
+     * Returns the size of the compiled DFA/NFA program in bytes.
+     * This represents the off-heap memory consumed by this pattern.
+     *
+     * @param pattern compiled pattern pointer
+     * @return size in bytes, or 0 if pattern is null
+     */
+    long re2_pattern_memory(Pointer pattern);
 }

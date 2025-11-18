@@ -31,7 +31,9 @@ public record CacheStatistics(
     long evictionsDeferred,
     int currentSize,
     int maxSize,
-    int deferredCleanupSize
+    int deferredCleanupSize,
+    long nativeMemoryBytes,
+    long peakNativeMemoryBytes
 ) {
 
     /**

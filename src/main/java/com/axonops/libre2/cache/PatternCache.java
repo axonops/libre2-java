@@ -20,19 +20,28 @@ import com.axonops.libre2.api.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
-import java.util.LinkedHashMap;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 /**
- * Thread-safe LRU cache for compiled patterns with dual eviction.
+ * High-performance thread-safe cache for compiled patterns with dual eviction.
  *
  * Eviction strategies:
- * 1. LRU: When cache reaches max size, evict least recently used
+ * 1. LRU (soft limit): When cache exceeds max size, async evict least recently used
  * 2. Idle time: Background thread evicts patterns idle beyond timeout
  *
- * Thread-safe for concurrent access.
+ * Performance characteristics:
+ * - Lock-free cache reads (ConcurrentHashMap)
+ * - Lock-free timestamp updates (AtomicLong)
+ * - Non-blocking eviction (async LRU, concurrent idle scan)
+ * - Soft limits: cache can temporarily exceed maxSize by ~10%
  *
  * @since 1.0.0
  */
@@ -44,14 +53,18 @@ public final class PatternCache {
     public RE2Config getConfig() {
         return config;
     }
-    private final Map<CacheKey, CachedPattern> cache;
+
+    // ConcurrentHashMap for lock-free reads/writes
+    private final ConcurrentHashMap<CacheKey, CachedPattern> cache;
     private final IdleEvictionTask evictionTask;
 
-    // Deferred cleanup: Patterns evicted from cache but still in use (refCount > 0)
-    // These will be freed when refCount reaches 0
-    private final java.util.List<CachedPattern> deferredCleanup = new java.util.concurrent.CopyOnWriteArrayList<>();
+    // Single-thread executor for async LRU eviction (doesn't block cache access)
+    private final ExecutorService lruEvictionExecutor;
 
-    // Statistics
+    // Deferred cleanup: Patterns evicted from cache but still in use (refCount > 0)
+    private final CopyOnWriteArrayList<CachedPattern> deferredCleanup = new CopyOnWriteArrayList<>();
+
+    // Statistics (all atomic, lock-free)
     private final AtomicLong hits = new AtomicLong(0);
     private final AtomicLong misses = new AtomicLong(0);
     private final AtomicLong evictionsLRU = new AtomicLong(0);
@@ -62,32 +75,16 @@ public final class PatternCache {
         this.config = config;
 
         if (config.cacheEnabled()) {
-            // LinkedHashMap in access-order mode for LRU
-            this.cache = new LinkedHashMap<>(config.maxCacheSize(), 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<CacheKey, CachedPattern> eldest) {
-                    if (size() > config.maxCacheSize()) {
-                        CachedPattern evicted = eldest.getValue();
+            // ConcurrentHashMap for lock-free concurrent access
+            this.cache = new ConcurrentHashMap<>(config.maxCacheSize());
 
-                        // Check if pattern can be freed immediately
-                        if (evicted.pattern().getRefCount() > 0) {
-                            // Pattern still in use - defer cleanup
-                            logger.debug("RE2: LRU evicting pattern (deferred cleanup - {} active matchers): {}",
-                                evicted.pattern().getRefCount(), eldest.getKey());
-                            deferredCleanup.add(evicted);
-                            evictionsDeferred.incrementAndGet();
-                        } else {
-                            // Can free immediately
-                            logger.debug("RE2: LRU evicting pattern (immediate): {}", eldest.getKey());
-                            evicted.forceClose();
-                            evictionsLRU.incrementAndGet();
-                        }
-
-                        return true; // Remove from cache either way
-                    }
-                    return false;
-                }
-            };
+            // Single-thread executor for async LRU eviction
+            this.lruEvictionExecutor = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "RE2-LRU-Eviction");
+                t.setDaemon(true);
+                t.setPriority(Thread.MIN_PRIORITY);
+                return t;
+            });
 
             // Start idle eviction background thread
             this.evictionTask = new IdleEvictionTask(this, config);
@@ -99,19 +96,24 @@ public final class PatternCache {
                 shutdown();
             }, "RE2-Shutdown"));
 
-            logger.info("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s, deferredCleanup: every 5s",
+            logger.info("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s, deferredCleanup: every {}s",
                 config.maxCacheSize(),
                 config.idleTimeoutSeconds(),
-                config.evictionScanIntervalSeconds());
+                config.evictionScanIntervalSeconds(),
+                config.deferredCleanupIntervalSeconds());
         } else {
             this.cache = null;
             this.evictionTask = null;
+            this.lruEvictionExecutor = null;
             logger.info("RE2: Pattern caching disabled");
         }
     }
 
     /**
      * Gets or compiles a pattern.
+     *
+     * Lock-free for cache hits. Only compiles patterns when necessary.
+     * Uses computeIfAbsent for safe concurrent compilation.
      *
      * @param patternString regex pattern
      * @param caseSensitive case sensitivity flag
@@ -127,36 +129,109 @@ public final class PatternCache {
 
         CacheKey key = new CacheKey(patternString, caseSensitive);
 
-        synchronized (cache) {
-            CachedPattern cached = cache.get(key);
+        // Try to get existing pattern (lock-free read)
+        CachedPattern cached = cache.get(key);
+        if (cached != null) {
+            // Cache hit - update access time atomically
+            cached.touch();
+            hits.incrementAndGet();
+            logger.debug("RE2: Cache hit - pattern: {}", key);
+            return cached.pattern();
+        }
 
-            if (cached != null) {
-                // Cache hit - update access time
-                cached.updateAccessTime();
-                hits.incrementAndGet();
-                logger.debug("RE2: Cache hit - pattern: {}", key);
-                return cached.pattern();
-            }
+        // Cache miss - use computeIfAbsent for safe concurrent compilation
+        // Only ONE thread compiles each unique pattern
+        misses.incrementAndGet();
+        logger.debug("RE2: Cache miss - compiling pattern: {}", key);
 
-            // Cache miss - compile and cache
-            misses.incrementAndGet();
-            logger.debug("RE2: Cache miss - compiling pattern: {}", key);
-
+        CachedPattern newCached = cache.computeIfAbsent(key, k -> {
+            // This lambda executes atomically for this key only
+            // Other keys can be accessed concurrently
             Pattern pattern = compiler.get();
-            cache.put(key, new CachedPattern(pattern));
+            return new CachedPattern(pattern);
+        });
 
-            // LRU eviction happens automatically in LinkedHashMap.put()
-            // If eldest pattern has refCount > 0, it goes to deferred cleanup list
-            // Eventually freed when refCount reaches 0
+        // If we just added a new pattern, check if we need async LRU eviction
+        // Soft limit: trigger eviction if over, but don't block
+        int currentSize = cache.size();
+        if (currentSize > config.maxCacheSize()) {
+            triggerAsyncLRUEviction(currentSize - config.maxCacheSize());
+        }
 
-            return pattern;
+        return newCached.pattern();
+    }
+
+    /**
+     * Triggers async LRU eviction (doesn't block caller).
+     *
+     * Soft limit approach: cache can temporarily exceed maxSize
+     * while eviction runs in background.
+     */
+    private void triggerAsyncLRUEviction(int toEvict) {
+        if (toEvict <= 0) return;
+
+        lruEvictionExecutor.submit(() -> {
+            try {
+                evictLRUBatch(toEvict);
+            } catch (Exception e) {
+                logger.warn("RE2: Error during async LRU eviction", e);
+            }
+        });
+    }
+
+    /**
+     * Evicts least-recently-used patterns.
+     *
+     * Uses sample-based LRU: samples subset of cache and evicts oldest.
+     * Much faster than scanning entire cache.
+     */
+    private void evictLRUBatch(int toEvict) {
+        int actualToEvict = Math.min(toEvict, cache.size() - config.maxCacheSize());
+        if (actualToEvict <= 0) return;
+
+        // Sample-based LRU: sample a subset and evict oldest
+        // This is O(sample size) not O(cache size)
+        int sampleSize = Math.min(500, cache.size());
+
+        List<Map.Entry<CacheKey, CachedPattern>> candidates = cache.entrySet()
+            .stream()
+            .limit(sampleSize)
+            .sorted(Comparator.comparingLong(e -> e.getValue().lastAccessTimeNanos()))
+            .limit(actualToEvict)
+            .collect(Collectors.toList());
+
+        int evicted = 0;
+        for (Map.Entry<CacheKey, CachedPattern> entry : candidates) {
+            CachedPattern cached = entry.getValue();
+
+            // Only evict if we successfully remove from map
+            if (cache.remove(entry.getKey(), cached)) {
+                if (cached.pattern().getRefCount() > 0) {
+                    // Pattern in use - defer cleanup
+                    deferredCleanup.add(cached);
+                    evictionsDeferred.incrementAndGet();
+                    logger.debug("RE2: LRU evicting pattern (deferred - {} active matchers): {}",
+                        cached.pattern().getRefCount(), entry.getKey());
+                } else {
+                    // Safe to free immediately
+                    cached.forceClose();
+                    evictionsLRU.incrementAndGet();
+                    logger.debug("RE2: LRU evicting pattern (immediate): {}", entry.getKey());
+                }
+                evicted++;
+            }
+        }
+
+        if (evicted > 0) {
+            logger.debug("RE2: Async LRU eviction completed - evicted: {}", evicted);
         }
     }
 
     /**
      * Evicts idle patterns (called by background thread).
      *
-     * Also cleans up deferred patterns that are now safe to free.
+     * Non-blocking: uses ConcurrentHashMap iteration which doesn't block
+     * other threads accessing the cache.
      *
      * @return number of patterns evicted
      */
@@ -165,39 +240,36 @@ public final class PatternCache {
             return 0;
         }
 
-        Instant cutoff = Instant.now().minusSeconds(config.idleTimeoutSeconds());
-        int evicted = 0;
+        long cutoffNanos = System.nanoTime() - (config.idleTimeoutSeconds() * 1_000_000_000L);
+        AtomicLong evictedCount = new AtomicLong(0);
 
-        synchronized (cache) {
-            var iterator = cache.entrySet().iterator();
-            while (iterator.hasNext()) {
-                var entry = iterator.next();
-                CachedPattern cached = entry.getValue();
+        // Non-blocking iteration - other threads can access cache concurrently
+        cache.entrySet().removeIf(entry -> {
+            CachedPattern cached = entry.getValue();
 
-                if (cached.lastAccessTime().isBefore(cutoff)) {
-                    if (cached.pattern().getRefCount() > 0) {
-                        // Pattern idle but still in use - defer cleanup
-                        logger.debug("RE2: Idle evicting pattern (deferred - {} active matchers): {}",
-                            cached.pattern().getRefCount(), entry.getKey());
-                        deferredCleanup.add(cached);
-                        iterator.remove();
-                        evictionsDeferred.incrementAndGet();
-                        evicted++;
-                    } else {
-                        // Can free immediately
-                        logger.debug("RE2: Idle evicting pattern (immediate): {}", entry.getKey());
-                        cached.forceClose();
-                        iterator.remove();
-                        evictionsIdle.addAndGet(1);
-                        evicted++;
-                    }
+            if (cached.lastAccessTimeNanos() < cutoffNanos) {
+                if (cached.pattern().getRefCount() > 0) {
+                    // Pattern idle but still in use - defer cleanup
+                    logger.debug("RE2: Idle evicting pattern (deferred - {} active matchers): {}",
+                        cached.pattern().getRefCount(), entry.getKey());
+                    deferredCleanup.add(cached);
+                    evictionsDeferred.incrementAndGet();
+                } else {
+                    // Can free immediately
+                    logger.debug("RE2: Idle evicting pattern (immediate): {}", entry.getKey());
+                    cached.forceClose();
+                    evictionsIdle.incrementAndGet();
                 }
+                evictedCount.incrementAndGet();
+                return true; // Remove from map
             }
-        }
+            return false; // Keep in map
+        });
 
-        // Clean up deferred patterns (now safe to free)
+        // Clean up deferred patterns
         int deferredCleaned = cleanupDeferredPatterns();
 
+        int evicted = (int) evictedCount.get();
         if (evicted > 0 || deferredCleaned > 0) {
             logger.info("RE2: Eviction completed - idle evicted: {}, deferred cleaned: {}", evicted, deferredCleaned);
         }
@@ -208,21 +280,18 @@ public final class PatternCache {
     /**
      * Cleans up deferred patterns that are no longer in use.
      *
-     * Called frequently by background thread (every 5s) to minimize memory retention.
-     *
      * @return number of patterns cleaned
      */
     int cleanupDeferredPatterns() {
         int cleaned = 0;
 
-        // CopyOnWriteArrayList allows safe iteration + modification
         for (CachedPattern deferred : deferredCleanup) {
             if (deferred.pattern().getRefCount() == 0) {
                 // Now safe to free
                 logger.debug("RE2: Cleaning up deferred pattern");
                 deferred.forceClose();
                 deferredCleanup.remove(deferred);
-                evictionsLRU.incrementAndGet(); // Count as LRU eviction
+                evictionsLRU.incrementAndGet();
                 cleaned++;
             }
         }
@@ -251,32 +320,29 @@ public final class PatternCache {
 
     /**
      * Clears the cache and closes all cached patterns.
-     * Also clears deferred cleanup list.
      */
     public void clear() {
         if (!config.cacheEnabled()) {
             return;
         }
 
-        synchronized (cache) {
-            int cacheSize = cache.size();
-            int deferredSize = deferredCleanup.size();
+        int cacheSize = cache.size();
+        int deferredSize = deferredCleanup.size();
 
-            logger.info("RE2: Clearing cache - {} cached patterns, {} deferred patterns",
-                cacheSize, deferredSize);
+        logger.info("RE2: Clearing cache - {} cached patterns, {} deferred patterns",
+            cacheSize, deferredSize);
 
-            // Close all cached patterns
-            for (CachedPattern cached : cache.values()) {
-                cached.forceClose();
-            }
-            cache.clear();
+        // Close and remove all cached patterns
+        cache.forEach((key, cached) -> {
+            cached.forceClose();
+        });
+        cache.clear();
 
-            // Close all deferred patterns
-            for (CachedPattern deferred : deferredCleanup) {
-                deferred.forceClose();
-            }
-            deferredCleanup.clear();
+        // Close all deferred patterns
+        for (CachedPattern deferred : deferredCleanup) {
+            deferred.forceClose();
         }
+        deferredCleanup.clear();
     }
 
     /**
@@ -297,7 +363,7 @@ public final class PatternCache {
     public void reset() {
         clear();
         resetStatistics();
-        com.axonops.libre2.util.ResourceTracker.reset(); // Reset resource tracker too
+        com.axonops.libre2.util.ResourceTracker.reset();
         logger.debug("RE2: Cache fully reset");
     }
 
@@ -309,6 +375,10 @@ public final class PatternCache {
 
         if (evictionTask != null) {
             evictionTask.stop();
+        }
+
+        if (lruEvictionExecutor != null) {
+            lruEvictionExecutor.shutdown();
         }
 
         clear();
@@ -327,31 +397,33 @@ public final class PatternCache {
     }
 
     /**
-     * Cached pattern with access time tracking.
+     * Cached pattern with atomic access time tracking.
+     *
+     * Uses nanoTime for efficient timestamp comparison without object allocation.
      */
     private static class CachedPattern {
         private final Pattern pattern;
-        private volatile Instant lastAccessTime;
+        private final AtomicLong lastAccessTimeNanos;
 
         CachedPattern(Pattern pattern) {
             this.pattern = pattern;
-            this.lastAccessTime = Instant.now();
+            this.lastAccessTimeNanos = new AtomicLong(System.nanoTime());
         }
 
         Pattern pattern() {
             return pattern;
         }
 
-        Instant lastAccessTime() {
-            return lastAccessTime;
+        long lastAccessTimeNanos() {
+            return lastAccessTimeNanos.get();
         }
 
-        void updateAccessTime() {
-            this.lastAccessTime = Instant.now();
+        void touch() {
+            lastAccessTimeNanos.set(System.nanoTime());
         }
 
         void forceClose() {
-            pattern.forceClose(); // Calls package-private method
+            pattern.forceClose();
         }
     }
 }

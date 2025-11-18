@@ -392,6 +392,9 @@ jobs:
             eclipse-temurin:17-jdk \
             bash -c "
               set -e
+              # Install unzip (not included in eclipse-temurin image)
+              apt-get update && apt-get install -y unzip
+
               # Verify native library in JAR
               echo 'Checking linux-aarch64 library in JAR:'
               unzip -l target/libre2-java-*.jar | grep 'linux-aarch64/libre2.so'

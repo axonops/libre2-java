@@ -55,11 +55,11 @@ class MetricsIntegrationTest {
         Pattern pattern = Pattern.compile("test.*");
 
         // Verify compilation counter incremented
-        Counter compiled = registry.counter("test.re2.patterns.compiled");
+        Counter compiled = registry.counter("test.re2.patterns.compiled.total.count");
         assertThat(compiled.getCount()).isEqualTo(1);
 
         // Verify compilation timer recorded
-        Timer compilationTime = registry.timer("test.re2.patterns.compilation_time");
+        Timer compilationTime = registry.timer("test.re2.patterns.compilation.latency");
         assertThat(compilationTime.getCount()).isEqualTo(1);
         assertThat(compilationTime.getSnapshot().getMean()).isGreaterThan(0);
 
@@ -75,8 +75,8 @@ class MetricsIntegrationTest {
         // First compile - cache miss
         Pattern p1 = Pattern.compile("test.*");
 
-        Counter misses = registry.counter("test.re2.patterns.cache_misses");
-        Counter hits = registry.counter("test.re2.patterns.cache_hits");
+        Counter misses = registry.counter("test.re2.patterns.cache.misses.total.count");
+        Counter hits = registry.counter("test.re2.patterns.cache.hits.total.count");
 
         assertThat(misses.getCount()).isEqualTo(1);
         assertThat(hits.getCount()).isEqualTo(0);
@@ -103,10 +103,10 @@ class MetricsIntegrationTest {
             m.matches();
         }
 
-        Timer fullMatch = registry.timer("test.re2.matching.full_match");
+        Timer fullMatch = registry.timer("test.re2.matching.full_match.latency");
         assertThat(fullMatch.getCount()).isEqualTo(1);
 
-        Counter operations = registry.counter("test.re2.matching.operations");
+        Counter operations = registry.counter("test.re2.matching.operations.total.count");
         assertThat(operations.getCount()).isEqualTo(1);
 
         // Partial match
@@ -114,7 +114,7 @@ class MetricsIntegrationTest {
             m.find();
         }
 
-        Timer partialMatch = registry.timer("test.re2.matching.partial_match");
+        Timer partialMatch = registry.timer("test.re2.matching.partial_match.latency");
         assertThat(partialMatch.getCount()).isEqualTo(1);
 
         assertThat(operations.getCount()).isEqualTo(2); // 1 full + 1 partial
@@ -124,12 +124,12 @@ class MetricsIntegrationTest {
     void testCacheGauges() {
         // Verify gauges registered
         assertThat(registry.getGauges()).containsKeys(
-            "test.re2.cache.size",
-            "test.re2.cache.native_memory_bytes",
-            "test.re2.cache.native_memory_peak_bytes"
+            "test.re2.cache.patterns.current.count",
+            "test.re2.cache.native_memory.current.bytes",
+            "test.re2.cache.native_memory.peak.bytes"
         );
 
-        Gauge<Integer> cacheSize = (Gauge<Integer>) registry.getGauges().get("test.re2.cache.size");
+        Gauge<Integer> cacheSize = (Gauge<Integer>) registry.getGauges().get("test.re2.cache.patterns.current.count");
         assertThat(cacheSize.getValue()).isEqualTo(0); // initially empty
 
         // Compile patterns
@@ -143,10 +143,10 @@ class MetricsIntegrationTest {
         assertThat(cacheSize.getValue()).isEqualTo(3);
 
         // Verify native memory gauge
-        Gauge<Long> nativeMemory = (Gauge<Long>) registry.getGauges().get("test.re2.cache.native_memory_bytes");
+        Gauge<Long> nativeMemory = (Gauge<Long>) registry.getGauges().get("test.re2.cache.native_memory.current.bytes");
         assertThat(nativeMemory.getValue()).isGreaterThan(0L);
 
-        Gauge<Long> peakMemory = (Gauge<Long>) registry.getGauges().get("test.re2.cache.native_memory_peak_bytes");
+        Gauge<Long> peakMemory = (Gauge<Long>) registry.getGauges().get("test.re2.cache.native_memory.peak.bytes");
         assertThat(peakMemory.getValue()).isGreaterThan(0L);
     }
 
@@ -154,14 +154,14 @@ class MetricsIntegrationTest {
     void testResourceGauges() {
         // Verify resource gauges registered
         assertThat(registry.getGauges()).containsKeys(
-            "test.re2.resources.patterns_active",
-            "test.re2.resources.matchers_active",
-            "test.re2.resources.patterns_freed",
-            "test.re2.resources.matchers_freed"
+            "test.re2.resources.patterns.active.current.count",
+            "test.re2.resources.matchers.active.current.count",
+            "test.re2.resources.patterns.freed.total.count",
+            "test.re2.resources.matchers.freed.total.count"
         );
 
-        Gauge<Integer> patternsActive = (Gauge<Integer>) registry.getGauges().get("test.re2.resources.patterns_active");
-        Gauge<Integer> matchersActive = (Gauge<Integer>) registry.getGauges().get("test.re2.resources.matchers_active");
+        Gauge<Integer> patternsActive = (Gauge<Integer>) registry.getGauges().get("test.re2.resources.patterns.active.current.count");
+        Gauge<Integer> matchersActive = (Gauge<Integer>) registry.getGauges().get("test.re2.resources.matchers.active.current.count");
 
         // Compile pattern (increases active patterns)
         Pattern pattern = Pattern.compile("test.*");
@@ -179,7 +179,7 @@ class MetricsIntegrationTest {
 
     @Test
     void testErrorMetrics_CompilationFailed() {
-        Counter errorCounter = registry.counter("test.re2.errors.compilation_failed");
+        Counter errorCounter = registry.counter("test.re2.errors.compilation.failed.total.count");
         assertThat(errorCounter.getCount()).isEqualTo(0);
 
         // Trigger compilation error
@@ -196,30 +196,53 @@ class MetricsIntegrationTest {
 
     @Test
     void testEvictionMetrics() {
-        // Create small cache to trigger eviction
+        // Create small cache with NO eviction protection for immediate testing
         RE2Config smallCacheConfig = RE2Config.builder()
             .maxCacheSize(5)
+            .evictionProtectionMs(0) // No protection - evict immediately
             .metricsRegistry(new DropwizardMetricsAdapter(registry, "eviction.test"))
             .build();
 
         Pattern.setGlobalCache(new PatternCache(smallCacheConfig));
 
-        // Compile 10 patterns (more than cache size)
-        for (int i = 0; i < 10; i++) {
-            Pattern.compile("pattern" + i);
+        Gauge<Integer> cacheSize = (Gauge<Integer>) registry.getGauges().get("eviction.test.cache.patterns.current.count");
+        Counter lruEvictions = registry.counter("eviction.test.cache.evictions.lru.total.count");
+
+        // Compile 15 patterns (way more than cache size of 5)
+        // Soft limit: cache temporarily exceeds max, then async eviction kicks in
+        for (int i = 0; i < 15; i++) {
+            Pattern.compile("eviction_test_" + i);
         }
+
+        // Cache should have grown beyond max (soft limit behavior)
+        int cacheSizeBeforeEviction = cacheSize.getValue();
+        assertThat(cacheSizeBeforeEviction)
+            .as("Cache should temporarily exceed max (soft limit)")
+            .isGreaterThan(5);
 
         // Wait for async LRU eviction to complete
         try {
-            Thread.sleep(500); // Increased wait time for eviction
+            Thread.sleep(1000);
         } catch (InterruptedException e) {
             // ignore
         }
 
-        // Verify LRU evictions occurred (at least some patterns evicted)
-        Counter lruEvictions = registry.counter("eviction.test.cache.evictions_lru");
-        // Note: May be 0 if patterns are deferred (in use), so just check metric exists
-        assertThat(lruEvictions).as("LRU eviction counter exists").isNotNull();
+        // Verify evictions occurred
+        long evictionsAfter = lruEvictions.getCount();
+        assertThat(evictionsAfter)
+            .as("LRU evictions should have occurred (15 patterns > 5 max)")
+            .isGreaterThan(0);
+
+        // Verify cache size brought back down to max
+        int cacheSizeAfterEviction = cacheSize.getValue();
+        assertThat(cacheSizeAfterEviction)
+            .as("Cache size should be at or below max after eviction")
+            .isLessThanOrEqualTo(5);
+
+        // Verify eviction count makes sense (should have evicted ~10 patterns)
+        assertThat(evictionsAfter)
+            .as("Should have evicted approximately 10 patterns")
+            .isGreaterThanOrEqualTo(8); // Some tolerance for timing
     }
 
     @Test
@@ -243,32 +266,32 @@ class MetricsIntegrationTest {
         // Verify all 21 metric names exist in registry
         // Counters (10)
         assertThat(registry.getCounters().keySet()).contains(
-            "test.re2.patterns.compiled",
-            "test.re2.patterns.cache_hits",
-            "test.re2.patterns.cache_misses",
-            "test.re2.matching.operations"
+            "test.re2.patterns.compiled.total.count",
+            "test.re2.patterns.cache.hits.total.count",
+            "test.re2.patterns.cache.misses.total.count",
+            "test.re2.matching.operations.total.count"
         );
 
         // Timers (3)
         assertThat(registry.getTimers().keySet()).contains(
-            "test.re2.patterns.compilation_time",
-            "test.re2.matching.full_match",
-            "test.re2.matching.partial_match"
+            "test.re2.patterns.compilation.latency",
+            "test.re2.matching.full_match.latency",
+            "test.re2.matching.partial_match.latency"
         );
 
         // Gauges (7)
         assertThat(registry.getGauges().keySet()).contains(
-            "test.re2.cache.size",
-            "test.re2.cache.native_memory_bytes",
-            "test.re2.cache.native_memory_peak_bytes",
-            "test.re2.resources.patterns_active",
-            "test.re2.resources.matchers_active",
-            "test.re2.resources.patterns_freed",
-            "test.re2.resources.matchers_freed"
+            "test.re2.cache.patterns.current.count",
+            "test.re2.cache.native_memory.current.bytes",
+            "test.re2.cache.native_memory.peak.bytes",
+            "test.re2.resources.patterns.active.current.count",
+            "test.re2.resources.matchers.active.current.count",
+            "test.re2.resources.patterns.freed.total.count",
+            "test.re2.resources.matchers.freed.total.count"
         );
 
         // Error counters exist (even if count is 0)
-        assertThat(registry.counter("test.re2.errors.compilation_failed").getCount()).isGreaterThan(0);
+        assertThat(registry.counter("test.re2.errors.compilation.failed.total.count").getCount()).isGreaterThan(0);
     }
 
     @Test

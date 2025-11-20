@@ -98,7 +98,7 @@ public final class RE2LibraryLoader {
                 // Record native library error (best effort - cache may not be initialized yet)
                 try {
                     com.axonops.libre2.api.Pattern.getGlobalCache().getConfig().metricsRegistry()
-                        .incrementCounter("errors.native_library");
+                        .incrementCounter("errors.native_library.total.count");
                 } catch (Exception metricsError) {
                     // Ignore - metrics are optional and cache may not be initialized
                 }

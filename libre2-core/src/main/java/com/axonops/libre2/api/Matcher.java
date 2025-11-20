@@ -75,8 +75,8 @@ public final class Matcher implements AutoCloseable {
         boolean result = RE2NativeJNI.fullMatch(pattern.getNativeHandle(), input);
 
         long durationNanos = System.nanoTime() - startNanos;
-        metrics.recordTimer("matching.full_match", durationNanos);
-        metrics.incrementCounter("matching.operations");
+        metrics.recordTimer("matching.full_match.latency", durationNanos);
+        metrics.incrementCounter("matching.operations.total.count");
 
         return result;
     }
@@ -90,8 +90,8 @@ public final class Matcher implements AutoCloseable {
         boolean result = RE2NativeJNI.partialMatch(pattern.getNativeHandle(), input);
 
         long durationNanos = System.nanoTime() - startNanos;
-        metrics.recordTimer("matching.partial_match", durationNanos);
-        metrics.incrementCounter("matching.operations");
+        metrics.recordTimer("matching.partial_match.latency", durationNanos);
+        metrics.incrementCounter("matching.operations.total.count");
 
         return result;
     }

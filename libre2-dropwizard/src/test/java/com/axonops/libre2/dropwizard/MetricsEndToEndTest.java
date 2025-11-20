@@ -27,13 +27,13 @@ class MetricsEndToEndTest {
 
         // Verify all 7 gauges registered
         assertThat(registry.getGauges()).containsKeys(
-            "e2e.test.cache.size",
-            "e2e.test.cache.native_memory_bytes",
-            "e2e.test.cache.native_memory_peak_bytes",
-            "e2e.test.resources.patterns_active",
-            "e2e.test.resources.matchers_active",
-            "e2e.test.resources.patterns_freed",
-            "e2e.test.resources.matchers_freed"
+            "e2e.test.cache.patterns.current.count",
+            "e2e.test.cache.native_memory.current.bytes",
+            "e2e.test.cache.native_memory.peak.bytes",
+            "e2e.test.resources.patterns.active.current.count",
+            "e2e.test.resources.matchers.active.current.count",
+            "e2e.test.resources.patterns.freed.total.count",
+            "e2e.test.resources.matchers.freed.total.count"
         );
 
         cache.reset();
@@ -52,7 +52,7 @@ class MetricsEndToEndTest {
 
         // Verify specific Cassandra-prefixed gauge exists
         assertThat(registry.getGauges())
-            .containsKey("org.apache.cassandra.metrics.RE2.cache.size");
+            .containsKey("org.apache.cassandra.metrics.RE2.cache.patterns.current.count");
 
         cache.reset();
     }
@@ -66,7 +66,7 @@ class MetricsEndToEndTest {
 
         // Verify custom prefix used
         assertThat(registry.getGauges())
-            .containsKey("com.mycompany.myapp.regex.cache.size");
+            .containsKey("com.mycompany.myapp.regex.cache.patterns.current.count");
 
         cache.reset();
     }
@@ -77,7 +77,7 @@ class MetricsEndToEndTest {
         RE2Config config = RE2MetricsConfig.withMetrics(registry, "gauge.test");
         PatternCache cache = new PatternCache(config);
 
-        Gauge<Integer> cacheSize = (Gauge<Integer>) registry.getGauges().get("gauge.test.cache.size");
+        Gauge<Integer> cacheSize = (Gauge<Integer>) registry.getGauges().get("gauge.test.cache.patterns.current.count");
 
         // Initially empty
         assertThat(cacheSize.getValue()).isEqualTo(0);
@@ -106,10 +106,10 @@ class MetricsEndToEndTest {
         cache.getOrCompile("test.*", true, () -> Pattern.compileWithoutCache("test.*"));
 
         // Memory gauges should show non-zero values
-        Gauge<Long> nativeMemory = (Gauge<Long>) registry.getGauges().get("memory.test.cache.native_memory_bytes");
+        Gauge<Long> nativeMemory = (Gauge<Long>) registry.getGauges().get("memory.test.cache.native_memory.current.bytes");
         assertThat(nativeMemory.getValue()).isGreaterThan(0L);
 
-        Gauge<Long> peakMemory = (Gauge<Long>) registry.getGauges().get("memory.test.cache.native_memory_peak_bytes");
+        Gauge<Long> peakMemory = (Gauge<Long>) registry.getGauges().get("memory.test.cache.native_memory.peak.bytes");
         assertThat(peakMemory.getValue()).isGreaterThan(0L);
 
         cache.reset();
@@ -123,14 +123,14 @@ class MetricsEndToEndTest {
 
         // Verify all resource gauges registered
         assertThat(registry.getGauges()).containsKeys(
-            "resource.test.resources.patterns_active",
-            "resource.test.resources.matchers_active",
-            "resource.test.resources.patterns_freed",
-            "resource.test.resources.matchers_freed"
+            "resource.test.resources.patterns.active.current.count",
+            "resource.test.resources.matchers.active.current.count",
+            "resource.test.resources.patterns.freed.total.count",
+            "resource.test.resources.matchers.freed.total.count"
         );
 
         // Gauges should return non-null values
-        Gauge<Integer> patternsActive = (Gauge<Integer>) registry.getGauges().get("resource.test.resources.patterns_active");
+        Gauge<Integer> patternsActive = (Gauge<Integer>) registry.getGauges().get("resource.test.resources.patterns.active.current.count");
         assertThat(patternsActive.getValue()).isNotNull();
 
         cache.reset();

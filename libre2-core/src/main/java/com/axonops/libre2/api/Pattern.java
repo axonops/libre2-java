@@ -158,14 +158,14 @@ public final class Pattern implements AutoCloseable {
                 }
                 // Compilation failed - decrement count and record error
                 ResourceTracker.trackPatternFreed();
-                metrics.incrementCounter("errors.compilation_failed");
+                metrics.incrementCounter("errors.compilation.failed.total.count");
                 logger.error("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
                 throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
             }
 
             long durationNanos = System.nanoTime() - startNanos;
-            metrics.recordTimer("patterns.compilation_time", durationNanos);
-            metrics.incrementCounter("patterns.compiled");
+            metrics.recordTimer("patterns.compilation.latency", durationNanos);
+            metrics.incrementCounter("patterns.compiled.total.count");
 
             Pattern compiled = new Pattern(pattern, caseSensitive, handle, fromCache);
             logger.debug("RE2: Pattern compiled - hash: {}, length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}, timeNs: {}",

@@ -67,7 +67,7 @@ public final class ResourceTracker {
 
             // Record resource exhausted error
             try {
-                Pattern.getGlobalCache().getConfig().metricsRegistry().incrementCounter("errors.resource_exhausted");
+                Pattern.getGlobalCache().getConfig().metricsRegistry().incrementCounter("errors.resource.exhausted.total.count");
             } catch (Exception e) {
                 // Ignore - metrics are optional
             }

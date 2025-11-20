@@ -65,6 +65,13 @@ public final class ResourceTracker {
             activePatternsCount.decrementAndGet(); // Roll back
             patternLimitRejections.incrementAndGet();
 
+            // Record resource exhausted error
+            try {
+                Pattern.getGlobalCache().getConfig().metricsRegistry().incrementCounter("errors.resource_exhausted");
+            } catch (Exception e) {
+                // Ignore - metrics are optional
+            }
+
             throw new com.axonops.libre2.api.ResourceException(
                 "Maximum simultaneous compiled patterns exceeded: " + maxSimultaneous +
                 " (this is ACTIVE count, not cumulative - patterns can be freed and recompiled)");

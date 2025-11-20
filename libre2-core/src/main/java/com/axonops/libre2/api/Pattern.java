@@ -56,7 +56,7 @@ public final class Pattern implements AutoCloseable {
     /**
      * Gets the global pattern cache (for internal use).
      */
-    static PatternCache getGlobalCache() {
+    public static PatternCache getGlobalCache() {
         return cache;
     }
 

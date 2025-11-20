@@ -152,12 +152,10 @@ class MetricsIntegrationTest {
 
     @Test
     void testResourceGauges() {
-        // Verify resource gauges registered
+        // Verify resource gauges registered (active counts only)
         assertThat(registry.getGauges()).containsKeys(
             "test.re2.resources.patterns.active.current.count",
-            "test.re2.resources.matchers.active.current.count",
-            "test.re2.resources.patterns.freed.total.count",
-            "test.re2.resources.matchers.freed.total.count"
+            "test.re2.resources.matchers.active.current.count"
         );
 
         Gauge<Integer> patternsActive = (Gauge<Integer>) registry.getGauges().get("test.re2.resources.patterns.active.current.count");
@@ -168,13 +166,21 @@ class MetricsIntegrationTest {
         int activeAfterCompile = patternsActive.getValue();
         assertThat(activeAfterCompile).isGreaterThan(0);
 
-        // Create matcher (increases active matchers)
+        // Create and close matcher to trigger freed counter
         Matcher matcher = pattern.matcher("test");
         assertThat(matchersActive.getValue()).isGreaterThan(0);
 
-        // Close matcher (decreases active matchers)
         matcher.close();
         assertThat(matchersActive.getValue()).isEqualTo(0);
+
+        // Verify freed counter was incremented (now a Counter, not Gauge)
+        Counter matchersFreed = registry.counter("test.re2.resources.matchers.freed.total.count");
+        assertThat(matchersFreed.getCount())
+            .as("Matcher freed counter should have incremented")
+            .isEqualTo(1);
+
+        // Note: patterns.freed counter only increments when non-cached patterns are freed
+        // Cached patterns are managed by cache, so this counter may be 0 in this test
     }
 
     @Test
@@ -279,13 +285,21 @@ class MetricsIntegrationTest {
             "test.re2.matching.partial_match.latency"
         );
 
-        // Gauges (7)
+        // Gauges (9 - current/peak values only)
         assertThat(registry.getGauges().keySet()).contains(
             "test.re2.cache.patterns.current.count",
             "test.re2.cache.native_memory.current.bytes",
             "test.re2.cache.native_memory.peak.bytes",
             "test.re2.resources.patterns.active.current.count",
             "test.re2.resources.matchers.active.current.count",
+            "test.re2.cache.deferred.patterns.current.count",
+            "test.re2.cache.deferred.patterns.peak.count",
+            "test.re2.cache.deferred.native_memory.current.bytes",
+            "test.re2.cache.deferred.native_memory.peak.bytes"
+        );
+
+        // Verify freed counts are now Counters (not Gauges)
+        assertThat(registry.getCounters().keySet()).contains(
             "test.re2.resources.patterns.freed.total.count",
             "test.re2.resources.matchers.freed.total.count"
         );

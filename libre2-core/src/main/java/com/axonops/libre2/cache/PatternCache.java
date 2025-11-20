@@ -560,15 +560,13 @@ public final class PatternCache {
         metrics.registerGauge("cache.native_memory.current.bytes", totalNativeMemoryBytes::get);
         metrics.registerGauge("cache.native_memory.peak.bytes", peakNativeMemoryBytes::get);
 
-        // Resource management metrics (active/freed counts)
+        // Resource management metrics (active counts only - freed counts are incremented directly)
         metrics.registerGauge("resources.patterns.active.current.count",
             com.axonops.libre2.util.ResourceTracker::getActivePatternCount);
         metrics.registerGauge("resources.matchers.active.current.count",
             com.axonops.libre2.util.ResourceTracker::getActiveMatcherCount);
-        metrics.registerGauge("resources.patterns.freed.total.count",
-            com.axonops.libre2.util.ResourceTracker::getTotalPatternsClosed);
-        metrics.registerGauge("resources.matchers.freed.total.count",
-            com.axonops.libre2.util.ResourceTracker::getTotalMatchersClosed);
+        // Note: resources.patterns.freed.total.count and resources.matchers.freed.total.count
+        // are Counters incremented in ResourceTracker.trackPatternFreed() and trackMatcherFreed()
 
         // Deferred cleanup metrics (current state)
         metrics.registerGauge("cache.deferred.patterns.current.count", deferredCleanup::size);

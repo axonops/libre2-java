@@ -17,6 +17,7 @@
 package com.axonops.libre2.util;
 
 import com.axonops.libre2.api.Pattern;
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,9 +56,10 @@ public final class ResourceTracker {
      * Tracks a new pattern allocation (called when pattern compiled).
      *
      * @param maxSimultaneous maximum allowed simultaneous patterns
+     * @param metricsRegistry optional metrics registry to record errors
      * @throws ResourceException if simultaneous limit exceeded
      */
-    public static void trackPatternAllocated(int maxSimultaneous) {
+    public static void trackPatternAllocated(int maxSimultaneous, RE2MetricsRegistry metricsRegistry) {
         int current = activePatternsCount.incrementAndGet();
         totalPatternsCompiled.incrementAndGet();
 
@@ -66,10 +68,8 @@ public final class ResourceTracker {
             patternLimitRejections.incrementAndGet();
 
             // Record resource exhausted error
-            try {
-                Pattern.getGlobalCache().getConfig().metricsRegistry().incrementCounter("errors.resource.exhausted.total.count");
-            } catch (Exception e) {
-                // Ignore - metrics are optional
+            if (metricsRegistry != null) {
+                metricsRegistry.incrementCounter("errors.resource.exhausted.total.count");
             }
 
             throw new com.axonops.libre2.api.ResourceException(
@@ -82,10 +82,17 @@ public final class ResourceTracker {
 
     /**
      * Tracks a pattern being freed (called when pattern closed).
+     *
+     * @param metricsRegistry optional metrics registry to record freed count
      */
-    public static void trackPatternFreed() {
+    public static void trackPatternFreed(RE2MetricsRegistry metricsRegistry) {
         int current = activePatternsCount.decrementAndGet();
         totalPatternsClosed.incrementAndGet();
+
+        // Record pattern freed metric (Counter, not Gauge)
+        if (metricsRegistry != null) {
+            metricsRegistry.incrementCounter("resources.patterns.freed.total.count");
+        }
 
         if (current < 0) {
             logger.error("RE2: Pattern count went negative! This is a bug.");
@@ -135,10 +142,17 @@ public final class ResourceTracker {
 
     /**
      * Tracks a matcher being freed.
+     *
+     * @param metricsRegistry optional metrics registry to record freed count
      */
-    public static void trackMatcherFreed() {
+    public static void trackMatcherFreed(RE2MetricsRegistry metricsRegistry) {
         int current = activeMatchersCount.decrementAndGet();
         totalMatchersClosed.incrementAndGet();
+
+        // Record matcher freed metric (Counter, not Gauge)
+        if (metricsRegistry != null) {
+            metricsRegistry.incrementCounter("resources.matchers.freed.total.count");
+        }
 
         if (current < 0) {
             logger.error("RE2: Matcher count went negative! This is a bug.");

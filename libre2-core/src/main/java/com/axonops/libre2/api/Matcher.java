@@ -111,7 +111,8 @@ public final class Matcher implements AutoCloseable {
             pattern.decrementRefCount();
 
             // Track matcher freed
-            ResourceTracker.trackMatcherFreed();
+            RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+            ResourceTracker.trackMatcherFreed(metrics);
         }
     }
 

@@ -145,7 +145,7 @@ public final class Pattern implements AutoCloseable {
 
         // Track allocation and enforce maxSimultaneousCompiledPatterns limit
         // This is ACTIVE count, not cumulative - patterns can be freed and recompiled
-        ResourceTracker.trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns());
+        ResourceTracker.trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns(), metrics);
 
         long startNanos = System.nanoTime();
         try {
@@ -157,7 +157,7 @@ public final class Pattern implements AutoCloseable {
                     RE2NativeJNI.freePattern(handle);
                 }
                 // Compilation failed - decrement count and record error
-                ResourceTracker.trackPatternFreed();
+                ResourceTracker.trackPatternFreed(metrics);
                 metrics.incrementCounter("errors.compilation.failed.total.count");
                 logger.error("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
                 throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
@@ -175,7 +175,7 @@ public final class Pattern implements AutoCloseable {
         } catch (Exception e) {
             // If any exception, decrement count (unless it was ResourceException from limit)
             if (!(e instanceof ResourceException)) {
-                ResourceTracker.trackPatternFreed();
+                ResourceTracker.trackPatternFreed(metrics);
             }
             throw e;
         }
@@ -307,7 +307,7 @@ public final class Pattern implements AutoCloseable {
             RE2NativeJNI.freePattern(nativeHandle);
 
             // Track that pattern was freed (decrements active count)
-            ResourceTracker.trackPatternFreed();
+            ResourceTracker.trackPatternFreed(cache.getConfig().metricsRegistry());
         }
     }
 

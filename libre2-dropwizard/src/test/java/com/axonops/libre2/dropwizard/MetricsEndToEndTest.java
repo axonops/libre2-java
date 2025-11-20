@@ -25,16 +25,22 @@ class MetricsEndToEndTest {
         // Create cache - should register all gauges
         PatternCache cache = new PatternCache(config);
 
-        // Verify all 7 gauges registered
+        // Verify gauges registered (11 total: cache, resources active, deferred)
         assertThat(registry.getGauges()).containsKeys(
             "e2e.test.cache.patterns.current.count",
             "e2e.test.cache.native_memory.current.bytes",
             "e2e.test.cache.native_memory.peak.bytes",
             "e2e.test.resources.patterns.active.current.count",
             "e2e.test.resources.matchers.active.current.count",
-            "e2e.test.resources.patterns.freed.total.count",
-            "e2e.test.resources.matchers.freed.total.count"
+            "e2e.test.cache.deferred.patterns.current.count",
+            "e2e.test.cache.deferred.patterns.peak.count",
+            "e2e.test.cache.deferred.native_memory.current.bytes",
+            "e2e.test.cache.deferred.native_memory.peak.bytes"
         );
+
+        // Verify freed counts are Counters (not in getGauges())
+        // Note: These may not exist yet if nothing has been freed
+        // assertThat(registry.getCounters()).containsKeys(...) would fail if counters not created yet
 
         cache.reset();
     }
@@ -121,17 +127,18 @@ class MetricsEndToEndTest {
         RE2Config config = RE2MetricsConfig.withMetrics(registry, "resource.test");
         PatternCache cache = new PatternCache(config);
 
-        // Verify all resource gauges registered
+        // Verify resource gauges registered (active counts only)
         assertThat(registry.getGauges()).containsKeys(
             "resource.test.resources.patterns.active.current.count",
-            "resource.test.resources.matchers.active.current.count",
-            "resource.test.resources.patterns.freed.total.count",
-            "resource.test.resources.matchers.freed.total.count"
+            "resource.test.resources.matchers.active.current.count"
         );
 
         // Gauges should return non-null values
         Gauge<Integer> patternsActive = (Gauge<Integer>) registry.getGauges().get("resource.test.resources.patterns.active.current.count");
         assertThat(patternsActive.getValue()).isNotNull();
+
+        // Note: resources.patterns.freed and resources.matchers.freed are now Counters
+        // They increment when patterns/matchers are freed (not registered as Gauges)
 
         cache.reset();
     }

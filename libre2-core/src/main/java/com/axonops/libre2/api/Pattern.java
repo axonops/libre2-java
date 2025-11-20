@@ -50,8 +50,8 @@ public final class Pattern implements AutoCloseable {
         RE2LibraryLoader.loadLibrary();
     }
 
-    // Global pattern cache
-    private static final PatternCache cache = new PatternCache(RE2Config.DEFAULT);
+    // Global pattern cache (mutable for testing only)
+    private static volatile PatternCache cache = new PatternCache(RE2Config.DEFAULT);
 
     /**
      * Gets the global pattern cache (for internal use).
@@ -342,6 +342,18 @@ public final class Pattern implements AutoCloseable {
      */
     public static void configureCache(RE2Config config) {
         cache.reconfigure(config);
+    }
+
+    /**
+     * Sets a new global cache (for testing only).
+     *
+     * WARNING: This replaces the entire global cache. Use with caution.
+     * Primarily for tests that need to inject a custom cache with metrics.
+     *
+     * @param newCache the new cache to use globally
+     */
+    public static void setGlobalCache(PatternCache newCache) {
+        cache = newCache;
     }
 
     /**

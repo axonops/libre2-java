@@ -122,10 +122,21 @@ public final class RE2MetricsConfig {
      * metric namespace: {@code "org.apache.cassandra.metrics.RE2"}
      *
      * @param cassandraRegistry Cassandra's singleton MetricRegistry
-     * @return configured RE2Config for Cassandra
+     * @return configured RE2Config for Cassandra with JMX enabled
      */
     public static RE2Config forCassandra(MetricRegistry cassandraRegistry) {
         return withMetrics(cassandraRegistry, "org.apache.cassandra.metrics.RE2", true);
+    }
+
+    /**
+     * Creates RE2Config optimized for Cassandra with standard metric prefix.
+     *
+     * @param cassandraRegistry Cassandra's singleton MetricRegistry
+     * @param enableJmx whether to automatically set up JMX exposure
+     * @return configured RE2Config for Cassandra
+     */
+    public static RE2Config forCassandra(MetricRegistry cassandraRegistry, boolean enableJmx) {
+        return withMetrics(cassandraRegistry, "org.apache.cassandra.metrics.RE2", enableJmx);
     }
 
     /**

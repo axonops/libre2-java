@@ -425,6 +425,9 @@ public final class PatternCache {
 
     /**
      * Clears the cache and closes all cached patterns.
+     *
+     * Patterns with active matchers (refCount > 0) are moved to deferred list
+     * instead of being forcibly closed.
      */
     public void clear() {
         if (!config.cacheEnabled()) {
@@ -438,19 +441,32 @@ public final class PatternCache {
             cacheSize, deferredSize);
 
         // Close and remove all cached patterns
+        // Patterns with active matchers go to deferred list
         cache.forEach((key, cached) -> {
-            cached.forceClose();
+            if (cached.pattern().getRefCount() > 0) {
+                // Pattern still in use - move to deferred list instead of closing
+                deferredCleanup.add(cached);
+                logger.trace("RE2: Clearing cache - pattern still in use, moving to deferred: refCount={}",
+                    cached.pattern().getRefCount());
+            } else {
+                // Safe to close immediately
+                cached.forceClose();
+            }
         });
         cache.clear();
 
-        // Close all deferred patterns
-        for (CachedPattern deferred : deferredCleanup) {
-            deferred.forceClose();
-        }
-        deferredCleanup.clear();
+        // Close deferred patterns that are no longer in use
+        deferredCleanup.removeIf(deferred -> {
+            if (deferred.pattern().getRefCount() == 0) {
+                deferred.forceClose();
+                return true; // Remove from list
+            }
+            return false; // Keep in list
+        });
 
-        // Reset memory tracking (all patterns removed)
+        // Reset memory tracking (all non-deferred patterns removed)
         totalNativeMemoryBytes.set(0);
+        // Note: deferred memory is tracked separately
     }
 
     /**
@@ -469,12 +485,26 @@ public final class PatternCache {
 
     /**
      * Full reset for testing (clears cache and resets statistics).
+     *
+     * WARNING: Only resets ResourceTracker if there are no active patterns/matchers.
+     * If resources are still active, logs a warning but doesn't reset counts to avoid
+     * negative count bugs when those resources are later freed.
      */
     public void reset() {
         clear();
         resetStatistics();
-        com.axonops.libre2.util.ResourceTracker.reset();
-        logger.trace("RE2: Cache fully reset");
+
+        // Only reset ResourceTracker if there are no active resources
+        int activePatterns = com.axonops.libre2.util.ResourceTracker.getActivePatternCount();
+        int activeMatchers = com.axonops.libre2.util.ResourceTracker.getActiveMatcherCount();
+
+        if (activePatterns == 0 && activeMatchers == 0) {
+            com.axonops.libre2.util.ResourceTracker.reset();
+            logger.trace("RE2: Cache fully reset (including ResourceTracker)");
+        } else {
+            logger.warn("RE2: Cache reset but ResourceTracker NOT reset - {} active patterns, {} active matchers still open",
+                activePatterns, activeMatchers);
+        }
     }
 
     /**

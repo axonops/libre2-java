@@ -20,7 +20,7 @@ class MetricsEndToEndTest {
     @Test
     void testGaugesRegisteredOnCacheCreation() {
         MetricRegistry registry = new MetricRegistry();
-        RE2Config config = RE2MetricsConfig.withMetrics(registry, "e2e.test");
+        RE2Config config = RE2MetricsConfig.withMetrics(registry, "e2e.test", false); // JMX disabled
 
         // Create cache - should register all gauges
         PatternCache cache = new PatternCache(config);
@@ -48,7 +48,7 @@ class MetricsEndToEndTest {
     @Test
     void testCassandraPrefixConvention() {
         MetricRegistry registry = new MetricRegistry();
-        RE2Config config = RE2MetricsConfig.forCassandra(registry);
+        RE2Config config = RE2MetricsConfig.forCassandra(registry, false); // JMX disabled
 
         PatternCache cache = new PatternCache(config);
 
@@ -66,7 +66,7 @@ class MetricsEndToEndTest {
     @Test
     void testCustomPrefixWorks() {
         MetricRegistry registry = new MetricRegistry();
-        RE2Config config = RE2MetricsConfig.withMetrics(registry, "com.mycompany.myapp.regex");
+        RE2Config config = RE2MetricsConfig.withMetrics(registry, "com.mycompany.myapp.regex", false);
 
         PatternCache cache = new PatternCache(config);
 
@@ -80,7 +80,7 @@ class MetricsEndToEndTest {
     @Test
     void testGaugeValuesReflectCacheState() {
         MetricRegistry registry = new MetricRegistry();
-        RE2Config config = RE2MetricsConfig.withMetrics(registry, "gauge.test");
+        RE2Config config = RE2MetricsConfig.withMetrics(registry, "gauge.test", false);
         PatternCache cache = new PatternCache(config);
 
         Gauge<Integer> cacheSize = (Gauge<Integer>) registry.getGauges().get("gauge.test.cache.patterns.current.count");
@@ -105,7 +105,7 @@ class MetricsEndToEndTest {
     @Test
     void testNativeMemoryGaugesNonZero() {
         MetricRegistry registry = new MetricRegistry();
-        RE2Config config = RE2MetricsConfig.withMetrics(registry, "memory.test");
+        RE2Config config = RE2MetricsConfig.withMetrics(registry, "memory.test", false);
         PatternCache cache = new PatternCache(config);
 
         // Add pattern
@@ -124,7 +124,7 @@ class MetricsEndToEndTest {
     @Test
     void testResourceGaugesExist() {
         MetricRegistry registry = new MetricRegistry();
-        RE2Config config = RE2MetricsConfig.withMetrics(registry, "resource.test");
+        RE2Config config = RE2MetricsConfig.withMetrics(registry, "resource.test", false);
         PatternCache cache = new PatternCache(config);
 
         // Verify resource gauges registered (active counts only)

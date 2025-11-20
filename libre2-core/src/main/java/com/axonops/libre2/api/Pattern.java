@@ -158,7 +158,8 @@ public final class Pattern implements AutoCloseable {
                 // Compilation failed - record error and decrement count
                 ResourceTracker.trackPatternFreed(metrics);
                 metrics.incrementCounter("errors.compilation.failed.total.count");
-                logger.error("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
+                // DEBUG level - invalid user patterns are expected, not an error in our library
+                logger.debug("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
 
                 // Pattern will be freed in finally block
                 throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");

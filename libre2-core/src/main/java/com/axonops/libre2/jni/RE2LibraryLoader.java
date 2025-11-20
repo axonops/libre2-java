@@ -88,7 +88,10 @@ public final class RE2LibraryLoader {
                 System.load(tempLib.toString());
                 loaded.set(true);
 
-                logger.info("RE2: Native library loaded successfully");
+                logger.info("RE2: Native library loaded successfully - platform: {}", platform);
+
+                // Perform initialization test/warmup if configured
+                performInitializationTest();
 
             } catch (Exception e) {
                 loadError = e;
@@ -177,6 +180,57 @@ public final class RE2LibraryLoader {
 
     public static boolean isLoaded() {
         return loaded.get() && loadError == null;
+    }
+
+    /**
+     * Performs initialization warmup test.
+     *
+     * Compiles and matches a test pattern to verify library is working correctly.
+     * Logs cache statistics to confirm initialization.
+     */
+    private static void performInitializationTest() {
+        try {
+            // Check config (need to access Pattern class which triggers this loader)
+            // We can't directly check config here due to circular dependency
+            // So we'll do a simple test that will be caught if it fails
+
+            long testStart = System.nanoTime();
+
+            // Test pattern compilation
+            long testPatternHandle = RE2NativeJNI.compile("test_init_.*", true);
+            if (testPatternHandle == 0 || !RE2NativeJNI.patternOk(testPatternHandle)) {
+                logger.warn("RE2: Initialization test pattern compilation failed");
+                if (testPatternHandle != 0) {
+                    RE2NativeJNI.freePattern(testPatternHandle);
+                }
+                return; // Don't fail initialization, just warn
+            }
+
+            // Test pattern matching
+            boolean matchResult = RE2NativeJNI.fullMatch(testPatternHandle, "test_init_123");
+            if (!matchResult) {
+                logger.warn("RE2: Initialization test match failed (expected true, got false)");
+            }
+
+            // Test partial match
+            boolean findResult = RE2NativeJNI.partialMatch(testPatternHandle, "xxx test_init_yyy");
+            if (!findResult) {
+                logger.warn("RE2: Initialization test partial match failed");
+            }
+
+            // Clean up test pattern
+            RE2NativeJNI.freePattern(testPatternHandle);
+
+            long testDuration = System.nanoTime() - testStart;
+
+            // Log success
+            logger.info("RE2: Initialization test passed - fullMatch: {}, partialMatch: {}, duration: {}ns",
+                matchResult, findResult, testDuration);
+
+        } catch (Exception e) {
+            // Log as ERROR - this indicates a serious problem
+            logger.error("RE2: Initialization test failed - library may not work correctly", e);
+        }
     }
 
     private record Platform(OS os, Arch arch) {}

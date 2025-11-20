@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -80,6 +81,7 @@ public final class PatternCache {
     // Deferred cleanup tracking
     private final AtomicLong deferredNativeMemoryBytes = new AtomicLong(0);
     private final AtomicLong peakDeferredNativeMemoryBytes = new AtomicLong(0);
+    private final AtomicInteger peakDeferredPatternCount = new AtomicInteger(0);
 
     // Invalid pattern recompilations (defensive check triggered)
     private final AtomicLong invalidPatternRecompilations = new AtomicLong(0);
@@ -326,6 +328,10 @@ public final class PatternCache {
                     long deferredMemory = deferredNativeMemoryBytes.addAndGet(cached.memoryBytes());
                     updatePeakDeferredMemory(deferredMemory);
 
+                    // Track deferred pattern count peak
+                    int deferredCount = deferredCleanup.size();
+                    updatePeakDeferredPatternCount(deferredCount);
+
                     logger.trace("RE2: Idle evicting pattern (deferred - {} active matchers): {}",
                         cached.pattern().getRefCount(), entry.getKey());
                 } else {
@@ -566,6 +572,7 @@ public final class PatternCache {
 
         // Deferred cleanup metrics (current state)
         metrics.registerGauge("cache.deferred.patterns.current.count", deferredCleanup::size);
+        metrics.registerGauge("cache.deferred.patterns.peak.count", peakDeferredPatternCount::get);
         metrics.registerGauge("cache.deferred.native_memory.current.bytes", deferredNativeMemoryBytes::get);
         metrics.registerGauge("cache.deferred.native_memory.peak.bytes", peakDeferredNativeMemoryBytes::get);
 
@@ -640,5 +647,15 @@ public final class PatternCache {
         do {
             peak = peakDeferredNativeMemoryBytes.get();
         } while (current > peak && !peakDeferredNativeMemoryBytes.compareAndSet(peak, current));
+    }
+
+    /**
+     * Updates peak deferred pattern count if current exceeds it.
+     */
+    private void updatePeakDeferredPatternCount(int current) {
+        int peak;
+        do {
+            peak = peakDeferredPatternCount.get();
+        } while (current > peak && !peakDeferredPatternCount.compareAndSet(peak, current));
     }
 }

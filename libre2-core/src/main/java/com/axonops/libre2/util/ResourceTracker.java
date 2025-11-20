@@ -35,10 +35,13 @@ public final class ResourceTracker {
 
     // ACTIVE counts (current simultaneous)
     private static final AtomicInteger activePatternsCount = new AtomicInteger(0);
+    private static final AtomicInteger activeMatchersCount = new AtomicInteger(0);
 
     // Cumulative counters (lifetime, for metrics only)
     private static final AtomicLong totalPatternsCompiled = new AtomicLong(0);
     private static final AtomicLong totalPatternsClosed = new AtomicLong(0);
+    private static final AtomicLong totalMatchersCreated = new AtomicLong(0);
+    private static final AtomicLong totalMatchersClosed = new AtomicLong(0);
 
     // Rejection counters
     private static final AtomicLong patternLimitRejections = new AtomicLong(0);
@@ -116,6 +119,48 @@ public final class ResourceTracker {
     }
 
     /**
+     * Tracks a new matcher allocation.
+     */
+    public static void trackMatcherAllocated() {
+        activeMatchersCount.incrementAndGet();
+        totalMatchersCreated.incrementAndGet();
+    }
+
+    /**
+     * Tracks a matcher being freed.
+     */
+    public static void trackMatcherFreed() {
+        int current = activeMatchersCount.decrementAndGet();
+        totalMatchersClosed.incrementAndGet();
+
+        if (current < 0) {
+            logger.error("RE2: Matcher count went negative! This is a bug.");
+            activeMatchersCount.set(0);
+        }
+    }
+
+    /**
+     * Gets current ACTIVE (simultaneous) matcher count.
+     */
+    public static int getActiveMatcherCount() {
+        return activeMatchersCount.get();
+    }
+
+    /**
+     * Gets total matchers created over library lifetime.
+     */
+    public static long getTotalMatchersCreated() {
+        return totalMatchersCreated.get();
+    }
+
+    /**
+     * Gets total matchers closed over library lifetime.
+     */
+    public static long getTotalMatchersClosed() {
+        return totalMatchersClosed.get();
+    }
+
+    /**
      * Gets rejection count for matcher limit.
      */
     public static long getMatcherLimitRejections() {
@@ -127,8 +172,11 @@ public final class ResourceTracker {
      */
     public static void reset() {
         activePatternsCount.set(0);
+        activeMatchersCount.set(0);
         totalPatternsCompiled.set(0);
         totalPatternsClosed.set(0);
+        totalMatchersCreated.set(0);
+        totalMatchersClosed.set(0);
         patternLimitRejections.set(0);
         matcherLimitRejections.set(0);
         logger.trace("RE2: ResourceTracker reset");

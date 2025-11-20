@@ -525,20 +525,28 @@ public final class PatternCache {
     }
 
     /**
-     * Registers cache metrics (gauges) with the metrics registry.
+     * Registers cache and resource metrics (gauges) with the metrics registry.
      * Called during cache initialization.
      */
     private void registerCacheMetrics() {
         RE2MetricsRegistry metrics = config.metricsRegistry();
 
-        // Register cache size gauge
+        // Cache metrics
         metrics.registerGauge("cache.size", () -> cache != null ? cache.size() : 0);
-
-        // Register native memory gauges
         metrics.registerGauge("cache.native_memory_bytes", totalNativeMemoryBytes::get);
         metrics.registerGauge("cache.native_memory_peak_bytes", peakNativeMemoryBytes::get);
 
-        logger.debug("RE2: Cache metrics registered");
+        // Resource management metrics (active/freed counts)
+        metrics.registerGauge("resources.patterns_active",
+            com.axonops.libre2.util.ResourceTracker::getActivePatternCount);
+        metrics.registerGauge("resources.matchers_active",
+            com.axonops.libre2.util.ResourceTracker::getActiveMatcherCount);
+        metrics.registerGauge("resources.patterns_freed",
+            com.axonops.libre2.util.ResourceTracker::getTotalPatternsClosed);
+        metrics.registerGauge("resources.matchers_freed",
+            com.axonops.libre2.util.ResourceTracker::getTotalMatchersClosed);
+
+        logger.debug("RE2: Metrics registered - cache gauges and resource gauges");
     }
 
     /**

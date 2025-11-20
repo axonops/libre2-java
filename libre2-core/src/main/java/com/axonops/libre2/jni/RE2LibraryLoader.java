@@ -94,6 +94,15 @@ public final class RE2LibraryLoader {
                 loadError = e;
                 loaded.set(true);
                 logger.error("RE2: Failed to load native library", e);
+
+                // Record native library error (best effort - cache may not be initialized yet)
+                try {
+                    com.axonops.libre2.api.Pattern.getGlobalCache().getConfig().metricsRegistry()
+                        .incrementCounter("errors.native_library");
+                } catch (Exception metricsError) {
+                    // Ignore - metrics are optional and cache may not be initialized
+                }
+
                 throw new IllegalStateException("RE2: Failed to load native library: " + e.getMessage(), e);
             }
         }

@@ -34,7 +34,7 @@ class MetricsIntegrationTest {
         // Create test registry
         registry = new MetricRegistry();
 
-        // Create config with Dropwizard metrics
+        // Create config with Dropwizard metrics (disable initialization test)
         RE2Config config = RE2Config.builder()
             .metricsRegistry(new DropwizardMetricsAdapter(registry, "test.re2"))
             .build();

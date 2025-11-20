@@ -90,7 +90,7 @@ public final class RE2LibraryLoader {
 
                 logger.info("RE2: Native library loaded successfully - platform: {}", platform);
 
-                // Perform initialization test/warmup if configured
+                // Perform initialization warmup test
                 performInitializationTest();
 
             } catch (Exception e) {
@@ -183,53 +183,59 @@ public final class RE2LibraryLoader {
     }
 
     /**
-     * Performs initialization warmup test.
+     * Performs initialization warmup test using direct JNI calls.
      *
-     * Compiles and matches a test pattern to verify library is working correctly.
-     * Logs cache statistics to confirm initialization.
+     * Tests the native library directly (not through Pattern cache) to verify:
+     * - Pattern compilation works
+     * - Full and partial matching work
+     * - Native library is functioning correctly
+     *
+     * Note: This bypasses the cache to avoid circular dependencies and test pollution.
      */
     private static void performInitializationTest() {
+        long testPatternHandle = 0;
         try {
-            // Check config (need to access Pattern class which triggers this loader)
-            // We can't directly check config here due to circular dependency
-            // So we'll do a simple test that will be caught if it fails
-
             long testStart = System.nanoTime();
 
-            // Test pattern compilation
-            long testPatternHandle = RE2NativeJNI.compile("test_init_.*", true);
+            // Test pattern compilation (direct JNI call, bypasses cache)
+            testPatternHandle = RE2NativeJNI.compile("test_warmup_.*", true);
             if (testPatternHandle == 0 || !RE2NativeJNI.patternOk(testPatternHandle)) {
-                logger.warn("RE2: Initialization test pattern compilation failed");
-                if (testPatternHandle != 0) {
-                    RE2NativeJNI.freePattern(testPatternHandle);
-                }
-                return; // Don't fail initialization, just warn
+                logger.error("RE2: Initialization test - pattern compilation failed");
+                return;
             }
 
-            // Test pattern matching
-            boolean matchResult = RE2NativeJNI.fullMatch(testPatternHandle, "test_init_123");
-            if (!matchResult) {
-                logger.warn("RE2: Initialization test match failed (expected true, got false)");
+            // Test full match
+            boolean fullMatchResult = RE2NativeJNI.fullMatch(testPatternHandle, "test_warmup_123");
+            if (!fullMatchResult) {
+                logger.error("RE2: Initialization test - full match failed (expected true, got false)");
             }
 
             // Test partial match
-            boolean findResult = RE2NativeJNI.partialMatch(testPatternHandle, "xxx test_init_yyy");
-            if (!findResult) {
-                logger.warn("RE2: Initialization test partial match failed");
+            boolean partialMatchResult = RE2NativeJNI.partialMatch(testPatternHandle, "xxx test_warmup_yyy");
+            if (!partialMatchResult) {
+                logger.error("RE2: Initialization test - partial match failed (expected true, got false)");
             }
-
-            // Clean up test pattern
-            RE2NativeJNI.freePattern(testPatternHandle);
 
             long testDuration = System.nanoTime() - testStart;
 
-            // Log success
-            logger.info("RE2: Initialization test passed - fullMatch: {}, partialMatch: {}, duration: {}ns",
-                matchResult, findResult, testDuration);
+            // Log success/failure
+            if (fullMatchResult && partialMatchResult) {
+                logger.info("RE2: Initialization test passed - native library functional, duration: {}ns", testDuration);
+            } else {
+                logger.error("RE2: Initialization test FAILED - library may not work correctly");
+            }
 
         } catch (Exception e) {
-            // Log as ERROR - this indicates a serious problem
             logger.error("RE2: Initialization test failed - library may not work correctly", e);
+        } finally {
+            // Always free the test pattern (silently consume exceptions)
+            if (testPatternHandle != 0) {
+                try {
+                    RE2NativeJNI.freePattern(testPatternHandle);
+                } catch (Exception e) {
+                    // Silently ignore - best effort cleanup
+                }
+            }
         }
     }
 

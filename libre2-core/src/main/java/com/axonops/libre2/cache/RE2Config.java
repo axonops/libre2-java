@@ -39,8 +39,7 @@ public record RE2Config(
     int maxSimultaneousCompiledPatterns,
     int maxMatchersPerPattern,
     boolean validateCachedPatterns,
-    RE2MetricsRegistry metricsRegistry,
-    boolean testOnInitialization
+    RE2MetricsRegistry metricsRegistry
 ) {
 
     /**
@@ -67,8 +66,7 @@ public record RE2Config(
         100000,                        // Max 100K simultaneous active patterns
         10000,                         // Max 10K matchers per pattern
         true,                          // Validate cached patterns (defensive check)
-        NoOpMetricsRegistry.INSTANCE,  // Metrics disabled (zero overhead)
-        true                           // Test on initialization (warmup + verify)
+        NoOpMetricsRegistry.INSTANCE   // Metrics disabled (zero overhead)
     );
 
     /**
@@ -85,8 +83,7 @@ public record RE2Config(
         100000,                        // Still enforce simultaneous limit
         10000,                         // Still enforce matcher limit
         false,                         // No validation needed when no cache
-        NoOpMetricsRegistry.INSTANCE,  // Metrics disabled
-        true                           // Test on initialization
+        NoOpMetricsRegistry.INSTANCE   // Metrics disabled
     );
 
     /**
@@ -166,7 +163,6 @@ public record RE2Config(
         private int maxMatchersPerPattern = 10000;
         private boolean validateCachedPatterns = true;
         private RE2MetricsRegistry metricsRegistry = NoOpMetricsRegistry.INSTANCE;
-        private boolean testOnInitialization = true;
 
         public Builder cacheEnabled(boolean enabled) {
             this.cacheEnabled = enabled;
@@ -218,11 +214,6 @@ public record RE2Config(
             return this;
         }
 
-        public Builder testOnInitialization(boolean test) {
-            this.testOnInitialization = test;
-            return this;
-        }
-
         public RE2Config build() {
             return new RE2Config(
                 cacheEnabled,
@@ -234,8 +225,7 @@ public record RE2Config(
                 maxSimultaneousCompiledPatterns,
                 maxMatchersPerPattern,
                 validateCachedPatterns,
-                metricsRegistry,
-                testOnInitialization
+                metricsRegistry
             );
         }
     }

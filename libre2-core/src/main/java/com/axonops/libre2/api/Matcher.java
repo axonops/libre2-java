@@ -17,6 +17,7 @@
 package com.axonops.libre2.api;
 
 import com.axonops.libre2.jni.RE2NativeJNI;
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,18 +65,30 @@ public final class Matcher implements AutoCloseable {
     public boolean matches() {
         checkNotClosed();
 
+        RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+        long startNanos = System.nanoTime();
+
         boolean result = RE2NativeJNI.fullMatch(pattern.getNativeHandle(), input);
 
-        // JNI version returns boolean directly, no error code
+        long durationNanos = System.nanoTime() - startNanos;
+        metrics.recordTimer("matching.full_match", durationNanos);
+        metrics.incrementCounter("matching.operations");
+
         return result;
     }
 
     public boolean find() {
         checkNotClosed();
 
+        RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+        long startNanos = System.nanoTime();
+
         boolean result = RE2NativeJNI.partialMatch(pattern.getNativeHandle(), input);
 
-        // JNI version returns boolean directly, no error code
+        long durationNanos = System.nanoTime() - startNanos;
+        metrics.recordTimer("matching.partial_match", durationNanos);
+        metrics.incrementCounter("matching.operations");
+
         return result;
     }
 

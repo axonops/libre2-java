@@ -20,6 +20,8 @@ import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.cache.RE2Config;
 import com.axonops.libre2.jni.RE2LibraryLoader;
 import com.axonops.libre2.jni.RE2NativeJNI;
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
+import com.axonops.libre2.util.PatternHasher;
 import com.axonops.libre2.util.ResourceTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +52,13 @@ public final class Pattern implements AutoCloseable {
 
     // Global pattern cache
     private static final PatternCache cache = new PatternCache(RE2Config.DEFAULT);
+
+    /**
+     * Gets the global pattern cache (for internal use).
+     */
+    static PatternCache getGlobalCache() {
+        return cache;
+    }
 
     private final String patternString;
     private final boolean caseSensitive;
@@ -126,6 +135,9 @@ public final class Pattern implements AutoCloseable {
      * Actual compilation logic.
      */
     private static Pattern doCompile(String pattern, boolean caseSensitive, boolean fromCache) {
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+        String hash = PatternHasher.hash(pattern);
+
         // Reject empty patterns (matches old wrapper behavior)
         if (pattern.isEmpty()) {
             throw new PatternCompilationException(pattern, "Pattern is null or empty");
@@ -135,6 +147,7 @@ public final class Pattern implements AutoCloseable {
         // This is ACTIVE count, not cumulative - patterns can be freed and recompiled
         ResourceTracker.trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns());
 
+        long startNanos = System.nanoTime();
         try {
             long handle = RE2NativeJNI.compile(pattern, caseSensitive);
 
@@ -143,12 +156,22 @@ public final class Pattern implements AutoCloseable {
                 if (handle != 0) {
                     RE2NativeJNI.freePattern(handle);
                 }
-                // Compilation failed - decrement count
+                // Compilation failed - decrement count and record error
                 ResourceTracker.trackPatternFreed();
+                metrics.incrementCounter("errors.compilation_failed");
+                logger.error("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
                 throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
             }
 
-            return new Pattern(pattern, caseSensitive, handle, fromCache);
+            long durationNanos = System.nanoTime() - startNanos;
+            metrics.recordTimer("patterns.compilation_time", durationNanos);
+            metrics.incrementCounter("patterns.compiled");
+
+            Pattern compiled = new Pattern(pattern, caseSensitive, handle, fromCache);
+            logger.debug("RE2: Pattern compiled - hash: {}, length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}, timeNs: {}",
+                hash, pattern.length(), caseSensitive, fromCache, compiled.nativeMemoryBytes, durationNanos);
+
+            return compiled;
         } catch (Exception e) {
             // If any exception, decrement count (unless it was ResourceException from limit)
             if (!(e instanceof ResourceException)) {

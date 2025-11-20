@@ -17,6 +17,8 @@
 package com.axonops.libre2.cache;
 
 import com.axonops.libre2.api.Pattern;
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
+import com.axonops.libre2.util.PatternHasher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,6 +110,9 @@ public final class PatternCache {
                 config.idleTimeoutSeconds(),
                 config.evictionScanIntervalSeconds(),
                 config.deferredCleanupIntervalSeconds());
+
+            // Register cache metrics (gauges)
+            registerCacheMetrics();
         } else {
             this.cache = null;
             this.evictionTask = null;
@@ -129,8 +134,11 @@ public final class PatternCache {
      */
     public Pattern getOrCompile(String patternString, boolean caseSensitive,
                                  java.util.function.Supplier<Pattern> compiler) {
+        RE2MetricsRegistry metrics = config.metricsRegistry();
+
         if (!config.cacheEnabled()) {
             misses.incrementAndGet();
+            metrics.incrementCounter("patterns.cache_misses");
             return compiler.get();
         }
 
@@ -141,8 +149,10 @@ public final class PatternCache {
         if (cached != null) {
             // Optional defensive check: validate native pointer is still valid
             if (config.validateCachedPatterns() && !cached.pattern().isValid()) {
-                logger.warn("RE2: Invalid pattern detected in cache (recompiling): {}", key);
+                String hash = PatternHasher.hash(patternString);
+                logger.warn("RE2: Invalid cached pattern detected - hash: {}, recompiling", hash);
                 invalidPatternRecompilations.incrementAndGet();
+                metrics.incrementCounter("patterns.invalid_recompiled");
                 // Remove invalid pattern and decrement memory
                 if (cache.remove(key, cached)) {
                     totalNativeMemoryBytes.addAndGet(-cached.memoryBytes());
@@ -152,7 +162,10 @@ public final class PatternCache {
                 // Cache hit - update access time atomically
                 cached.touch();
                 hits.incrementAndGet();
-                logger.trace("RE2: Cache hit - pattern: {}", key);
+                metrics.incrementCounter("patterns.cache_hits");
+                logger.trace("RE2: Cache hit - hash: {}, hitRate: {:.1f}%",
+                    PatternHasher.hash(patternString),
+                    getCacheHitRate());
                 return cached.pattern();
             }
         }
@@ -160,7 +173,8 @@ public final class PatternCache {
         // Cache miss - use computeIfAbsent for safe concurrent compilation
         // Only ONE thread compiles each unique pattern
         misses.incrementAndGet();
-        logger.trace("RE2: Cache miss - compiling pattern: {}", key);
+        metrics.incrementCounter("patterns.cache_misses");
+        logger.trace("RE2: Cache miss - hash: {}, compiling", PatternHasher.hash(patternString));
 
         // Track whether this thread compiled a new pattern
         final long[] addedMemory = {0};
@@ -257,6 +271,7 @@ public final class PatternCache {
                     // Safe to free immediately
                     cached.forceClose();
                     evictionsLRU.incrementAndGet();
+                    config.metricsRegistry().incrementCounter("cache.evictions_lru");
                     logger.trace("RE2: LRU evicting pattern (immediate): {}", entry.getKey());
                 }
                 evicted++;
@@ -264,7 +279,8 @@ public final class PatternCache {
         }
 
         if (evicted > 0) {
-            logger.trace("RE2: Async LRU eviction completed - evicted: {}", evicted);
+            logger.debug("RE2: LRU eviction completed - evicted: {}, cacheSize: {}/{}",
+                evicted, cache.size(), config.maxCacheSize());
         }
     }
 
@@ -303,6 +319,7 @@ public final class PatternCache {
                     logger.trace("RE2: Idle evicting pattern (immediate): {}", entry.getKey());
                     cached.forceClose();
                     evictionsIdle.incrementAndGet();
+                    config.metricsRegistry().incrementCounter("cache.evictions_idle");
                 }
                 evictedCount.incrementAndGet();
                 return true; // Remove from map
@@ -315,7 +332,8 @@ public final class PatternCache {
 
         int evicted = (int) evictedCount.get();
         if (evicted > 0 || deferredCleaned > 0) {
-            logger.info("RE2: Eviction completed - idle evicted: {}, deferred cleaned: {}", evicted, deferredCleaned);
+            logger.debug("RE2: Idle eviction completed - evicted: {}, deferred cleaned: {}, cacheSize: {}",
+                evicted, deferredCleaned, cache.size());
         }
 
         return evicted;
@@ -335,12 +353,28 @@ public final class PatternCache {
                 logger.trace("RE2: Cleaning up deferred pattern");
                 deferred.forceClose();
                 deferredCleanup.remove(deferred);
-                evictionsLRU.incrementAndGet();
+                // Note: evictionsDeferred already incremented when added to deferred list
+                config.metricsRegistry().incrementCounter("cache.evictions_deferred");
                 cleaned++;
             }
         }
 
+        if (cleaned > 0) {
+            logger.trace("RE2: Deferred cleanup completed - freed: {}", cleaned);
+        }
+
         return cleaned;
+    }
+
+    /**
+     * Gets current cache hit rate as percentage.
+     */
+    private double getCacheHitRate() {
+        long totalRequests = hits.get() + misses.get();
+        if (totalRequests == 0) {
+            return 0.0;
+        }
+        return (hits.get() * 100.0) / totalRequests;
     }
 
     /**
@@ -488,6 +522,23 @@ public final class PatternCache {
         }
 
         clear();
+    }
+
+    /**
+     * Registers cache metrics (gauges) with the metrics registry.
+     * Called during cache initialization.
+     */
+    private void registerCacheMetrics() {
+        RE2MetricsRegistry metrics = config.metricsRegistry();
+
+        // Register cache size gauge
+        metrics.registerGauge("cache.size", () -> cache != null ? cache.size() : 0);
+
+        // Register native memory gauges
+        metrics.registerGauge("cache.native_memory_bytes", totalNativeMemoryBytes::get);
+        metrics.registerGauge("cache.native_memory_peak_bytes", peakNativeMemoryBytes::get);
+
+        logger.debug("RE2: Cache metrics registered");
     }
 
     /**

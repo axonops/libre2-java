@@ -6,7 +6,7 @@
 
     <groupId>com.axonops</groupId>
     <artifactId>libre2-parent</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>0.9.1</version>
     <packaging>pom</packaging>
 
     <name>libre2-java Parent</name>
@@ -15,7 +15,7 @@
 
     <modules>
         <module>libre2-core</module>
-        <module>libre2-cassandra</module>
+        <module>libre2-cassandra-5.0</module>
     </modules>
 
     <licenses>

@@ -13,7 +13,7 @@ name: Build Native Libraries
 #    - Uploads the resulting .dylib/.so file as an artifact
 #
 # 3. Artifacts can be downloaded from the GitHub Actions UI and placed in:
-#    src/main/resources/native/{platform}/
+#    libre2-core/src/main/resources/native/{platform}/
 
 on:
   # Trigger this workflow ONLY manually from GitHub UI
@@ -342,18 +342,18 @@ jobs:
 
       - name: Organize libraries into resources directory
         run: |
-          # Create resources directory structure
-          mkdir -p src/main/resources/native/{darwin-x86_64,darwin-aarch64,linux-x86_64,linux-aarch64}
+          # Create resources directory structure (multi-module: libre2-core)
+          mkdir -p libre2-core/src/main/resources/native/{darwin-x86_64,darwin-aarch64,linux-x86_64,linux-aarch64}
 
           # Copy libraries to correct locations
-          cp artifacts/libre2-macos-x86_64/libre2.dylib src/main/resources/native/darwin-x86_64/
-          cp artifacts/libre2-macos-aarch64/libre2.dylib src/main/resources/native/darwin-aarch64/
-          cp artifacts/libre2-linux-x86_64/libre2.so src/main/resources/native/linux-x86_64/
-          cp artifacts/libre2-linux-aarch64/libre2.so src/main/resources/native/linux-aarch64/
+          cp artifacts/libre2-macos-x86_64/libre2.dylib libre2-core/src/main/resources/native/darwin-x86_64/
+          cp artifacts/libre2-macos-aarch64/libre2.dylib libre2-core/src/main/resources/native/darwin-aarch64/
+          cp artifacts/libre2-linux-x86_64/libre2.so libre2-core/src/main/resources/native/linux-x86_64/
+          cp artifacts/libre2-linux-aarch64/libre2.so libre2-core/src/main/resources/native/linux-aarch64/
 
           # Show what we got
           echo "Libraries copied:"
-          ls -lh src/main/resources/native/*/libre2.*
+          ls -lh libre2-core/src/main/resources/native/*/libre2.*
 
       - name: Create branch and commit
         run: |
@@ -365,8 +365,8 @@ jobs:
           BRANCH_NAME="native-libs-$(date +%Y%m%d-%H%M%S)"
           git checkout -b "$BRANCH_NAME"
 
-          # Add libraries
-          git add -f src/main/resources/native/*/libre2.*
+          # Add libraries (multi-module: libre2-core)
+          git add -f libre2-core/src/main/resources/native/*/libre2.*
 
           # Commit with heredoc
           git commit -m "$(cat <<'EOF'

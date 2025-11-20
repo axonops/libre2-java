@@ -14,8 +14,11 @@ on:
       - main
       - development
     paths:
-      - 'src/**'
+      - 'libre2-core/src/**'
+      - 'libre2-cassandra-5.0/src/**'
       - 'pom.xml'
+      - 'libre2-core/pom.xml'
+      - 'libre2-cassandra-5.0/pom.xml'
       - '.github/workflows/test-platforms.yml'
 
   # Manual trigger
@@ -26,8 +29,11 @@ on:
     branches:
       - development
     paths:
-      - 'src/**'
+      - 'libre2-core/src/**'
+      - 'libre2-cassandra-5.0/src/**'
       - 'pom.xml'
+      - 'libre2-core/pom.xml'
+      - 'libre2-cassandra-5.0/pom.xml'
 
 jobs:
   # ============================================================================
@@ -49,27 +55,31 @@ jobs:
           java-version: '17'
           cache: 'maven'
 
-      - name: Build JAR
+      - name: Build JARs (multi-module)
         run: mvn clean package -DskipTests -B
 
       - name: Verify JAR contents
         run: |
-          echo "JAR size:"
-          ls -lh target/libre2-java-*.jar
+          echo "Core JAR size:"
+          ls -lh libre2-core/target/libre2-core-*.jar
 
           echo ""
-          echo "Native libraries in JAR:"
-          unzip -l target/libre2-java-*.jar | grep -E "libre2\.(dylib|so)"
+          echo "Cassandra JAR size:"
+          ls -lh libre2-cassandra-5.0/target/libre2-cassandra-5.0-*.jar || echo "(empty skeleton - OK)"
+
+          echo ""
+          echo "Native libraries in core JAR:"
+          unzip -l libre2-core/target/libre2-core-*.jar | grep -E "libre2\.(dylib|so)"
 
           echo ""
           echo "Verify JNA NOT included (should show nothing):"
-          unzip -l target/libre2-java-*.jar | grep "com/sun/jna" || echo "✅ JNA not included (provided scope working)"
+          unzip -l libre2-core/target/libre2-core-*.jar | grep "com/sun/jna" || echo "✅ JNA not included (provided scope working)"
 
-      - name: Upload JAR artifact
+      - name: Upload core JAR artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/libre2-java-*.jar
+          name: libre2-core-jar
+          path: libre2-core/target/libre2-core-*.jar
           retention-days: 7
 
   # ============================================================================
@@ -95,24 +105,24 @@ jobs:
           java-version: '17'
           cache: 'maven'
 
-      - name: Download JAR artifact
+      - name: Download core JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Verify native library in JAR
         run: |
           echo "Checking darwin-x86_64 library in JAR:"
-          unzip -l target/libre2-java-*.jar | grep "darwin-x86_64/libre2.dylib"
+          unzip -l libre2-core/target/libre2-core-*.jar | grep "darwin-x86_64/libre2.dylib"
 
-      - name: Run tests with JAR
+      - name: Run tests (multi-module)
         run: mvn test -B
 
       - name: Verify platform detection
         run: |
           echo "Checking test logs for platform detection:"
-          cat target/surefire-reports/*.txt | grep "darwin-x86_64" || echo "✅ Tests passed on darwin-x86_64"
+          cat libre2-core/libre2-core/target/surefire-reports/*.txt | grep "darwin-x86_64" || echo "✅ Tests passed on darwin-x86_64"
 
   test-macos-aarch64:
     name: Test macOS aarch64 (Apple Silicon)
@@ -133,13 +143,13 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Verify native library in JAR
         run: |
           echo "Checking darwin-aarch64 library in JAR:"
-          unzip -l target/libre2-java-*.jar | grep "darwin-aarch64/libre2.dylib"
+          unzip -l libre2-core/target/libre2-core-*.jar | grep "darwin-aarch64/libre2.dylib"
 
       - name: Run tests with JAR
         run: mvn test -B
@@ -164,8 +174,8 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Cache Maven dependencies
         uses: actions/cache@v4
@@ -198,7 +208,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l target/libre2-java-*.jar | grep 'linux-x86_64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-x86_64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -225,13 +235,13 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Verify native library in JAR
         run: |
           echo "Checking linux-x86_64 library in JAR:"
-          unzip -l target/libre2-java-*.jar | grep "linux-x86_64/libre2.so"
+          unzip -l libre2-core/target/libre2-core-*.jar | grep "linux-x86_64/libre2.so"
 
       - name: Run tests with JAR
         run: mvn test -B
@@ -252,8 +262,8 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Cache Maven dependencies
         uses: actions/cache@v4
@@ -280,7 +290,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l target/libre2-java-*.jar | grep 'linux-x86_64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-x86_64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -304,8 +314,8 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Cache Maven dependencies
         uses: actions/cache@v4
@@ -335,7 +345,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l target/libre2-java-*.jar | grep 'linux-x86_64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-x86_64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -355,8 +365,8 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Cache Maven dependencies
         uses: actions/cache@v4
@@ -387,7 +397,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l target/libre2-java-*.jar | grep 'linux-x86_64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-x86_64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -407,8 +417,8 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Cache Maven dependencies
         uses: actions/cache@v4
@@ -438,7 +448,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l target/libre2-java-*.jar | grep 'linux-aarch64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-aarch64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -458,8 +468,8 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Cache Maven dependencies
         uses: actions/cache@v4
@@ -493,7 +503,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l target/libre2-java-*.jar | grep 'linux-aarch64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-aarch64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -513,8 +523,8 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: libre2-java-jar
-          path: target/
+          name: libre2-core-jar
+          path: libre2-core/target/
 
       - name: Cache Maven dependencies
         uses: actions/cache@v4
@@ -551,7 +561,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l target/libre2-java-*.jar | grep 'linux-aarch64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-aarch64/libre2.so'
 
               # Run tests
               ./mvnw test -B

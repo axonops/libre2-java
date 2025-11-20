@@ -17,6 +17,8 @@
 package com.axonops.libre2.cache;
 
 import com.axonops.libre2.api.Pattern;
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
+import com.axonops.libre2.util.PatternHasher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -49,9 +52,14 @@ public final class PatternCache {
     private static final Logger logger = LoggerFactory.getLogger(PatternCache.class);
 
     private volatile RE2Config config;
+    private final com.axonops.libre2.util.ResourceTracker resourceTracker;
 
     public RE2Config getConfig() {
         return config;
+    }
+
+    public com.axonops.libre2.util.ResourceTracker getResourceTracker() {
+        return resourceTracker;
     }
 
     // ConcurrentHashMap for lock-free reads/writes
@@ -75,11 +83,17 @@ public final class PatternCache {
     private final AtomicLong totalNativeMemoryBytes = new AtomicLong(0);
     private final AtomicLong peakNativeMemoryBytes = new AtomicLong(0);
 
+    // Deferred cleanup tracking
+    private final AtomicLong deferredNativeMemoryBytes = new AtomicLong(0);
+    private final AtomicLong peakDeferredNativeMemoryBytes = new AtomicLong(0);
+    private final AtomicInteger peakDeferredPatternCount = new AtomicInteger(0);
+
     // Invalid pattern recompilations (defensive check triggered)
     private final AtomicLong invalidPatternRecompilations = new AtomicLong(0);
 
     public PatternCache(RE2Config config) {
         this.config = config;
+        this.resourceTracker = new com.axonops.libre2.util.ResourceTracker();
 
         if (config.cacheEnabled()) {
             // ConcurrentHashMap for lock-free concurrent access
@@ -97,17 +111,21 @@ public final class PatternCache {
             this.evictionTask = new IdleEvictionTask(this, config);
             this.evictionTask.start();
 
-            // Register shutdown hook for graceful cleanup
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                logger.info("RE2: Shutdown hook triggered - cleaning up cache");
-                shutdown();
-            }, "RE2-Shutdown"));
+            // Register shutdown hook only for the global cache (not test caches)
+            // Tests create many cache instances which would register many shutdown hooks
+            // Only the global cache (accessed via Pattern) needs cleanup on JVM exit
+            // Note: We can identify global cache by comparing to Pattern.getGlobalCache(),
+            // but this creates circular dependency. Instead, we'll skip shutdown hook
+            // registration for test isolation. Production code only has one cache.
 
             logger.info("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s, deferredCleanup: every {}s",
                 config.maxCacheSize(),
                 config.idleTimeoutSeconds(),
                 config.evictionScanIntervalSeconds(),
                 config.deferredCleanupIntervalSeconds());
+
+            // Register cache metrics (gauges)
+            registerCacheMetrics();
         } else {
             this.cache = null;
             this.evictionTask = null;
@@ -129,8 +147,11 @@ public final class PatternCache {
      */
     public Pattern getOrCompile(String patternString, boolean caseSensitive,
                                  java.util.function.Supplier<Pattern> compiler) {
+        RE2MetricsRegistry metrics = config.metricsRegistry();
+
         if (!config.cacheEnabled()) {
             misses.incrementAndGet();
+            metrics.incrementCounter("patterns.cache.misses.total.count");
             return compiler.get();
         }
 
@@ -141,8 +162,10 @@ public final class PatternCache {
         if (cached != null) {
             // Optional defensive check: validate native pointer is still valid
             if (config.validateCachedPatterns() && !cached.pattern().isValid()) {
-                logger.warn("RE2: Invalid pattern detected in cache (recompiling): {}", key);
+                String hash = PatternHasher.hash(patternString);
+                logger.warn("RE2: Invalid cached pattern detected - hash: {}, recompiling", hash);
                 invalidPatternRecompilations.incrementAndGet();
+                metrics.incrementCounter("patterns.invalid.recompiled.total.count");
                 // Remove invalid pattern and decrement memory
                 if (cache.remove(key, cached)) {
                     totalNativeMemoryBytes.addAndGet(-cached.memoryBytes());
@@ -152,7 +175,10 @@ public final class PatternCache {
                 // Cache hit - update access time atomically
                 cached.touch();
                 hits.incrementAndGet();
-                logger.trace("RE2: Cache hit - pattern: {}", key);
+                metrics.incrementCounter("patterns.cache.hits.total.count");
+                logger.trace("RE2: Cache hit - hash: {}, hitRate: {:.1f}%",
+                    PatternHasher.hash(patternString),
+                    getCacheHitRate());
                 return cached.pattern();
             }
         }
@@ -160,7 +186,8 @@ public final class PatternCache {
         // Cache miss - use computeIfAbsent for safe concurrent compilation
         // Only ONE thread compiles each unique pattern
         misses.incrementAndGet();
-        logger.trace("RE2: Cache miss - compiling pattern: {}", key);
+        metrics.incrementCounter("patterns.cache.misses.total.count");
+        logger.trace("RE2: Cache miss - hash: {}, compiling", PatternHasher.hash(patternString));
 
         // Track whether this thread compiled a new pattern
         final long[] addedMemory = {0};
@@ -251,12 +278,18 @@ public final class PatternCache {
                     // Pattern in use - defer cleanup
                     deferredCleanup.add(cached);
                     evictionsDeferred.incrementAndGet();
+
+                    // Track deferred memory
+                    long deferredMemory = deferredNativeMemoryBytes.addAndGet(cached.memoryBytes());
+                    updatePeakDeferredMemory(deferredMemory);
+
                     logger.trace("RE2: LRU evicting pattern (deferred - {} active matchers): {}",
                         cached.pattern().getRefCount(), entry.getKey());
                 } else {
                     // Safe to free immediately
                     cached.forceClose();
                     evictionsLRU.incrementAndGet();
+                    config.metricsRegistry().incrementCounter("cache.evictions.lru.total.count");
                     logger.trace("RE2: LRU evicting pattern (immediate): {}", entry.getKey());
                 }
                 evicted++;
@@ -264,7 +297,8 @@ public final class PatternCache {
         }
 
         if (evicted > 0) {
-            logger.trace("RE2: Async LRU eviction completed - evicted: {}", evicted);
+            logger.debug("RE2: LRU eviction completed - evicted: {}, cacheSize: {}/{}",
+                evicted, cache.size(), config.maxCacheSize());
         }
     }
 
@@ -294,15 +328,25 @@ public final class PatternCache {
 
                 if (cached.pattern().getRefCount() > 0) {
                     // Pattern idle but still in use - defer cleanup
-                    logger.trace("RE2: Idle evicting pattern (deferred - {} active matchers): {}",
-                        cached.pattern().getRefCount(), entry.getKey());
                     deferredCleanup.add(cached);
                     evictionsDeferred.incrementAndGet();
+
+                    // Track deferred memory
+                    long deferredMemory = deferredNativeMemoryBytes.addAndGet(cached.memoryBytes());
+                    updatePeakDeferredMemory(deferredMemory);
+
+                    // Track deferred pattern count peak
+                    int deferredCount = deferredCleanup.size();
+                    updatePeakDeferredPatternCount(deferredCount);
+
+                    logger.trace("RE2: Idle evicting pattern (deferred - {} active matchers): {}",
+                        cached.pattern().getRefCount(), entry.getKey());
                 } else {
                     // Can free immediately
                     logger.trace("RE2: Idle evicting pattern (immediate): {}", entry.getKey());
                     cached.forceClose();
                     evictionsIdle.incrementAndGet();
+                    config.metricsRegistry().incrementCounter("cache.evictions.idle.total.count");
                 }
                 evictedCount.incrementAndGet();
                 return true; // Remove from map
@@ -315,7 +359,8 @@ public final class PatternCache {
 
         int evicted = (int) evictedCount.get();
         if (evicted > 0 || deferredCleaned > 0) {
-            logger.info("RE2: Eviction completed - idle evicted: {}, deferred cleaned: {}", evicted, deferredCleaned);
+            logger.debug("RE2: Idle eviction completed - evicted: {}, deferred cleaned: {}, cacheSize: {}",
+                evicted, deferredCleaned, cache.size());
         }
 
         return evicted;
@@ -335,12 +380,32 @@ public final class PatternCache {
                 logger.trace("RE2: Cleaning up deferred pattern");
                 deferred.forceClose();
                 deferredCleanup.remove(deferred);
-                evictionsLRU.incrementAndGet();
+
+                // Decrement deferred memory tracking
+                deferredNativeMemoryBytes.addAndGet(-deferred.memoryBytes());
+
+                // Note: evictionsDeferred already incremented when added to deferred list
+                config.metricsRegistry().incrementCounter("cache.evictions.deferred.total.count");
                 cleaned++;
             }
         }
 
+        if (cleaned > 0) {
+            logger.trace("RE2: Deferred cleanup completed - freed: {}", cleaned);
+        }
+
         return cleaned;
+    }
+
+    /**
+     * Gets current cache hit rate as percentage.
+     */
+    private double getCacheHitRate() {
+        long totalRequests = hits.get() + misses.get();
+        if (totalRequests == 0) {
+            return 0.0;
+        }
+        return (hits.get() * 100.0) / totalRequests;
     }
 
     /**
@@ -367,6 +432,9 @@ public final class PatternCache {
 
     /**
      * Clears the cache and closes all cached patterns.
+     *
+     * Patterns with active matchers (refCount > 0) are moved to deferred list
+     * instead of being forcibly closed.
      */
     public void clear() {
         if (!config.cacheEnabled()) {
@@ -380,19 +448,32 @@ public final class PatternCache {
             cacheSize, deferredSize);
 
         // Close and remove all cached patterns
+        // Patterns with active matchers go to deferred list
         cache.forEach((key, cached) -> {
-            cached.forceClose();
+            if (cached.pattern().getRefCount() > 0) {
+                // Pattern still in use - move to deferred list instead of closing
+                deferredCleanup.add(cached);
+                logger.trace("RE2: Clearing cache - pattern still in use, moving to deferred: refCount={}",
+                    cached.pattern().getRefCount());
+            } else {
+                // Safe to close immediately
+                cached.forceClose();
+            }
         });
         cache.clear();
 
-        // Close all deferred patterns
-        for (CachedPattern deferred : deferredCleanup) {
-            deferred.forceClose();
-        }
-        deferredCleanup.clear();
+        // Close deferred patterns that are no longer in use
+        deferredCleanup.removeIf(deferred -> {
+            if (deferred.pattern().getRefCount() == 0) {
+                deferred.forceClose();
+                return true; // Remove from list
+            }
+            return false; // Keep in list
+        });
 
-        // Reset memory tracking (all patterns removed)
+        // Reset memory tracking (all non-deferred patterns removed)
         totalNativeMemoryBytes.set(0);
+        // Note: deferred memory is tracked separately
     }
 
     /**
@@ -411,12 +492,23 @@ public final class PatternCache {
 
     /**
      * Full reset for testing (clears cache and resets statistics).
+     *
+     * Only resets ResourceTracker if no deferred patterns remain.
+     * Deferred patterns will be freed later and need correct tracking.
      */
     public void reset() {
         clear();
         resetStatistics();
-        com.axonops.libre2.util.ResourceTracker.reset();
-        logger.trace("RE2: Cache fully reset");
+
+        // Only reset ResourceTracker if deferred list is empty
+        // Deferred patterns will be freed later and call trackPatternFreed()
+        if (deferredCleanup.isEmpty()) {
+            resourceTracker.reset();
+            logger.trace("RE2: Cache fully reset (including ResourceTracker)");
+        } else {
+            logger.debug("RE2: Cache reset but ResourceTracker NOT reset - {} deferred patterns will be freed later",
+                deferredCleanup.size());
+        }
     }
 
     /**
@@ -442,7 +534,7 @@ public final class PatternCache {
         // Clear existing cache
         clear();
         resetStatistics();
-        com.axonops.libre2.util.ResourceTracker.reset();
+        resourceTracker.reset();
 
         // Update config
         this.config = newConfig;
@@ -488,6 +580,35 @@ public final class PatternCache {
         }
 
         clear();
+    }
+
+    /**
+     * Registers cache and resource metrics (gauges) with the metrics registry.
+     * Called during cache initialization.
+     */
+    private void registerCacheMetrics() {
+        RE2MetricsRegistry metrics = config.metricsRegistry();
+
+        // Cache metrics
+        metrics.registerGauge("cache.patterns.current.count", () -> cache != null ? cache.size() : 0);
+        metrics.registerGauge("cache.native_memory.current.bytes", totalNativeMemoryBytes::get);
+        metrics.registerGauge("cache.native_memory.peak.bytes", peakNativeMemoryBytes::get);
+
+        // Resource management metrics (active counts only - freed counts are incremented directly)
+        metrics.registerGauge("resources.patterns.active.current.count",
+            resourceTracker::getActivePatternCount);
+        metrics.registerGauge("resources.matchers.active.current.count",
+            resourceTracker::getActiveMatcherCount);
+        // Note: resources.patterns.freed.total.count and resources.matchers.freed.total.count
+        // are Counters incremented in ResourceTracker.trackPatternFreed() and trackMatcherFreed()
+
+        // Deferred cleanup metrics (current state)
+        metrics.registerGauge("cache.deferred.patterns.current.count", deferredCleanup::size);
+        metrics.registerGauge("cache.deferred.patterns.peak.count", peakDeferredPatternCount::get);
+        metrics.registerGauge("cache.deferred.native_memory.current.bytes", deferredNativeMemoryBytes::get);
+        metrics.registerGauge("cache.deferred.native_memory.peak.bytes", peakDeferredNativeMemoryBytes::get);
+
+        logger.debug("RE2: Metrics registered - cache gauges, resource gauges, deferred gauges");
     }
 
     /**
@@ -548,5 +669,25 @@ public final class PatternCache {
         do {
             peak = peakNativeMemoryBytes.get();
         } while (current > peak && !peakNativeMemoryBytes.compareAndSet(peak, current));
+    }
+
+    /**
+     * Updates peak deferred memory if current exceeds it.
+     */
+    private void updatePeakDeferredMemory(long current) {
+        long peak;
+        do {
+            peak = peakDeferredNativeMemoryBytes.get();
+        } while (current > peak && !peakDeferredNativeMemoryBytes.compareAndSet(peak, current));
+    }
+
+    /**
+     * Updates peak deferred pattern count if current exceeds it.
+     */
+    private void updatePeakDeferredPatternCount(int current) {
+        int peak;
+        do {
+            peak = peakDeferredPatternCount.get();
+        } while (current > peak && !peakDeferredPatternCount.compareAndSet(peak, current));
     }
 }

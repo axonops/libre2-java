@@ -217,3 +217,97 @@
   - Phase numbering: Skip to Phase 4 (Logging/Metrics)
 - **Date:** 2025-11-18
 - **Status:** Decision recorded, Phase 3 skipped
+
+## Phase 4: Logging and Metrics
+
+### Decision: Multi-Module Architecture
+- **What:** Split into libre2-core + libre2-dropwizard modules
+- **Chosen:** Multi-module with shared parent POM
+- **Rationale:** 
+  - Core stays generic (no framework coupling)
+  - Dropwizard module provides convenience
+  - Can test with actual frameworks
+- **Impact:** Cleaner separation, better testability
+- **Date:** 2025-11-20
+- **Status:** Implemented
+
+### Decision: Rename from libre2-cassandra-5.0 to libre2-dropwizard
+- **What:** Module was originally libre2-cassandra-5.0
+- **Chosen:** libre2-dropwizard (generic)
+- **Rationale:**
+  - Nothing Cassandra-specific (just Dropwizard + auto-JMX)
+  - Works with any framework (Cassandra, Spring Boot, standalone)
+  - Configurable metric prefix (not hardcoded to Cassandra)
+- **Impact:** Generic, reusable by any Dropwizard application
+- **Date:** 2025-11-20
+- **Status:** Implemented
+
+### Decision: SLF4J Logging in Core
+- **What:** Should logging be in core or framework-specific modules?
+- **Chosen:** SLF4J in core (provided scope)
+- **Rationale:**
+  - SLF4J IS the abstraction layer (industry standard)
+  - Users choose implementation (logback, log4j2, nop, etc.)
+  - Zero forced dependencies
+- **Impact:** Works everywhere, fully generic
+- **Date:** 2025-11-20
+- **Status:** Implemented
+
+### Decision: Pattern Hashing for Privacy
+- **What:** Log full patterns or hash them?
+- **Chosen:** Hash patterns using Integer.toHexString(pattern.hashCode())
+- **Rationale:**
+  - Patterns may contain sensitive data (PII, security rules)
+  - Logs don't get cluttered with 200-char regex strings
+  - Hash is consistent (same pattern = same hash)
+- **Impact:** Privacy-conscious logging
+- **Date:** 2025-11-20
+- **Status:** Implemented
+
+### Decision: Metric Naming Convention
+- **What:** How to name metrics for clarity?
+- **Chosen:** Hierarchical with suffixes:
+  - Counters: `.total.count` (cumulative)
+  - Timers: `.latency` (nanoseconds)
+  - Gauges: `.current.X` or `.peak.X` + units (.count, .bytes)
+- **Rationale:**
+  - Before: `cache.size` (ambiguous)
+  - After: `cache.patterns.current.count` (clear!)
+  - Unambiguous units and semantics
+- **Impact:** Self-documenting metrics
+- **Date:** 2025-11-20
+- **Status:** Implemented
+
+### Decision: Add Deferred Cleanup Metrics
+- **What:** Original plan had no deferred cleanup metrics
+- **Chosen:** Add 4 metrics for deferred patterns
+- **Rationale:**
+  - Deferred backlog = potential memory leak risk
+  - Need to monitor if cleanup keeping up
+  - Peak deferred count/memory = worst-case tracking
+- **Impact:** Better observability of deferred cleanup
+- **Date:** 2025-11-20
+- **Status:** Implemented
+
+### Decision: Freed Counts as Counters (not Gauges)
+- **What:** resources.patterns.freed/matchers.freed metric type
+- **Originally:** Registered as Gauges (read from ResourceTracker)
+- **Chosen:** Implemented as Counters (incremented on free)
+- **Rationale:**
+  - Semantically they're cumulative (always increasing)
+  - Counters more appropriate than Gauges for cumulative counts
+  - Pass metricsRegistry explicitly (no unsafe try-catch)
+- **Impact:** Semantically correct, safer code
+- **Date:** 2025-11-20
+- **Status:** Implemented
+
+### Decision: Initialization Warmup Test
+- **What:** Should library test itself on initialization?
+- **Chosen:** testOnInitialization config (default: true)
+- **Rationale:**
+  - Catches library issues early
+  - Warms up JNI/native code
+  - Logs success/failure for operators
+- **Impact:** Better startup verification
+- **Date:** 2025-11-20
+- **Status:** Implemented

@@ -17,6 +17,8 @@
 package com.axonops.libre2.api;
 
 import com.axonops.libre2.jni.RE2NativeJNI;
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
+import com.axonops.libre2.util.ResourceTracker;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,23 +61,38 @@ public final class Matcher implements AutoCloseable {
 
         // Increment reference count to prevent pattern being freed while in use
         pattern.incrementRefCount();
+
+        // Track matcher allocation
+        Pattern.getGlobalCache().getResourceTracker().trackMatcherAllocated();
     }
 
     public boolean matches() {
         checkNotClosed();
 
+        RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+        long startNanos = System.nanoTime();
+
         boolean result = RE2NativeJNI.fullMatch(pattern.getNativeHandle(), input);
 
-        // JNI version returns boolean directly, no error code
+        long durationNanos = System.nanoTime() - startNanos;
+        metrics.recordTimer("matching.full_match.latency", durationNanos);
+        metrics.incrementCounter("matching.operations.total.count");
+
         return result;
     }
 
     public boolean find() {
         checkNotClosed();
 
+        RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+        long startNanos = System.nanoTime();
+
         boolean result = RE2NativeJNI.partialMatch(pattern.getNativeHandle(), input);
 
-        // JNI version returns boolean directly, no error code
+        long durationNanos = System.nanoTime() - startNanos;
+        metrics.recordTimer("matching.partial_match.latency", durationNanos);
+        metrics.incrementCounter("matching.operations.total.count");
+
         return result;
     }
 
@@ -92,6 +109,10 @@ public final class Matcher implements AutoCloseable {
         if (closed.compareAndSet(false, true)) {
             // Decrement reference count - pattern can now be freed if evicted
             pattern.decrementRefCount();
+
+            // Track matcher freed
+            RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+            Pattern.getGlobalCache().getResourceTracker().trackMatcherFreed(metrics);
         }
     }
 

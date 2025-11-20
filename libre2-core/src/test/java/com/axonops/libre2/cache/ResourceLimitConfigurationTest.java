@@ -21,13 +21,13 @@ class ResourceLimitConfigurationTest {
     @BeforeEach
     void setUp() {
         Pattern.resetCache();
-        ResourceTracker.reset();
+        Pattern.getGlobalCache().getResourceTracker().reset();
     }
 
     @AfterEach
     void tearDown() {
         Pattern.resetCache();
-        ResourceTracker.reset();
+        Pattern.getGlobalCache().getResourceTracker().reset();
     }
 
     @Test
@@ -41,16 +41,16 @@ class ResourceLimitConfigurationTest {
             patterns[i] = Pattern.compileWithoutCache("pattern" + i);
         }
 
-        assertThat(ResourceTracker.getActivePatternCount()).isEqualTo(10);
-        assertThat(ResourceTracker.getTotalPatternsCompiled()).isEqualTo(10);
+        assertThat(Pattern.getGlobalCache().getResourceTracker().getActivePatternCount()).isEqualTo(10);
+        assertThat(Pattern.getGlobalCache().getResourceTracker().getTotalPatternsCompiled()).isEqualTo(10);
 
         // Close all 10 patterns
         for (Pattern p : patterns) {
             p.close();
         }
 
-        assertThat(ResourceTracker.getActivePatternCount()).isEqualTo(0); // Active = 0
-        assertThat(ResourceTracker.getTotalPatternsCompiled()).isEqualTo(10); // Cumulative = 10
+        assertThat(Pattern.getGlobalCache().getResourceTracker().getActivePatternCount()).isEqualTo(0); // Active = 0
+        assertThat(Pattern.getGlobalCache().getResourceTracker().getTotalPatternsCompiled()).isEqualTo(10); // Cumulative = 10
 
         // Compile 10 NEW patterns - should SUCCESS (not "20 compiled" - patterns were freed)
         for (int i = 0; i < 10; i++) {
@@ -60,8 +60,8 @@ class ResourceLimitConfigurationTest {
         }
 
         // Active still 0, but cumulative is now 20
-        assertThat(ResourceTracker.getActivePatternCount()).isEqualTo(0);
-        assertThat(ResourceTracker.getTotalPatternsCompiled()).isEqualTo(20);
+        assertThat(Pattern.getGlobalCache().getResourceTracker().getActivePatternCount()).isEqualTo(0);
+        assertThat(Pattern.getGlobalCache().getResourceTracker().getTotalPatternsCompiled()).isEqualTo(20);
 
         // This proves limit is NOT cumulative!
     }
@@ -75,7 +75,7 @@ class ResourceLimitConfigurationTest {
             p.close();
         }
 
-        ResourceTracker.ResourceStatistics stats = ResourceTracker.getStatistics();
+        com.axonops.libre2.util.ResourceTracker.ResourceStatistics stats = Pattern.getGlobalCache().getResourceTracker().getStatistics();
 
         assertThat(stats.activePatterns()).isEqualTo(0); // None active
         assertThat(stats.totalCompiled()).isEqualTo(100); // 100 compiled over lifetime
@@ -95,7 +95,7 @@ class ResourceLimitConfigurationTest {
             // Last 5 remain open (leak)
         }
 
-        ResourceTracker.ResourceStatistics stats = ResourceTracker.getStatistics();
+        com.axonops.libre2.util.ResourceTracker.ResourceStatistics stats = Pattern.getGlobalCache().getResourceTracker().getStatistics();
 
         assertThat(stats.activePatterns()).isEqualTo(5); // 5 still active
         assertThat(stats.totalCompiled()).isEqualTo(10);

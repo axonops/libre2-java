@@ -10,14 +10,13 @@
         <version>0.9.1</version>
     </parent>
 
-    <artifactId>libre2-cassandra-5.0</artifactId>
+    <artifactId>libre2-dropwizard</artifactId>
     <packaging>jar</packaging>
 
-    <name>libre2-cassandra-5.0</name>
-    <description>Cassandra 5.0 integration convenience layer with automatic JMX</description>
+    <name>libre2-dropwizard</name>
+    <description>Dropwizard Metrics integration with automatic JMX - usable with any framework (Cassandra, Spring Boot, etc.)</description>
 
     <!-- Version inherited from parent: 0.9.1 -->
-    <!-- Cassandra version: 5.0.x -->
 
     <dependencies>
         <!-- Core library -->

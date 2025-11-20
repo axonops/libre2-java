@@ -20,6 +20,8 @@ import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.cache.RE2Config;
 import com.axonops.libre2.jni.RE2LibraryLoader;
 import com.axonops.libre2.jni.RE2NativeJNI;
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
+import com.axonops.libre2.util.PatternHasher;
 import com.axonops.libre2.util.ResourceTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,8 +50,15 @@ public final class Pattern implements AutoCloseable {
         RE2LibraryLoader.loadLibrary();
     }
 
-    // Global pattern cache
-    private static final PatternCache cache = new PatternCache(RE2Config.DEFAULT);
+    // Global pattern cache (mutable for testing only)
+    private static volatile PatternCache cache = new PatternCache(RE2Config.DEFAULT);
+
+    /**
+     * Gets the global pattern cache (for internal use).
+     */
+    public static PatternCache getGlobalCache() {
+        return cache;
+    }
 
     private final String patternString;
     private final boolean caseSensitive;
@@ -126,6 +135,9 @@ public final class Pattern implements AutoCloseable {
      * Actual compilation logic.
      */
     private static Pattern doCompile(String pattern, boolean caseSensitive, boolean fromCache) {
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+        String hash = PatternHasher.hash(pattern);
+
         // Reject empty patterns (matches old wrapper behavior)
         if (pattern.isEmpty()) {
             throw new PatternCompilationException(pattern, "Pattern is null or empty");
@@ -133,28 +145,67 @@ public final class Pattern implements AutoCloseable {
 
         // Track allocation and enforce maxSimultaneousCompiledPatterns limit
         // This is ACTIVE count, not cumulative - patterns can be freed and recompiled
-        ResourceTracker.trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns());
+        cache.getResourceTracker().trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns(), metrics);
 
+        long startNanos = System.nanoTime();
+        long handle = 0;
         try {
-            long handle = RE2NativeJNI.compile(pattern, caseSensitive);
+            handle = RE2NativeJNI.compile(pattern, caseSensitive);
 
             if (handle == 0 || !RE2NativeJNI.patternOk(handle)) {
                 String error = RE2NativeJNI.getError();
-                if (handle != 0) {
-                    RE2NativeJNI.freePattern(handle);
-                }
-                // Compilation failed - decrement count
-                ResourceTracker.trackPatternFreed();
+
+                // Compilation failed - record error and decrement count
+                cache.getResourceTracker().trackPatternFreed(metrics);
+                metrics.incrementCounter("errors.compilation.failed.total.count");
+                // DEBUG level - invalid user patterns are expected, not an error in our library
+                logger.debug("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
+
+                // Pattern will be freed in finally block
                 throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
             }
 
-            return new Pattern(pattern, caseSensitive, handle, fromCache);
+            long durationNanos = System.nanoTime() - startNanos;
+            metrics.recordTimer("patterns.compilation.latency", durationNanos);
+            metrics.incrementCounter("patterns.compiled.total.count");
+
+            Pattern compiled = new Pattern(pattern, caseSensitive, handle, fromCache);
+            logger.debug("RE2: Pattern compiled - hash: {}, length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}, timeNs: {}",
+                hash, pattern.length(), caseSensitive, fromCache, compiled.nativeMemoryBytes, durationNanos);
+
+            return compiled;
+
         } catch (Exception e) {
-            // If any exception, decrement count (unless it was ResourceException from limit)
-            if (!(e instanceof ResourceException)) {
-                ResourceTracker.trackPatternFreed();
+            // If any exception OTHER than PatternCompilationException, decrement count
+            // (PatternCompilationException already called trackPatternFreed in the error detection block)
+            if (!(e instanceof ResourceException) && !(e instanceof PatternCompilationException)) {
+                cache.getResourceTracker().trackPatternFreed(metrics);
             }
             throw e;
+
+        } finally {
+            // CRITICAL: If compilation failed, always free the handle
+            // This is in addition to the check inside the if block above
+            // Ensures no handle leaks even if exception thrown
+            if (handle != 0 && !isCompilationSuccessful(handle)) {
+                try {
+                    RE2NativeJNI.freePattern(handle);
+                } catch (Exception e) {
+                    // Silently ignore - best effort cleanup
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks if a handle represents a successfully compiled pattern.
+     * Helper to avoid leaking handles in finally blocks.
+     */
+    private static boolean isCompilationSuccessful(long handle) {
+        try {
+            return handle != 0 && RE2NativeJNI.patternOk(handle);
+        } catch (Exception e) {
+            return false; // Assume failed if check throws
         }
     }
 
@@ -280,11 +331,21 @@ public final class Pattern implements AutoCloseable {
         }
 
         if (closed.compareAndSet(false, true)) {
-            logger.trace("RE2: Force closing pattern");
-            RE2NativeJNI.freePattern(nativeHandle);
+            logger.trace("RE2: Force closing pattern - fromCache: {}", fromCache);
 
-            // Track that pattern was freed (decrements active count)
-            ResourceTracker.trackPatternFreed();
+            // CRITICAL: Always track freed, even if freePattern throws
+            try {
+                RE2NativeJNI.freePattern(nativeHandle);
+            } catch (Exception e) {
+                logger.error("RE2: Error freeing pattern native handle", e);
+            } finally {
+                // Always track freed (all patterns were tracked when allocated)
+                try {
+                    cache.getResourceTracker().trackPatternFreed(cache.getConfig().metricsRegistry());
+                } catch (Exception e) {
+                    logger.error("RE2: Error tracking pattern freed", e);
+                }
+            }
         }
     }
 
@@ -319,6 +380,18 @@ public final class Pattern implements AutoCloseable {
      */
     public static void configureCache(RE2Config config) {
         cache.reconfigure(config);
+    }
+
+    /**
+     * Sets a new global cache (for testing only).
+     *
+     * WARNING: This replaces the entire global cache. Use with caution.
+     * Primarily for tests that need to inject a custom cache with metrics.
+     *
+     * @param newCache the new cache to use globally
+     */
+    public static void setGlobalCache(PatternCache newCache) {
+        cache = newCache;
     }
 
     /**

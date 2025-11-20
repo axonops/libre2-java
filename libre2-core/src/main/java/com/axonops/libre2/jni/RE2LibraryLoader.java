@@ -88,12 +88,24 @@ public final class RE2LibraryLoader {
                 System.load(tempLib.toString());
                 loaded.set(true);
 
-                logger.info("RE2: Native library loaded successfully");
+                logger.info("RE2: Native library loaded successfully - platform: {}", platform);
+
+                // Perform initialization warmup test
+                performInitializationTest();
 
             } catch (Exception e) {
                 loadError = e;
                 loaded.set(true);
                 logger.error("RE2: Failed to load native library", e);
+
+                // Record native library error (best effort - cache may not be initialized yet)
+                try {
+                    com.axonops.libre2.api.Pattern.getGlobalCache().getConfig().metricsRegistry()
+                        .incrementCounter("errors.native_library.total.count");
+                } catch (Exception metricsError) {
+                    // Ignore - metrics are optional and cache may not be initialized
+                }
+
                 throw new IllegalStateException("RE2: Failed to load native library: " + e.getMessage(), e);
             }
         }
@@ -168,6 +180,63 @@ public final class RE2LibraryLoader {
 
     public static boolean isLoaded() {
         return loaded.get() && loadError == null;
+    }
+
+    /**
+     * Performs initialization warmup test using direct JNI calls.
+     *
+     * Tests the native library directly (not through Pattern cache) to verify:
+     * - Pattern compilation works
+     * - Full and partial matching work
+     * - Native library is functioning correctly
+     *
+     * Note: This bypasses the cache to avoid circular dependencies and test pollution.
+     */
+    private static void performInitializationTest() {
+        long testPatternHandle = 0;
+        try {
+            long testStart = System.nanoTime();
+
+            // Test pattern compilation (direct JNI call, bypasses cache)
+            testPatternHandle = RE2NativeJNI.compile("test_warmup_.*", true);
+            if (testPatternHandle == 0 || !RE2NativeJNI.patternOk(testPatternHandle)) {
+                logger.error("RE2: Initialization test - pattern compilation failed");
+                return;
+            }
+
+            // Test full match
+            boolean fullMatchResult = RE2NativeJNI.fullMatch(testPatternHandle, "test_warmup_123");
+            if (!fullMatchResult) {
+                logger.error("RE2: Initialization test - full match failed (expected true, got false)");
+            }
+
+            // Test partial match
+            boolean partialMatchResult = RE2NativeJNI.partialMatch(testPatternHandle, "xxx test_warmup_yyy");
+            if (!partialMatchResult) {
+                logger.error("RE2: Initialization test - partial match failed (expected true, got false)");
+            }
+
+            long testDuration = System.nanoTime() - testStart;
+
+            // Log success/failure
+            if (fullMatchResult && partialMatchResult) {
+                logger.info("RE2: Initialization test passed - native library functional, duration: {}ns", testDuration);
+            } else {
+                logger.error("RE2: Initialization test FAILED - library may not work correctly");
+            }
+
+        } catch (Exception e) {
+            logger.error("RE2: Initialization test failed - library may not work correctly", e);
+        } finally {
+            // Always free the test pattern (silently consume exceptions)
+            if (testPatternHandle != 0) {
+                try {
+                    RE2NativeJNI.freePattern(testPatternHandle);
+                } catch (Exception e) {
+                    // Silently ignore - best effort cleanup
+                }
+            }
+        }
     }
 
     private record Platform(OS os, Arch arch) {}

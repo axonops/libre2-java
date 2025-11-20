@@ -16,10 +16,14 @@
 
 package com.axonops.libre2.cache;
 
+import com.axonops.libre2.metrics.NoOpMetricsRegistry;
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
+
 import java.time.Duration;
+import java.util.Objects;
 
 /**
- * Configuration for RE2 library including caching and resource limits.
+ * Configuration for RE2 library including caching, resource limits, and metrics.
  *
  * Immutable configuration using Java 17 records.
  *
@@ -34,7 +38,8 @@ public record RE2Config(
     long evictionProtectionMs,
     int maxSimultaneousCompiledPatterns,
     int maxMatchersPerPattern,
-    boolean validateCachedPatterns
+    boolean validateCachedPatterns,
+    RE2MetricsRegistry metricsRegistry
 ) {
 
     /**
@@ -49,6 +54,7 @@ public record RE2Config(
      * - Matchers per pattern: 10K (prevents per-pattern exhaustion)
      * - Validate cached patterns: enabled (defensive check for native pointer validity)
      * - Eviction protection: 1000ms (protects recently-used patterns from immediate eviction)
+     * - Metrics: disabled (NoOp - zero overhead)
      */
     public static final RE2Config DEFAULT = new RE2Config(
         true,                          // Cache enabled
@@ -59,7 +65,8 @@ public record RE2Config(
         1000,                          // 1 second eviction protection
         100000,                        // Max 100K simultaneous active patterns
         10000,                         // Max 10K matchers per pattern
-        true                           // Validate cached patterns (defensive check)
+        true,                          // Validate cached patterns (defensive check)
+        NoOpMetricsRegistry.INSTANCE   // Metrics disabled (zero overhead)
     );
 
     /**
@@ -75,7 +82,8 @@ public record RE2Config(
         0,                             // Ignored when cache disabled
         100000,                        // Still enforce simultaneous limit
         10000,                         // Still enforce matcher limit
-        false                          // No validation needed when no cache
+        false,                         // No validation needed when no cache
+        NoOpMetricsRegistry.INSTANCE   // Metrics disabled
     );
 
     /**
@@ -154,6 +162,7 @@ public record RE2Config(
         private int maxSimultaneousCompiledPatterns = 100000;
         private int maxMatchersPerPattern = 10000;
         private boolean validateCachedPatterns = true;
+        private RE2MetricsRegistry metricsRegistry = NoOpMetricsRegistry.INSTANCE;
 
         public Builder cacheEnabled(boolean enabled) {
             this.cacheEnabled = enabled;
@@ -200,6 +209,11 @@ public record RE2Config(
             return this;
         }
 
+        public Builder metricsRegistry(RE2MetricsRegistry metricsRegistry) {
+            this.metricsRegistry = Objects.requireNonNull(metricsRegistry, "metricsRegistry cannot be null");
+            return this;
+        }
+
         public RE2Config build() {
             return new RE2Config(
                 cacheEnabled,
@@ -210,7 +224,8 @@ public record RE2Config(
                 evictionProtectionMs,
                 maxSimultaneousCompiledPatterns,
                 maxMatchersPerPattern,
-                validateCachedPatterns
+                validateCachedPatterns,
+                metricsRegistry
             );
         }
     }

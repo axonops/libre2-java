@@ -15,10 +15,10 @@ on:
       - development
     paths:
       - 'libre2-core/src/**'
-      - 'libre2-cassandra-5.0/src/**'
+      - 'libre2-dropwizard/src/**'
       - 'pom.xml'
       - 'libre2-core/pom.xml'
-      - 'libre2-cassandra-5.0/pom.xml'
+      - 'libre2-dropwizard/pom.xml'
       - '.github/workflows/test-platforms.yml'
 
   # Manual trigger
@@ -30,10 +30,10 @@ on:
       - development
     paths:
       - 'libre2-core/src/**'
-      - 'libre2-cassandra-5.0/src/**'
+      - 'libre2-dropwizard/src/**'
       - 'pom.xml'
       - 'libre2-core/pom.xml'
-      - 'libre2-cassandra-5.0/pom.xml'
+      - 'libre2-dropwizard/pom.xml'
 
 jobs:
   # ============================================================================
@@ -65,7 +65,7 @@ jobs:
 
           echo ""
           echo "Cassandra JAR size:"
-          ls -lh libre2-cassandra-5.0/target/libre2-cassandra-5.0-*.jar || echo "(empty skeleton - OK)"
+          ls -lh libre2-dropwizard/target/libre2-dropwizard-*.jar || echo "(empty skeleton - OK)"
 
           echo ""
           echo "Native libraries in core JAR:"

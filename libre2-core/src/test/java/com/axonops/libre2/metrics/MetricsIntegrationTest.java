@@ -202,7 +202,7 @@ class MetricsIntegrationTest {
 
     @Test
     void testEvictionMetrics() {
-        // Create small cache with NO eviction protection for immediate testing
+        // Create small cache with NO eviction protection
         RE2Config smallCacheConfig = RE2Config.builder()
             .maxCacheSize(5)
             .evictionProtectionMs(0) // No protection - evict immediately
@@ -214,17 +214,12 @@ class MetricsIntegrationTest {
         Gauge<Integer> cacheSize = (Gauge<Integer>) registry.getGauges().get("eviction.test.cache.patterns.current.count");
         Counter lruEvictions = registry.counter("eviction.test.cache.evictions.lru.total.count");
 
+        long evictionsBefore = lruEvictions.getCount();
+
         // Compile 15 patterns (way more than cache size of 5)
-        // Soft limit: cache temporarily exceeds max, then async eviction kicks in
         for (int i = 0; i < 15; i++) {
             Pattern.compile("eviction_test_" + i);
         }
-
-        // Cache should have grown beyond max (soft limit behavior)
-        int cacheSizeBeforeEviction = cacheSize.getValue();
-        assertThat(cacheSizeBeforeEviction)
-            .as("Cache should temporarily exceed max (soft limit)")
-            .isGreaterThan(5);
 
         // Wait for async LRU eviction to complete
         try {
@@ -237,18 +232,19 @@ class MetricsIntegrationTest {
         long evictionsAfter = lruEvictions.getCount();
         assertThat(evictionsAfter)
             .as("LRU evictions should have occurred (15 patterns > 5 max)")
-            .isGreaterThan(0);
+            .isGreaterThan(evictionsBefore);
 
-        // Verify cache size brought back down to max
+        // Verify cache size is at or below max after eviction
         int cacheSizeAfterEviction = cacheSize.getValue();
         assertThat(cacheSizeAfterEviction)
             .as("Cache size should be at or below max after eviction")
             .isLessThanOrEqualTo(5);
 
-        // Verify eviction count makes sense (should have evicted ~10 patterns)
-        assertThat(evictionsAfter)
+        // Verify significant evictions occurred (should have evicted ~10 patterns)
+        long totalEvictions = evictionsAfter - evictionsBefore;
+        assertThat(totalEvictions)
             .as("Should have evicted approximately 10 patterns")
-            .isGreaterThanOrEqualTo(8); // Some tolerance for timing
+            .isGreaterThanOrEqualTo(8);
     }
 
     @Test

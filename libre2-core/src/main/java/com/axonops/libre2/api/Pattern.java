@@ -148,18 +148,19 @@ public final class Pattern implements AutoCloseable {
         ResourceTracker.trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns(), metrics);
 
         long startNanos = System.nanoTime();
+        long handle = 0;
         try {
-            long handle = RE2NativeJNI.compile(pattern, caseSensitive);
+            handle = RE2NativeJNI.compile(pattern, caseSensitive);
 
             if (handle == 0 || !RE2NativeJNI.patternOk(handle)) {
                 String error = RE2NativeJNI.getError();
-                if (handle != 0) {
-                    RE2NativeJNI.freePattern(handle);
-                }
-                // Compilation failed - decrement count and record error
+
+                // Compilation failed - record error and decrement count
                 ResourceTracker.trackPatternFreed(metrics);
                 metrics.incrementCounter("errors.compilation.failed.total.count");
                 logger.error("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
+
+                // Pattern will be freed in finally block
                 throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
             }
 
@@ -172,12 +173,37 @@ public final class Pattern implements AutoCloseable {
                 hash, pattern.length(), caseSensitive, fromCache, compiled.nativeMemoryBytes, durationNanos);
 
             return compiled;
+
         } catch (Exception e) {
             // If any exception, decrement count (unless it was ResourceException from limit)
             if (!(e instanceof ResourceException)) {
                 ResourceTracker.trackPatternFreed(metrics);
             }
             throw e;
+
+        } finally {
+            // CRITICAL: If compilation failed, always free the handle
+            // This is in addition to the check inside the if block above
+            // Ensures no handle leaks even if exception thrown
+            if (handle != 0 && !isCompilationSuccessful(handle)) {
+                try {
+                    RE2NativeJNI.freePattern(handle);
+                } catch (Exception e) {
+                    // Silently ignore - best effort cleanup
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks if a handle represents a successfully compiled pattern.
+     * Helper to avoid leaking handles in finally blocks.
+     */
+    private static boolean isCompilationSuccessful(long handle) {
+        try {
+            return handle != 0 && RE2NativeJNI.patternOk(handle);
+        } catch (Exception e) {
+            return false; // Assume failed if check throws
         }
     }
 
@@ -304,10 +330,23 @@ public final class Pattern implements AutoCloseable {
 
         if (closed.compareAndSet(false, true)) {
             logger.trace("RE2: Force closing pattern");
-            RE2NativeJNI.freePattern(nativeHandle);
 
-            // Track that pattern was freed (decrements active count)
-            ResourceTracker.trackPatternFreed(cache.getConfig().metricsRegistry());
+            // CRITICAL: Always track freed, even if freePattern throws
+            try {
+                RE2NativeJNI.freePattern(nativeHandle);
+            } catch (Exception e) {
+                logger.error("RE2: Error freeing pattern native handle", e);
+                // Continue to tracking - pattern is marked closed
+            } finally {
+                // Always track freed (even if free threw exception)
+                // This ensures ResourceTracker counts stay accurate
+                try {
+                    ResourceTracker.trackPatternFreed(cache.getConfig().metricsRegistry());
+                } catch (Exception e) {
+                    // Even tracking failed - log it but don't throw
+                    logger.error("RE2: Error tracking pattern freed", e);
+                }
+            }
         }
     }
 

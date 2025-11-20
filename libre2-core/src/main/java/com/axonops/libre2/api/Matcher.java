@@ -63,7 +63,7 @@ public final class Matcher implements AutoCloseable {
         pattern.incrementRefCount();
 
         // Track matcher allocation
-        ResourceTracker.trackMatcherAllocated();
+        Pattern.getGlobalCache().getResourceTracker().trackMatcherAllocated();
     }
 
     public boolean matches() {
@@ -112,7 +112,7 @@ public final class Matcher implements AutoCloseable {
 
             // Track matcher freed
             RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
-            ResourceTracker.trackMatcherFreed(metrics);
+            Pattern.getGlobalCache().getResourceTracker().trackMatcherFreed(metrics);
         }
     }
 

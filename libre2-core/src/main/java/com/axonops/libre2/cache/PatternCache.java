@@ -52,9 +52,14 @@ public final class PatternCache {
     private static final Logger logger = LoggerFactory.getLogger(PatternCache.class);
 
     private volatile RE2Config config;
+    private final com.axonops.libre2.util.ResourceTracker resourceTracker;
 
     public RE2Config getConfig() {
         return config;
+    }
+
+    public com.axonops.libre2.util.ResourceTracker getResourceTracker() {
+        return resourceTracker;
     }
 
     // ConcurrentHashMap for lock-free reads/writes
@@ -88,6 +93,7 @@ public final class PatternCache {
 
     public PatternCache(RE2Config config) {
         this.config = config;
+        this.resourceTracker = new com.axonops.libre2.util.ResourceTracker();
 
         if (config.cacheEnabled()) {
             // ConcurrentHashMap for lock-free concurrent access
@@ -486,24 +492,21 @@ public final class PatternCache {
     /**
      * Full reset for testing (clears cache and resets statistics).
      *
-     * WARNING: Only resets ResourceTracker if there are no active patterns/matchers.
-     * If resources are still active, logs a warning but doesn't reset counts to avoid
-     * negative count bugs when those resources are later freed.
+     * Only resets ResourceTracker if no deferred patterns remain.
+     * Deferred patterns will be freed later and need correct tracking.
      */
     public void reset() {
         clear();
         resetStatistics();
 
-        // Only reset ResourceTracker if there are no active resources
-        int activePatterns = com.axonops.libre2.util.ResourceTracker.getActivePatternCount();
-        int activeMatchers = com.axonops.libre2.util.ResourceTracker.getActiveMatcherCount();
-
-        if (activePatterns == 0 && activeMatchers == 0) {
-            com.axonops.libre2.util.ResourceTracker.reset();
+        // Only reset ResourceTracker if deferred list is empty
+        // Deferred patterns will be freed later and call trackPatternFreed()
+        if (deferredCleanup.isEmpty()) {
+            resourceTracker.reset();
             logger.trace("RE2: Cache fully reset (including ResourceTracker)");
         } else {
-            logger.warn("RE2: Cache reset but ResourceTracker NOT reset - {} active patterns, {} active matchers still open",
-                activePatterns, activeMatchers);
+            logger.debug("RE2: Cache reset but ResourceTracker NOT reset - {} deferred patterns will be freed later",
+                deferredCleanup.size());
         }
     }
 
@@ -530,7 +533,7 @@ public final class PatternCache {
         // Clear existing cache
         clear();
         resetStatistics();
-        com.axonops.libre2.util.ResourceTracker.reset();
+        resourceTracker.reset();
 
         // Update config
         this.config = newConfig;
@@ -592,9 +595,9 @@ public final class PatternCache {
 
         // Resource management metrics (active counts only - freed counts are incremented directly)
         metrics.registerGauge("resources.patterns.active.current.count",
-            com.axonops.libre2.util.ResourceTracker::getActivePatternCount);
+            resourceTracker::getActivePatternCount);
         metrics.registerGauge("resources.matchers.active.current.count",
-            com.axonops.libre2.util.ResourceTracker::getActiveMatcherCount);
+            resourceTracker::getActiveMatcherCount);
         // Note: resources.patterns.freed.total.count and resources.matchers.freed.total.count
         // are Counters incremented in ResourceTracker.trackPatternFreed() and trackMatcherFreed()
 

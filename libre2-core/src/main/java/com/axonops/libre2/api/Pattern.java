@@ -145,7 +145,7 @@ public final class Pattern implements AutoCloseable {
 
         // Track allocation and enforce maxSimultaneousCompiledPatterns limit
         // This is ACTIVE count, not cumulative - patterns can be freed and recompiled
-        ResourceTracker.trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns(), metrics);
+        cache.getResourceTracker().trackPatternAllocated(cache.getConfig().maxSimultaneousCompiledPatterns(), metrics);
 
         long startNanos = System.nanoTime();
         long handle = 0;
@@ -156,7 +156,7 @@ public final class Pattern implements AutoCloseable {
                 String error = RE2NativeJNI.getError();
 
                 // Compilation failed - record error and decrement count
-                ResourceTracker.trackPatternFreed(metrics);
+                cache.getResourceTracker().trackPatternFreed(metrics);
                 metrics.incrementCounter("errors.compilation.failed.total.count");
                 // DEBUG level - invalid user patterns are expected, not an error in our library
                 logger.debug("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
@@ -176,9 +176,10 @@ public final class Pattern implements AutoCloseable {
             return compiled;
 
         } catch (Exception e) {
-            // If any exception, decrement count (unless it was ResourceException from limit)
-            if (!(e instanceof ResourceException)) {
-                ResourceTracker.trackPatternFreed(metrics);
+            // If any exception OTHER than PatternCompilationException, decrement count
+            // (PatternCompilationException already called trackPatternFreed in the error detection block)
+            if (!(e instanceof ResourceException) && !(e instanceof PatternCompilationException)) {
+                cache.getResourceTracker().trackPatternFreed(metrics);
             }
             throw e;
 
@@ -330,21 +331,18 @@ public final class Pattern implements AutoCloseable {
         }
 
         if (closed.compareAndSet(false, true)) {
-            logger.trace("RE2: Force closing pattern");
+            logger.trace("RE2: Force closing pattern - fromCache: {}", fromCache);
 
             // CRITICAL: Always track freed, even if freePattern throws
             try {
                 RE2NativeJNI.freePattern(nativeHandle);
             } catch (Exception e) {
                 logger.error("RE2: Error freeing pattern native handle", e);
-                // Continue to tracking - pattern is marked closed
             } finally {
-                // Always track freed (even if free threw exception)
-                // This ensures ResourceTracker counts stay accurate
+                // Always track freed (all patterns were tracked when allocated)
                 try {
-                    ResourceTracker.trackPatternFreed(cache.getConfig().metricsRegistry());
+                    cache.getResourceTracker().trackPatternFreed(cache.getConfig().metricsRegistry());
                 } catch (Exception e) {
-                    // Even tracking failed - log it but don't throw
                     logger.error("RE2: Error tracking pattern freed", e);
                 }
             }

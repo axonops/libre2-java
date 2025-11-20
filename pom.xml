@@ -15,7 +15,7 @@
 
     <modules>
         <module>libre2-core</module>
-        <module>libre2-cassandra-5.0</module>
+        <module>libre2-dropwizard</module>
     </modules>
 
     <licenses>

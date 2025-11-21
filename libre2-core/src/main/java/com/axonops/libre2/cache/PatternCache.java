@@ -111,12 +111,10 @@ public final class PatternCache {
             this.evictionTask = new IdleEvictionTask(this, config);
             this.evictionTask.start();
 
-            // Register shutdown hook only for the global cache (not test caches)
-            // Tests create many cache instances which would register many shutdown hooks
-            // Only the global cache (accessed via Pattern) needs cleanup on JVM exit
-            // Note: We can identify global cache by comparing to Pattern.getGlobalCache(),
-            // but this creates circular dependency. Instead, we'll skip shutdown hook
-            // registration for test isolation. Production code only has one cache.
+            // Note: Shutdown hooks not registered to avoid test interference.
+            // Tests create multiple cache instances and explicit cleanup in tearDown.
+            // Production applications should call shutdown() explicitly or rely on
+            // try-with-resources if cache lifecycle is scoped.
 
             logger.info("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s, deferredCleanup: every {}s",
                 config.maxCacheSize(),

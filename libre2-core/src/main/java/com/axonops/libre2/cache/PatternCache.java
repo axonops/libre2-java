@@ -18,6 +18,7 @@ package com.axonops.libre2.cache;
 
 import com.axonops.libre2.api.Pattern;
 import com.axonops.libre2.metrics.RE2MetricsRegistry;
+import com.axonops.libre2.metrics.MetricNames;
 import com.axonops.libre2.util.PatternHasher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,7 +150,7 @@ public final class PatternCache {
 
         if (!config.cacheEnabled()) {
             misses.incrementAndGet();
-            metrics.incrementCounter("patterns.cache.misses.total.count");
+            metrics.incrementCounter(MetricNames.PATTERNS_CACHE_MISSES);
             return compiler.get();
         }
 
@@ -163,7 +164,7 @@ public final class PatternCache {
                 String hash = PatternHasher.hash(patternString);
                 logger.warn("RE2: Invalid cached pattern detected - hash: {}, recompiling", hash);
                 invalidPatternRecompilations.incrementAndGet();
-                metrics.incrementCounter("patterns.invalid.recompiled.total.count");
+                metrics.incrementCounter(MetricNames.PATTERNS_INVALID_RECOMPILED);
                 // Remove invalid pattern and decrement memory
                 if (cache.remove(key, cached)) {
                     totalNativeMemoryBytes.addAndGet(-cached.memoryBytes());
@@ -173,7 +174,7 @@ public final class PatternCache {
                 // Cache hit - update access time atomically
                 cached.touch();
                 hits.incrementAndGet();
-                metrics.incrementCounter("patterns.cache.hits.total.count");
+                metrics.incrementCounter(MetricNames.PATTERNS_CACHE_HITS);
                 logger.trace("RE2: Cache hit - hash: {}, hitRate: {:.1f}%",
                     PatternHasher.hash(patternString),
                     getCacheHitRate());
@@ -184,7 +185,7 @@ public final class PatternCache {
         // Cache miss - use computeIfAbsent for safe concurrent compilation
         // Only ONE thread compiles each unique pattern
         misses.incrementAndGet();
-        metrics.incrementCounter("patterns.cache.misses.total.count");
+        metrics.incrementCounter(MetricNames.PATTERNS_CACHE_MISSES);
         logger.trace("RE2: Cache miss - hash: {}, compiling", PatternHasher.hash(patternString));
 
         // Track whether this thread compiled a new pattern
@@ -287,7 +288,7 @@ public final class PatternCache {
                     // Safe to free immediately
                     cached.forceClose();
                     evictionsLRU.incrementAndGet();
-                    config.metricsRegistry().incrementCounter("cache.evictions.lru.total.count");
+                    config.metricsRegistry().incrementCounter(MetricNames.CACHE_EVICTIONS_LRU);
                     logger.trace("RE2: LRU evicting pattern (immediate): {}", entry.getKey());
                 }
                 evicted++;
@@ -344,7 +345,7 @@ public final class PatternCache {
                     logger.trace("RE2: Idle evicting pattern (immediate): {}", entry.getKey());
                     cached.forceClose();
                     evictionsIdle.incrementAndGet();
-                    config.metricsRegistry().incrementCounter("cache.evictions.idle.total.count");
+                    config.metricsRegistry().incrementCounter(MetricNames.CACHE_EVICTIONS_IDLE);
                 }
                 evictedCount.incrementAndGet();
                 return true; // Remove from map
@@ -383,7 +384,7 @@ public final class PatternCache {
                 deferredNativeMemoryBytes.addAndGet(-deferred.memoryBytes());
 
                 // Note: evictionsDeferred already incremented when added to deferred list
-                config.metricsRegistry().incrementCounter("cache.evictions.deferred.total.count");
+                config.metricsRegistry().incrementCounter(MetricNames.CACHE_EVICTIONS_DEFERRED);
                 cleaned++;
             }
         }

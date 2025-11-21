@@ -18,6 +18,7 @@ package com.axonops.libre2.api;
 
 import com.axonops.libre2.jni.RE2NativeJNI;
 import com.axonops.libre2.metrics.RE2MetricsRegistry;
+import com.axonops.libre2.metrics.MetricNames;
 import com.axonops.libre2.util.ResourceTracker;
 
 import java.util.Objects;
@@ -75,8 +76,8 @@ public final class Matcher implements AutoCloseable {
         boolean result = RE2NativeJNI.fullMatch(pattern.getNativeHandle(), input);
 
         long durationNanos = System.nanoTime() - startNanos;
-        metrics.recordTimer("matching.full_match.latency", durationNanos);
-        metrics.incrementCounter("matching.operations.total.count");
+        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos);
+        metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
 
         return result;
     }
@@ -90,8 +91,8 @@ public final class Matcher implements AutoCloseable {
         boolean result = RE2NativeJNI.partialMatch(pattern.getNativeHandle(), input);
 
         long durationNanos = System.nanoTime() - startNanos;
-        metrics.recordTimer("matching.partial_match.latency", durationNanos);
-        metrics.incrementCounter("matching.operations.total.count");
+        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos);
+        metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
 
         return result;
     }

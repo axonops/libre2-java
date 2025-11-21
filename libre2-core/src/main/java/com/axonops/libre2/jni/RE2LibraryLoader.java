@@ -16,6 +16,7 @@
 
 package com.axonops.libre2.jni;
 
+import com.axonops.libre2.metrics.MetricNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,7 +102,7 @@ public final class RE2LibraryLoader {
                 // Record native library error (best effort - cache may not be initialized yet)
                 try {
                     com.axonops.libre2.api.Pattern.getGlobalCache().getConfig().metricsRegistry()
-                        .incrementCounter("errors.native_library.total.count");
+                        .incrementCounter(MetricNames.ERRORS_NATIVE_LIBRARY);
                 } catch (Exception metricsError) {
                     // Ignore - metrics are optional and cache may not be initialized
                 }

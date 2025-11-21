@@ -20,6 +20,7 @@ import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.cache.RE2Config;
 import com.axonops.libre2.jni.RE2LibraryLoader;
 import com.axonops.libre2.jni.RE2NativeJNI;
+import com.axonops.libre2.metrics.MetricNames;
 import com.axonops.libre2.metrics.RE2MetricsRegistry;
 import com.axonops.libre2.util.PatternHasher;
 import com.axonops.libre2.util.ResourceTracker;
@@ -158,7 +159,7 @@ public final class Pattern implements AutoCloseable {
                 String error = RE2NativeJNI.getError();
 
                 // Compilation failed - record error
-                metrics.incrementCounter("errors.compilation.failed.total.count");
+                metrics.incrementCounter(MetricNames.ERRORS_COMPILATION_FAILED);
                 logger.debug("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
 
                 // Will be cleaned up in finally block
@@ -166,8 +167,8 @@ public final class Pattern implements AutoCloseable {
             }
 
             long durationNanos = System.nanoTime() - startNanos;
-            metrics.recordTimer("patterns.compilation.latency", durationNanos);
-            metrics.incrementCounter("patterns.compiled.total.count");
+            metrics.recordTimer(MetricNames.PATTERNS_COMPILATION_LATENCY, durationNanos);
+            metrics.incrementCounter(MetricNames.PATTERNS_COMPILED);
 
             Pattern compiled = new Pattern(pattern, caseSensitive, handle, fromCache);
             logger.debug("RE2: Pattern compiled - hash: {}, length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}, timeNs: {}",

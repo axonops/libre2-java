@@ -668,28 +668,23 @@ JNIEXPORT jintArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_programFano
 
     try {
         RE2* re = reinterpret_cast<RE2*>(handle);
-        std::map<int, int> fanout;
+        std::vector<int> histogram;
 
-        // Get fanout histogram
-        int numFanout = re->ProgramFanout(&fanout);
-        if (numFanout == 0 || fanout.empty()) {
+        // Get fanout histogram (RE2 fills the vector)
+        int numFanout = re->ProgramFanout(&histogram);
+        if (numFanout == 0 || histogram.empty()) {
             return nullptr;
         }
 
-        // Flatten to array: [fanout1, count1, fanout2, count2, ...]
-        jintArray result = env->NewIntArray(fanout.size() * 2);
+        // Convert vector<int> to Java int array
+        jintArray result = env->NewIntArray(histogram.size());
         if (result == nullptr) {
             return nullptr;
         }
 
-        std::vector<jint> flatData;
-        flatData.reserve(fanout.size() * 2);
-        for (const auto& entry : fanout) {
-            flatData.push_back(entry.first);
-            flatData.push_back(entry.second);
-        }
-
-        env->SetIntArrayRegion(result, 0, flatData.size(), flatData.data());
+        // Copy data (cast to jint if needed)
+        std::vector<jint> jintData(histogram.begin(), histogram.end());
+        env->SetIntArrayRegion(result, 0, jintData.size(), jintData.data());
         return result;
 
     } catch (const std::exception& e) {

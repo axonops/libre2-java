@@ -224,10 +224,10 @@ public final class RE2NativeJNI {
 
     /**
      * Gets pattern complexity histogram (DFA branching factor).
-     * Returns flattened array: [fanout1, count1, fanout2, count2, ...]
+     * Returns histogram array where index is fanout value and element is count.
      *
      * @param handle compiled pattern handle
-     * @return flattened fanout-count pairs, or null on error
+     * @return histogram array, or null on error
      */
     public static native int[] programFanout(long handle);
 }

@@ -18,35 +18,130 @@ package com.axonops.libre2.metrics;
 /**
  * Metric name constants for RE2 library instrumentation.
  *
- * <p>Provides 25 metrics across 6 categories for comprehensive observability:
+ * <p>Provides 25 metrics across 6 categories for comprehensive observability of the RE2 pattern
+ * cache, native memory management, and matching performance.
+ *
+ * <h2>Architecture Overview</h2>
+ *
+ * <h3>Pattern Cache</h3>
+ * <p>The RE2 library maintains an automatic LRU cache of compiled regex patterns to avoid expensive
+ * recompilation. When {@link com.axonops.libre2.api.Pattern#compile(String)} is called:
+ * <ol>
+ *   <li><b>Cache Hit</b> - Pattern found in cache, returned immediately (no compilation)</li>
+ *   <li><b>Cache Miss</b> - Pattern compiled via native JNI, stored in cache for reuse</li>
+ * </ol>
+ *
+ * <p><b>Dual Eviction Strategy:</b>
  * <ul>
- *   <li>Pattern Compilation (5 metrics) - compilation performance and cache efficiency</li>
- *   <li>Cache State (3 metrics) - current cache size and memory usage</li>
- *   <li>Cache Evictions (3 metrics) - eviction types and frequencies</li>
- *   <li>Deferred Cleanup (4 metrics) - patterns awaiting cleanup (in use by matchers)</li>
- *   <li>Resource Management (4 metrics) - active patterns/matchers and cleanup tracking</li>
- *   <li>Performance (3 metrics) - matching operation latencies</li>
- *   <li>Errors (3 metrics) - compilation failures and resource exhaustion</li>
+ *   <li><b>LRU Eviction</b> - When cache exceeds maxCacheSize, least-recently-used patterns evicted</li>
+ *   <li><b>Idle Eviction</b> - Background thread evicts patterns unused for idleTimeoutSeconds</li>
  * </ul>
  *
- * <p><b>Metric Types:</b>
+ * <p>This dual strategy provides:
  * <ul>
- *   <li><b>Counter</b> - Monotonically increasing count (suffix: .total.count)</li>
- *   <li><b>Timer</b> - Latency histogram with percentiles (suffix: .latency)</li>
- *   <li><b>Gauge</b> - Current or peak value (suffix: .current.* or .peak.*)</li>
+ *   <li>Short-term performance (LRU keeps hot patterns)</li>
+ *   <li>Long-term memory hygiene (idle eviction prevents unbounded growth)</li>
  * </ul>
  *
- * <p><b>Usage with Dropwizard Metrics:</b>
+ * <h3>Deferred Cleanup Queue</h3>
+ * <p>Patterns cannot be immediately freed from native memory if they are in use by active
+ * {@link com.axonops.libre2.api.Matcher} instances. When a pattern is evicted (LRU or idle)
+ * but has active matchers:
+ * <ol>
+ *   <li>Pattern removed from cache (no longer available for new compilations)</li>
+ *   <li>Pattern moved to <b>deferred cleanup queue</b> (awaiting matcher closure)</li>
+ *   <li>When all matchers close, pattern freed from native memory</li>
+ * </ol>
+ *
+ * <p><b>Why Deferred Cleanup Matters:</b>
+ * <ul>
+ *   <li>Prevents use-after-free crashes (matchers reference native memory)</li>
+ *   <li>Allows safe concurrent pattern eviction and matching operations</li>
+ *   <li>High deferred counts indicate matchers not closed promptly (potential leak)</li>
+ * </ul>
+ *
+ * <p>A background task runs every {@code deferredCleanupIntervalSeconds} to free patterns
+ * whose matchers have closed.
+ *
+ * <h3>Native Memory Tracking</h3>
+ * <p>Compiled RE2 patterns are stored in <b>off-heap native memory</b> (not JVM heap) to:
+ * <ul>
+ *   <li>Avoid Java GC pressure (large regex automata can be 100s of KB)</li>
+ *   <li>Leverage RE2's optimized C++ memory layout</li>
+ *   <li>Prevent OutOfMemoryError in high-throughput scenarios</li>
+ * </ul>
+ *
+ * <p><b>Exact Memory Measurement:</b> When a pattern is compiled, the native library reports
+ * exact memory usage via {@code Pattern.getNativeMemoryBytes()}. This is NOT an estimate -
+ * it's the actual allocation size from RE2's internal accounting.
+ *
+ * <p><b>Memory Lifecycle:</b>
+ * <ol>
+ *   <li>Pattern compiled → native memory allocated (tracked in CACHE_NATIVE_MEMORY)</li>
+ *   <li>Pattern evicted but in use → moved to deferred (tracked in CACHE_DEFERRED_MEMORY)</li>
+ *   <li>All matchers closed → pattern freed (memory reclaimed, counters decremented)</li>
+ * </ol>
+ *
+ * <p><b>Total Native Memory = Cache Memory + Deferred Memory</b>
+ *
+ * <h2>Metric Categories</h2>
+ * <ul>
+ *   <li><b>Pattern Compilation (5 metrics)</b> - Compilation performance and cache efficiency</li>
+ *   <li><b>Cache State (3 metrics)</b> - Current cache size and memory usage</li>
+ *   <li><b>Cache Evictions (3 metrics)</b> - Eviction types (LRU, idle, deferred) and frequencies</li>
+ *   <li><b>Deferred Cleanup (4 metrics)</b> - Patterns awaiting cleanup (in use by matchers)</li>
+ *   <li><b>Resource Management (4 metrics)</b> - Active patterns/matchers and cleanup tracking</li>
+ *   <li><b>Performance (3 metrics)</b> - Matching operation latencies (RE2 guarantees linear time)</li>
+ *   <li><b>Errors (3 metrics)</b> - Compilation failures and resource exhaustion</li>
+ * </ul>
+ *
+ * <h2>Metric Types</h2>
+ * <ul>
+ *   <li><b>Counter</b> - Monotonically increasing count (suffix: {@code .total.count})</li>
+ *   <li><b>Timer</b> - Latency histogram with percentiles (suffix: {@code .latency})</li>
+ *   <li><b>Gauge</b> - Current or peak value (suffix: {@code .current.*} or {@code .peak.*})</li>
+ * </ul>
+ *
+ * <h2>Usage Example</h2>
  * <pre>{@code
+ * // Initialize with Dropwizard Metrics and JMX
  * MetricRegistry registry = new MetricRegistry();
  * RE2Config config = RE2MetricsConfig.withMetrics(registry, "myapp.re2", true);
  * Pattern.setGlobalCache(new PatternCache(config));
  *
- * // Metrics accessible via JMX or programmatically:
- * registry.counter(MetricRegistry.name("myapp.re2", MetricNames.PATTERNS_COMPILED));
+ * // Compile patterns (automatically cached and metered)
+ * Pattern emailPattern = Pattern.compile("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}");
+ * try (Matcher m = emailPattern.matcher("user@example.com")) {
+ *     boolean matches = m.matches(); // Latency recorded in MATCHING_FULL_MATCH_LATENCY
+ * }
+ *
+ * // Access metrics programmatically
+ * Counter compilations = registry.counter(
+ *     MetricRegistry.name("myapp.re2", MetricNames.PATTERNS_COMPILED));
+ * Histogram compileLatency = registry.histogram(
+ *     MetricRegistry.name("myapp.re2", MetricNames.PATTERNS_COMPILATION_LATENCY));
+ *
+ * // Or via JMX (if enableJmx=true):
+ * // - metrics:name=myapp.re2.patterns.compiled.total.count,type=counters
+ * // - metrics:name=myapp.re2.patterns.compilation.latency,type=timers
  * }</pre>
  *
+ * <h2>Monitoring Recommendations</h2>
+ * <ul>
+ *   <li><b>Cache Hit Rate:</b> PATTERNS_CACHE_HITS / (PATTERNS_CACHE_HITS + PATTERNS_CACHE_MISSES)
+ *       - Target: >90% for steady-state workloads</li>
+ *   <li><b>Deferred Cleanup:</b> CACHE_DEFERRED_PATTERNS_COUNT should be low (near zero)
+ *       - High values indicate matchers not closed (potential leak)</li>
+ *   <li><b>Memory Growth:</b> CACHE_NATIVE_MEMORY + CACHE_DEFERRED_MEMORY = total off-heap
+ *       - Should stabilize after warmup, not grow unbounded</li>
+ *   <li><b>Eviction Balance:</b> CACHE_EVICTIONS_IDLE should dominate over CACHE_EVICTIONS_LRU
+ *       - Means cache sized correctly, idle patterns cleaned up</li>
+ * </ul>
+ *
  * @since 1.0.0
+ * @see com.axonops.libre2.cache.PatternCache
+ * @see com.axonops.libre2.api.Pattern
+ * @see com.axonops.libre2.api.Matcher
  */
 public final class MetricNames {
     private MetricNames() {}

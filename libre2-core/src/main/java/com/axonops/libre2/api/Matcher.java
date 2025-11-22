@@ -55,10 +55,12 @@ public final class Matcher implements AutoCloseable {
     private final Pattern pattern;
     private final String input;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final RE2MetricsRegistry metrics; // Cached to avoid repeated getGlobalCache() calls
 
     Matcher(Pattern pattern, String input) {
         this.pattern = Objects.requireNonNull(pattern);
         this.input = Objects.requireNonNull(input);
+        this.metrics = Pattern.getGlobalCache().getConfig().metricsRegistry(); // Cache once
 
         // Increment reference count to prevent pattern being freed while in use
         pattern.incrementRefCount();
@@ -70,7 +72,6 @@ public final class Matcher implements AutoCloseable {
     public boolean matches() {
         checkNotClosed();
 
-        RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
         long startNanos = System.nanoTime();
 
         boolean result = RE2NativeJNI.fullMatch(pattern.getNativeHandle(), input);
@@ -85,7 +86,6 @@ public final class Matcher implements AutoCloseable {
     public boolean find() {
         checkNotClosed();
 
-        RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
         long startNanos = System.nanoTime();
 
         boolean result = RE2NativeJNI.partialMatch(pattern.getNativeHandle(), input);
@@ -111,8 +111,7 @@ public final class Matcher implements AutoCloseable {
             // Decrement reference count - pattern can now be freed if evicted
             pattern.decrementRefCount();
 
-            // Track matcher freed
-            RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+            // Track matcher freed (use cached metrics)
             Pattern.getGlobalCache().getResourceTracker().trackMatcherFreed(metrics);
         }
     }

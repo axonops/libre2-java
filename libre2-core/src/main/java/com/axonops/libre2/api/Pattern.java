@@ -20,6 +20,7 @@ import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.cache.RE2Config;
 import com.axonops.libre2.jni.RE2LibraryLoader;
 import com.axonops.libre2.jni.RE2NativeJNI;
+import com.axonops.libre2.metrics.MetricNames;
 import com.axonops.libre2.metrics.RE2MetricsRegistry;
 import com.axonops.libre2.util.PatternHasher;
 import com.axonops.libre2.util.ResourceTracker;
@@ -149,63 +150,52 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
         long handle = 0;
+        boolean compilationSuccessful = false;
+
         try {
             handle = RE2NativeJNI.compile(pattern, caseSensitive);
 
             if (handle == 0 || !RE2NativeJNI.patternOk(handle)) {
                 String error = RE2NativeJNI.getError();
 
-                // Compilation failed - record error and decrement count
-                cache.getResourceTracker().trackPatternFreed(metrics);
-                metrics.incrementCounter("errors.compilation.failed.total.count");
-                // DEBUG level - invalid user patterns are expected, not an error in our library
+                // Compilation failed - record error
+                metrics.incrementCounter(MetricNames.ERRORS_COMPILATION_FAILED);
                 logger.debug("RE2: Pattern compilation failed - hash: {}, error: {}", hash, error);
 
-                // Pattern will be freed in finally block
+                // Will be cleaned up in finally block
                 throw new PatternCompilationException(pattern, error != null ? error : "Unknown error");
             }
 
             long durationNanos = System.nanoTime() - startNanos;
-            metrics.recordTimer("patterns.compilation.latency", durationNanos);
-            metrics.incrementCounter("patterns.compiled.total.count");
+            metrics.recordTimer(MetricNames.PATTERNS_COMPILATION_LATENCY, durationNanos);
+            metrics.incrementCounter(MetricNames.PATTERNS_COMPILED);
 
             Pattern compiled = new Pattern(pattern, caseSensitive, handle, fromCache);
             logger.debug("RE2: Pattern compiled - hash: {}, length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}, timeNs: {}",
                 hash, pattern.length(), caseSensitive, fromCache, compiled.nativeMemoryBytes, durationNanos);
 
+            compilationSuccessful = true;
             return compiled;
 
-        } catch (Exception e) {
-            // If any exception OTHER than PatternCompilationException, decrement count
-            // (PatternCompilationException already called trackPatternFreed in the error detection block)
-            if (!(e instanceof ResourceException) && !(e instanceof PatternCompilationException)) {
-                cache.getResourceTracker().trackPatternFreed(metrics);
-            }
+        } catch (ResourceException e) {
+            // Resource limit hit - count already rolled back by trackPatternAllocated
             throw e;
 
         } finally {
-            // CRITICAL: If compilation failed, always free the handle
-            // This is in addition to the check inside the if block above
-            // Ensures no handle leaks even if exception thrown
-            if (handle != 0 && !isCompilationSuccessful(handle)) {
-                try {
-                    RE2NativeJNI.freePattern(handle);
-                } catch (Exception e) {
-                    // Silently ignore - best effort cleanup
+            // Clean up if compilation failed
+            if (!compilationSuccessful) {
+                // Free handle if allocated
+                if (handle != 0) {
+                    try {
+                        RE2NativeJNI.freePattern(handle);
+                    } catch (Exception e) {
+                        // Silently ignore - best effort cleanup
+                    }
                 }
-            }
-        }
-    }
 
-    /**
-     * Checks if a handle represents a successfully compiled pattern.
-     * Helper to avoid leaking handles in finally blocks.
-     */
-    private static boolean isCompilationSuccessful(long handle) {
-        try {
-            return handle != 0 && RE2NativeJNI.patternOk(handle);
-        } catch (Exception e) {
-            return false; // Assume failed if check throws
+                // Decrement count (allocation failed)
+                cache.getResourceTracker().trackPatternFreed(metrics);
+            }
         }
     }
 
@@ -315,15 +305,14 @@ public final class Pattern implements AutoCloseable {
     /**
      * Force closes the pattern (INTERNAL USE ONLY - called by cache during eviction).
      *
-     * CRITICAL: Only frees native resources if reference count is 0.
-     * If refCount > 0, pattern is still in use by Matchers - defer cleanup.
+     * <p><strong>DO NOT CALL THIS METHOD.</strong> This is internal API for PatternCache.
+     * Use {@link #close()} instead.
      *
-     * Do not call this method directly - use close() instead.
-     * This method bypasses the fromCache check.
+     * <p>CRITICAL: Only frees native resources if reference count is 0.
+     * If refCount > 0, pattern is still in use by Matchers - doesn't close.
      *
-     * @deprecated Internal use only
+     * <p>Public for PatternCache access (different package), but not part of public API.
      */
-    @Deprecated
     public void forceClose() {
         if (refCount.get() > 0) {
             logger.warn("RE2: Cannot force close pattern - still in use by {} matcher(s)", refCount.get());
@@ -340,11 +329,7 @@ public final class Pattern implements AutoCloseable {
                 logger.error("RE2: Error freeing pattern native handle", e);
             } finally {
                 // Always track freed (all patterns were tracked when allocated)
-                try {
-                    cache.getResourceTracker().trackPatternFreed(cache.getConfig().metricsRegistry());
-                } catch (Exception e) {
-                    logger.error("RE2: Error tracking pattern freed", e);
-                }
+                cache.getResourceTracker().trackPatternFreed(cache.getConfig().metricsRegistry());
             }
         }
     }

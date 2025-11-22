@@ -18,6 +18,7 @@ package com.axonops.libre2.util;
 
 import com.axonops.libre2.api.Pattern;
 import com.axonops.libre2.metrics.RE2MetricsRegistry;
+import com.axonops.libre2.metrics.MetricNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,7 +71,7 @@ public final class ResourceTracker {
 
             // Record resource exhausted error
             if (metricsRegistry != null) {
-                metricsRegistry.incrementCounter("errors.resource.exhausted.total.count");
+                metricsRegistry.incrementCounter(MetricNames.ERRORS_RESOURCE_EXHAUSTED);
             }
 
             throw new com.axonops.libre2.api.ResourceException(
@@ -93,7 +94,7 @@ public final class ResourceTracker {
 
         // Record pattern freed metric (Counter, not Gauge)
         if (metricsRegistry != null) {
-            metricsRegistry.incrementCounter("resources.patterns.freed.total.count");
+            metricsRegistry.incrementCounter(MetricNames.RESOURCES_PATTERNS_FREED);
         }
 
         if (current < 0) {
@@ -160,7 +161,7 @@ public final class ResourceTracker {
 
         // Record matcher freed metric (Counter, not Gauge)
         if (metricsRegistry != null) {
-            metricsRegistry.incrementCounter("resources.matchers.freed.total.count");
+            metricsRegistry.incrementCounter(MetricNames.RESOURCES_MATCHERS_FREED);
         }
 
         if (current < 0) {

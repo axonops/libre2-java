@@ -48,8 +48,8 @@ Our library bundles three components into a single self-contained shared library
 
 ### 3. Our JNI Wrapper (re2_jni.cpp)
 - **Purpose:** Provides JNI bindings for direct Java native method calls
-- **Functions:** 9 JNI functions (compile, freePattern, fullMatch, etc.)
-- **Size:** ~200 lines of C++ wrapping RE2's C++ API
+- **Functions:** 22 JNI functions (compile, fullMatch, extractGroups, replaceAll, etc.)
+- **Size:** ~700 lines of C++ wrapping RE2's C++ API
 - **Performance:** JNI has ~2-3x lower call overhead than JNA
 
 **Final output:**
@@ -275,7 +275,7 @@ Repeat for Abseil. Uses `--depth 50` for faster clones.
 ```
 native/
 ├── wrapper/
-│   └── re2_jni.cpp               # JNI wrapper (9 JNI functions)
+│   └── re2_jni.cpp               # JNI wrapper (22 JNI functions)
 ├── jni/
 │   └── com_axonops_libre2_jni_RE2NativeJNI.h  # Generated JNI header
 ├── scripts/
@@ -329,16 +329,35 @@ Generated during build (not committed):
 
 ## Exported JNI Functions
 
-The wrapper exposes these 9 JNI functions:
+The wrapper exposes these 22 JNI functions:
 
 ```c
 // Pattern compilation and lifecycle
 jlong   Java_com_axonops_libre2_jni_RE2NativeJNI_compile(JNIEnv*, jclass, jstring, jboolean);
 void    Java_com_axonops_libre2_jni_RE2NativeJNI_freePattern(JNIEnv*, jclass, jlong);
 
-// Matching operations
+// Matching operations (single)
 jboolean Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatch(JNIEnv*, jclass, jlong, jstring);
 jboolean Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatch(JNIEnv*, jclass, jlong, jstring);
+
+// Matching operations (bulk)
+jbooleanArray Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatchBulk(JNIEnv*, jclass, jlong, jobjectArray);
+jbooleanArray Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatchBulk(JNIEnv*, jclass, jlong, jobjectArray);
+
+// Capture group operations
+jobjectArray Java_com_axonops_libre2_jni_RE2NativeJNI_extractGroups(JNIEnv*, jclass, jlong, jstring);
+jobjectArray Java_com_axonops_libre2_jni_RE2NativeJNI_extractGroupsBulk(JNIEnv*, jclass, jlong, jobjectArray);
+jobjectArray Java_com_axonops_libre2_jni_RE2NativeJNI_findAllMatches(JNIEnv*, jclass, jlong, jstring);
+jobjectArray Java_com_axonops_libre2_jni_RE2NativeJNI_getNamedGroups(JNIEnv*, jclass, jlong);
+
+// Replace operations
+jstring      Java_com_axonops_libre2_jni_RE2NativeJNI_replaceFirst(JNIEnv*, jclass, jlong, jstring, jstring);
+jstring      Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAll(JNIEnv*, jclass, jlong, jstring, jstring);
+jobjectArray Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAllBulk(JNIEnv*, jclass, jlong, jobjectArray, jstring);
+
+// Utility operations
+jstring   Java_com_axonops_libre2_jni_RE2NativeJNI_quoteMeta(JNIEnv*, jclass, jstring);
+jintArray Java_com_axonops_libre2_jni_RE2NativeJNI_programFanout(JNIEnv*, jclass, jlong);
 
 // Pattern info and error handling
 jstring Java_com_axonops_libre2_jni_RE2NativeJNI_getError(JNIEnv*, jclass);

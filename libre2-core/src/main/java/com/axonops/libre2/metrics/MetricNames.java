@@ -1,47 +1,284 @@
 /*
  * Copyright 2025 AxonOps
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package com.axonops.libre2.metrics;
 
+/**
+ * Metric name constants for RE2 library instrumentation.
+ *
+ * <p>Provides 25 metrics across 6 categories for comprehensive observability:
+ * <ul>
+ *   <li>Pattern Compilation (5 metrics) - compilation performance and cache efficiency</li>
+ *   <li>Cache State (3 metrics) - current cache size and memory usage</li>
+ *   <li>Cache Evictions (3 metrics) - eviction types and frequencies</li>
+ *   <li>Deferred Cleanup (4 metrics) - patterns awaiting cleanup (in use by matchers)</li>
+ *   <li>Resource Management (4 metrics) - active patterns/matchers and cleanup tracking</li>
+ *   <li>Performance (3 metrics) - matching operation latencies</li>
+ *   <li>Errors (3 metrics) - compilation failures and resource exhaustion</li>
+ * </ul>
+ *
+ * <p><b>Metric Types:</b>
+ * <ul>
+ *   <li><b>Counter</b> - Monotonically increasing count (suffix: .total.count)</li>
+ *   <li><b>Timer</b> - Latency histogram with percentiles (suffix: .latency)</li>
+ *   <li><b>Gauge</b> - Current or peak value (suffix: .current.* or .peak.*)</li>
+ * </ul>
+ *
+ * <p><b>Usage with Dropwizard Metrics:</b>
+ * <pre>{@code
+ * MetricRegistry registry = new MetricRegistry();
+ * RE2Config config = RE2MetricsConfig.withMetrics(registry, "myapp.re2", true);
+ * Pattern.setGlobalCache(new PatternCache(config));
+ *
+ * // Metrics accessible via JMX or programmatically:
+ * registry.counter(MetricRegistry.name("myapp.re2", MetricNames.PATTERNS_COMPILED));
+ * }</pre>
+ *
+ * @since 1.0.0
+ */
 public final class MetricNames {
     private MetricNames() {}
 
-    // Pattern Compilation (5)
+    // ========================================
+    // Pattern Compilation Metrics (5)
+    // ========================================
+
+    /**
+     * Total patterns compiled (cache misses).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> Each time a pattern is compiled via native JNI
+     * <p><b>Interpretation:</b> High values indicate poor cache hit rate or many unique patterns
+     */
     public static final String PATTERNS_COMPILED = "patterns.compiled.total.count";
+
+    /**
+     * Total cache hits (pattern found in cache).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When Pattern.compile() finds pattern already cached
+     * <p><b>Interpretation:</b> High hit rate (hits / (hits + misses)) indicates effective caching
+     */
     public static final String PATTERNS_CACHE_HITS = "patterns.cache.hits.total.count";
+
+    /**
+     * Total cache misses (pattern not in cache, compilation required).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When Pattern.compile() must compile new pattern
+     * <p><b>Interpretation:</b> Equal to PATTERNS_COMPILED; compare to hits for hit rate
+     */
     public static final String PATTERNS_CACHE_MISSES = "patterns.cache.misses.total.count";
+
+    /**
+     * Pattern compilation latency histogram.
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each successful pattern compilation (native JNI call)
+     * <p><b>Provides:</b> min, max, mean, p50, p75, p95, p98, p99, p99.9, rates (1m, 5m, 15m)
+     * <p><b>Interpretation:</b> High latencies indicate complex regex patterns or platform issues
+     */
     public static final String PATTERNS_COMPILATION_LATENCY = "patterns.compilation.latency";
+
+    /**
+     * Patterns recompiled after cache validation detected corruption.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When cached pattern fails validation and is recompiled
+     * <p><b>Interpretation:</b> Should be zero; non-zero indicates serious native memory corruption
+     */
     public static final String PATTERNS_INVALID_RECOMPILED = "patterns.invalid.recompiled.total.count";
 
-    // Cache State (3)
+    // ========================================
+    // Cache State Metrics (3)
+    // ========================================
+
+    /**
+     * Current number of patterns in cache.
+     * <p><b>Type:</b> Gauge (count)
+     * <p><b>Updated:</b> On cache insertions and evictions
+     * <p><b>Interpretation:</b> Should stay below configured maxCacheSize; sudden drops indicate evictions
+     */
     public static final String CACHE_PATTERNS_COUNT = "cache.patterns.current.count";
+
+    /**
+     * Current native memory used by cached patterns.
+     * <p><b>Type:</b> Gauge (bytes)
+     * <p><b>Updated:</b> On cache insertions and evictions
+     * <p><b>Interpretation:</b> Off-heap memory footprint; ~170-250 bytes per pattern typical
+     */
     public static final String CACHE_NATIVE_MEMORY = "cache.native_memory.current.bytes";
+
+    /**
+     * Peak native memory used by cached patterns (high water mark).
+     * <p><b>Type:</b> Gauge (bytes)
+     * <p><b>Updated:</b> When current memory exceeds previous peak
+     * <p><b>Interpretation:</b> Maximum memory pressure; helps size cache limits
+     */
     public static final String CACHE_NATIVE_MEMORY_PEAK = "cache.native_memory.peak.bytes";
 
-    // Cache Evictions (3)
+    // ========================================
+    // Cache Eviction Metrics (3)
+    // ========================================
+
+    /**
+     * Patterns evicted due to LRU cache overflow.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When cache exceeds maxCacheSize and LRU pattern evicted
+     * <p><b>Interpretation:</b> High values indicate cache too small or working set exceeds limit
+     */
     public static final String CACHE_EVICTIONS_LRU = "cache.evictions.lru.total.count";
+
+    /**
+     * Patterns evicted due to idle timeout.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When background task evicts pattern unused for idleTimeoutSeconds
+     * <p><b>Interpretation:</b> High values indicate many patterns accessed once then abandoned
+     */
     public static final String CACHE_EVICTIONS_IDLE = "cache.evictions.idle.total.count";
+
+    /**
+     * Patterns freed from deferred cleanup queue (were in use when eviction attempted).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When deferred cleanup task successfully frees pattern after matchers closed
+     * <p><b>Interpretation:</b> Normal during concurrent workloads; see deferred metrics for backlog
+     */
     public static final String CACHE_EVICTIONS_DEFERRED = "cache.evictions.deferred.total.count";
 
-    // Deferred Cleanup (4)
+    // ========================================
+    // Deferred Cleanup Metrics (4)
+    // ========================================
+
+    /**
+     * Current number of patterns awaiting deferred cleanup.
+     * <p><b>Type:</b> Gauge (count)
+     * <p><b>Updated:</b> When patterns moved to deferred queue or freed
+     * <p><b>Interpretation:</b> Should be low; high values indicate matchers not closed promptly
+     */
     public static final String CACHE_DEFERRED_PATTERNS_COUNT = "cache.deferred.patterns.current.count";
+
+    /**
+     * Peak number of patterns in deferred cleanup queue.
+     * <p><b>Type:</b> Gauge (count)
+     * <p><b>Updated:</b> When deferred count exceeds previous peak
+     * <p><b>Interpretation:</b> High peaks indicate bursts of concurrent matcher usage
+     */
     public static final String CACHE_DEFERRED_PATTERNS_PEAK = "cache.deferred.patterns.peak.count";
+
+    /**
+     * Current native memory held by deferred cleanup patterns.
+     * <p><b>Type:</b> Gauge (bytes)
+     * <p><b>Updated:</b> When patterns added to or freed from deferred queue
+     * <p><b>Interpretation:</b> Memory not yet reclaimed; large values indicate matcher leak risk
+     */
     public static final String CACHE_DEFERRED_MEMORY = "cache.deferred.native_memory.current.bytes";
+
+    /**
+     * Peak native memory held by deferred cleanup patterns.
+     * <p><b>Type:</b> Gauge (bytes)
+     * <p><b>Updated:</b> When deferred memory exceeds previous peak
+     * <p><b>Interpretation:</b> Maximum memory pressure from in-use patterns
+     */
     public static final String CACHE_DEFERRED_MEMORY_PEAK = "cache.deferred.native_memory.peak.bytes";
 
-    // Resource Management (4)
+    // ========================================
+    // Resource Management Metrics (4)
+    // ========================================
+
+    /**
+     * Current number of active (compiled) patterns across all caches.
+     * <p><b>Type:</b> Gauge (count)
+     * <p><b>Updated:</b> On pattern compilation and cleanup
+     * <p><b>Interpretation:</b> Should stay below maxSimultaneousCompiledPatterns limit
+     */
     public static final String RESOURCES_PATTERNS_ACTIVE = "resources.patterns.active.current.count";
+
+    /**
+     * Current number of active matchers.
+     * <p><b>Type:</b> Gauge (count)
+     * <p><b>Updated:</b> On matcher creation and close
+     * <p><b>Interpretation:</b> High values indicate many concurrent matching operations
+     */
     public static final String RESOURCES_MATCHERS_ACTIVE = "resources.matchers.active.current.count";
+
+    /**
+     * Total patterns freed (native memory deallocated).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When pattern's native handle freed via freePattern()
+     * <p><b>Interpretation:</b> Should approximately equal PATTERNS_COMPILED over time
+     */
     public static final String RESOURCES_PATTERNS_FREED = "resources.patterns.freed.total.count";
+
+    /**
+     * Total matchers freed.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When Matcher.close() completes
+     * <p><b>Interpretation:</b> Tracks matcher lifecycle; useful for leak detection
+     */
     public static final String RESOURCES_MATCHERS_FREED = "resources.matchers.freed.total.count";
 
-    // Performance (3)
+    // ========================================
+    // Performance Metrics (3)
+    // ========================================
+
+    /**
+     * Full match operation latency histogram (Matcher.matches()).
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each matches() call (exact string match)
+     * <p><b>Provides:</b> min, max, mean, p50, p75, p95, p98, p99, p99.9, rates
+     * <p><b>Interpretation:</b> RE2 guarantees linear time; high latencies indicate long input strings
+     */
     public static final String MATCHING_FULL_MATCH_LATENCY = "matching.full_match.latency";
+
+    /**
+     * Partial match operation latency histogram (Matcher.find()).
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each find() call (substring match)
+     * <p><b>Provides:</b> min, max, mean, p50, p75, p95, p98, p99, p99.9, rates
+     * <p><b>Interpretation:</b> Typically faster than full match; measures search performance
+     */
     public static final String MATCHING_PARTIAL_MATCH_LATENCY = "matching.partial_match.latency";
+
+    /**
+     * Total matching operations (matches() + find()).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For each matches() or find() call
+     * <p><b>Interpretation:</b> Total workload; compare to compilation count for reuse ratio
+     */
     public static final String MATCHING_OPERATIONS = "matching.operations.total.count";
 
-    // Errors (3)
+    // ========================================
+    // Error Metrics (3)
+    // ========================================
+
+    /**
+     * Pattern compilation failures (invalid regex syntax).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When RE2 rejects pattern as invalid
+     * <p><b>Interpretation:</b> User error (bad regex); check logs for pattern details
+     */
     public static final String ERRORS_COMPILATION_FAILED = "errors.compilation.failed.total.count";
+
+    /**
+     * Native library load failures.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When RE2 native library fails to load at startup
+     * <p><b>Interpretation:</b> Critical error; check platform detection and library bundle
+     */
     public static final String ERRORS_NATIVE_LIBRARY = "errors.native_library.total.count";
+
+    /**
+     * Resource limit exceeded (too many patterns or matchers).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> When maxSimultaneousCompiledPatterns exceeded
+     * <p><b>Interpretation:</b> Safety limit hit; increase limit or reduce concurrency
+     */
     public static final String ERRORS_RESOURCE_EXHAUSTED = "errors.resource.exhausted.total.count";
 }

@@ -81,10 +81,10 @@ jobs:
           echo "Exported JNI functions:"
           nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 9 JNI functions exist
+          # Verify all 20 JNI functions exist
           FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
-          if [ "$FUNC_COUNT" -ne 9 ]; then
-            echo "ERROR: Expected 9 exported JNI functions, found $FUNC_COUNT"
+          if [ "$FUNC_COUNT" -ne 20 ]; then
+            echo "ERROR: Expected 20 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -148,10 +148,10 @@ jobs:
           echo "Exported JNI functions:"
           nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 9 JNI functions exist
+          # Verify all 20 JNI functions exist
           FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
-          if [ "$FUNC_COUNT" -ne 9 ]; then
-            echo "ERROR: Expected 9 exported JNI functions, found $FUNC_COUNT"
+          if [ "$FUNC_COUNT" -ne 20 ]; then
+            echo "ERROR: Expected 20 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -226,10 +226,10 @@ jobs:
           echo "Exported JNI functions:"
           docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 9 JNI functions exist
+          # Verify all 20 JNI functions exist
           FUNC_COUNT=$(docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
-          if [ "$FUNC_COUNT" -ne 9 ]; then
-            echo "ERROR: Expected 9 exported JNI functions, found $FUNC_COUNT"
+          if [ "$FUNC_COUNT" -ne 20 ]; then
+            echo "ERROR: Expected 20 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -306,10 +306,10 @@ jobs:
           echo "Exported JNI functions:"
           docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 9 JNI functions exist
+          # Verify all 20 JNI functions exist
           FUNC_COUNT=$(docker run --rm --platform linux/arm64 -v "$(pwd):/output" re2-builder-arm64 nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
-          if [ "$FUNC_COUNT" -ne 9 ]; then
-            echo "ERROR: Expected 9 exported JNI functions, found $FUNC_COUNT"
+          if [ "$FUNC_COUNT" -ne 20 ]; then
+            echo "ERROR: Expected 20 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 

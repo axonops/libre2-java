@@ -112,7 +112,7 @@ public final class MetricNames {
      * Current native memory used by cached patterns.
      * <p><b>Type:</b> Gauge (bytes)
      * <p><b>Updated:</b> On cache insertions and evictions
-     * <p><b>Interpretation:</b> Off-heap memory footprint; ~170-250 bytes per pattern typical
+     * <p><b>Interpretation:</b> Exact off-heap memory usage (reported by RE2 native library)
      */
     public static final String CACHE_NATIVE_MEMORY = "cache.native_memory.current.bytes";
 
@@ -120,7 +120,7 @@ public final class MetricNames {
      * Peak native memory used by cached patterns (high water mark).
      * <p><b>Type:</b> Gauge (bytes)
      * <p><b>Updated:</b> When current memory exceeds previous peak
-     * <p><b>Interpretation:</b> Maximum memory pressure; helps size cache limits
+     * <p><b>Interpretation:</b> Maximum exact memory usage; helps size cache limits
      */
     public static final String CACHE_NATIVE_MEMORY_PEAK = "cache.native_memory.peak.bytes";
 
@@ -176,7 +176,7 @@ public final class MetricNames {
      * Current native memory held by deferred cleanup patterns.
      * <p><b>Type:</b> Gauge (bytes)
      * <p><b>Updated:</b> When patterns added to or freed from deferred queue
-     * <p><b>Interpretation:</b> Memory not yet reclaimed; large values indicate matcher leak risk
+     * <p><b>Interpretation:</b> Exact memory not yet reclaimed; large values indicate matcher leak risk
      */
     public static final String CACHE_DEFERRED_MEMORY = "cache.deferred.native_memory.current.bytes";
 
@@ -184,7 +184,7 @@ public final class MetricNames {
      * Peak native memory held by deferred cleanup patterns.
      * <p><b>Type:</b> Gauge (bytes)
      * <p><b>Updated:</b> When deferred memory exceeds previous peak
-     * <p><b>Interpretation:</b> Maximum memory pressure from in-use patterns
+     * <p><b>Interpretation:</b> Maximum exact memory from in-use patterns
      */
     public static final String CACHE_DEFERRED_MEMORY_PEAK = "cache.deferred.native_memory.peak.bytes";
 

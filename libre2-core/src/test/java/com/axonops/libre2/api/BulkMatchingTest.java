@@ -527,4 +527,241 @@ class BulkMatchingTest {
         // Should preserve order
         assertEquals(List.of("item1", "item2", "item3"), filtered);
     }
+
+    // ========== Additional Scenarios ==========
+
+    @Test
+    void testMatchAll_WithNullElements() {
+        Pattern pattern = Pattern.compile("test.*");
+
+        // Null elements in array should not crash
+        String[] arrayWithNulls = {"test1", null, "test2", null, "other"};
+        boolean[] results = pattern.matchAll(arrayWithNulls);
+
+        assertEquals(5, results.length);
+        // Nulls should be treated as non-matches (handled by JNI)
+        assertTrue(results[0]);   // "test1" matches
+        assertFalse(results[1]);  // null doesn't match
+        assertTrue(results[2]);   // "test2" matches
+        assertFalse(results[3]);  // null doesn't match
+        assertFalse(results[4]);  // "other" doesn't match
+    }
+
+    @Test
+    void testFilter_WithDuplicates() {
+        Pattern pattern = Pattern.compile("keep");
+
+        // List with duplicates
+        List<String> withDuplicates = List.of("keep", "drop", "keep", "keep", "drop");
+        List<String> filtered = pattern.filter(withDuplicates);
+
+        // All "keep" entries preserved, including duplicates
+        assertEquals(3, filtered.size());
+        assertEquals(List.of("keep", "keep", "keep"), filtered);
+    }
+
+    @Test
+    void testRetainMatches_WithDuplicates() {
+        Pattern pattern = Pattern.compile("\\d+");
+
+        // ArrayList with duplicates: 3x"123", 1x"456" = 4 numeric, 2 non-numeric
+        List<String> list = new ArrayList<>(List.of("123", "abc", "123", "xyz", "456", "123"));
+        int removed = pattern.retainMatches(list);
+
+        assertEquals(2, removed);  // "abc" and "xyz" removed
+        assertEquals(4, list.size());  // 3x"123" + 1x"456" remain
+        // All numeric strings retained (including duplicates)
+        assertEquals(3, list.stream().filter(s -> s.equals("123")).count());  // 3x "123"
+        assertEquals(1, list.stream().filter(s -> s.equals("456")).count());  // 1x "456"
+        assertTrue(list.stream().allMatch(s -> s.matches("\\d+")));  // All are numeric
+    }
+
+    @Test
+    void testMapFiltering_TreeMap() {
+        Pattern pattern = Pattern.compile("key[1-2]");
+
+        // TreeMap maintains sorted order
+        Map<String, Integer> treeMap = new TreeMap<>(Map.of(
+            "key3", 3,
+            "key1", 1,
+            "other", 5,
+            "key2", 2
+        ));
+
+        Map<String, Integer> filtered = pattern.filterByKey(treeMap);
+
+        assertEquals(2, filtered.size());
+        assertEquals(1, filtered.get("key1"));
+        assertEquals(2, filtered.get("key2"));
+        assertNull(filtered.get("key3"));
+        assertNull(filtered.get("other"));
+    }
+
+    @Test
+    void testMapFiltering_LinkedHashMap() {
+        Pattern pattern = Pattern.compile("user\\d+");
+
+        // LinkedHashMap preserves insertion order
+        Map<String, String> linkedMap = new LinkedHashMap<>();
+        linkedMap.put("user2", "second");
+        linkedMap.put("admin", "first");
+        linkedMap.put("user1", "third");
+
+        Map<String, String> filtered = pattern.filterByKey(linkedMap);
+
+        assertEquals(2, filtered.size());
+        // LinkedHashMap order should be preserved
+        List<String> keys = new ArrayList<>(filtered.keySet());
+        assertTrue(keys.contains("user2"));
+        assertTrue(keys.contains("user1"));
+    }
+
+    @Test
+    void testMapFiltering_ConcurrentHashMap() {
+        Pattern pattern = Pattern.compile("data_.*");
+
+        // ConcurrentHashMap (thread-safe map)
+        Map<String, Integer> concurrentMap = new java.util.concurrent.ConcurrentHashMap<>();
+        concurrentMap.put("data_1", 100);
+        concurrentMap.put("meta_1", 200);
+        concurrentMap.put("data_2", 300);
+
+        Map<String, Integer> filtered = pattern.filterByKey(concurrentMap);
+
+        assertEquals(2, filtered.size());
+        assertEquals(100, filtered.get("data_1"));
+        assertEquals(300, filtered.get("data_2"));
+    }
+
+    @Test
+    void testRetainMatchesByKey_TreeMap() {
+        Pattern pattern = Pattern.compile("keep.*");
+
+        // TreeMap (sorted)
+        Map<String, Integer> treeMap = new TreeMap<>(Map.of(
+            "keep1", 1,
+            "drop1", 2,
+            "keep2", 3
+        ));
+
+        int removed = pattern.retainMatchesByKey(treeMap);
+
+        assertEquals(1, removed);
+        assertEquals(2, treeMap.size());
+        assertTrue(treeMap.containsKey("keep1"));
+        assertTrue(treeMap.containsKey("keep2"));
+    }
+
+    @Test
+    void testRetainMatchesByValue_LinkedHashMap() {
+        Pattern pattern = Pattern.compile("valid");
+
+        Map<Integer, String> linkedMap = new LinkedHashMap<>();
+        linkedMap.put(1, "valid");
+        linkedMap.put(2, "invalid");
+        linkedMap.put(3, "valid");
+
+        int removed = pattern.retainMatchesByValue(linkedMap);
+
+        assertEquals(1, removed);
+        assertEquals(2, linkedMap.size());
+        assertEquals("valid", linkedMap.get(1));
+        assertEquals("valid", linkedMap.get(3));
+    }
+
+    @Test
+    void testBulk_VeryLargeCollection_10k() {
+        Pattern pattern = Pattern.compile("item\\d{4}");  // item + 4 digits
+
+        // Create 10,000 strings
+        List<String> inputs = new ArrayList<>(10_000);
+        for (int i = 0; i < 10_000; i++) {
+            inputs.add("item" + i);
+        }
+
+        // Test matchAll
+        boolean[] results = pattern.matchAll(inputs);
+        assertEquals(10_000, results.length);
+
+        // Count matches (items 0-9999, all 4 digits match from item1000 onward)
+        int matchCount = 0;
+        for (boolean match : results) {
+            if (match) matchCount++;
+        }
+        assertEquals(9000, matchCount);  // item1000 through item9999
+
+        // Test filter
+        List<String> filtered = pattern.filter(inputs);
+        assertEquals(9000, filtered.size());
+
+        // Test in-place
+        List<String> mutable = new ArrayList<>(inputs);
+        int removed = pattern.retainMatches(mutable);
+        assertEquals(1000, removed);
+        assertEquals(9000, mutable.size());
+    }
+
+    @Test
+    void testBulk_VeryLargeMap_10k() {
+        Pattern pattern = Pattern.compile("user_\\d+");
+
+        // Create 10,000 entry map
+        Map<String, Integer> largeMap = new HashMap<>();
+        for (int i = 0; i < 10_000; i++) {
+            if (i % 2 == 0) {
+                largeMap.put("user_" + i, i);
+            } else {
+                largeMap.put("admin_" + i, i);
+            }
+        }
+
+        // Test filterByKey
+        Map<String, Integer> filtered = pattern.filterByKey(largeMap);
+        assertEquals(5000, filtered.size());
+
+        // Test in-place
+        Map<String, Integer> mutable = new HashMap<>(largeMap);
+        int removed = pattern.retainMatchesByKey(mutable);
+        assertEquals(5000, removed);
+        assertEquals(5000, mutable.size());
+    }
+
+    @Test
+    void testMatchAll_EmptyStrings() {
+        Pattern pattern = Pattern.compile(".*");  // Matches everything including empty
+
+        List<String> inputs = List.of("", "test", "", "other", "");
+        boolean[] results = pattern.matchAll(inputs);
+
+        // ".*" should match empty strings
+        assertArrayEquals(new boolean[]{true, true, true, true, true}, results);
+    }
+
+    @Test
+    void testFilter_PreservesDuplicateOrder() {
+        Pattern pattern = Pattern.compile("keep");
+
+        // Specific order with duplicates
+        List<String> ordered = List.of("keep", "drop", "keep", "other", "keep");
+        List<String> filtered = pattern.filter(ordered);
+
+        // Order and duplicates preserved
+        assertEquals(List.of("keep", "keep", "keep"), filtered);
+    }
+
+    @Test
+    void testRemoveMatchesByKey_ConcurrentHashMap() {
+        Pattern pattern = Pattern.compile("tmp_.*");
+
+        Map<String, String> concurrentMap = new java.util.concurrent.ConcurrentHashMap<>();
+        concurrentMap.put("tmp_cache", "data1");
+        concurrentMap.put("perm_data", "data2");
+        concurrentMap.put("tmp_session", "data3");
+
+        int removed = pattern.removeMatchesByKey(concurrentMap);
+
+        assertEquals(2, removed);
+        assertEquals(1, concurrentMap.size());
+        assertTrue(concurrentMap.containsKey("perm_data"));
+    }
 }

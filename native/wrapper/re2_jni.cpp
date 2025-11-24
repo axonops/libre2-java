@@ -693,4 +693,349 @@ JNIEXPORT jintArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_programFano
     }
 }
 
+// ========== Zero-Copy Direct Memory Operations ==========
+//
+// These methods accept raw memory addresses instead of Java Strings,
+// enabling true zero-copy regex matching with Chronicle Bytes or
+// other off-heap memory systems.
+//
+// The memory at the provided address is wrapped in RE2::StringPiece
+// which is a zero-copy string view - no data is copied.
+//
+// CRITICAL: The caller MUST ensure the memory remains valid for
+// the duration of the call.
+
+/**
+ * Full match using direct memory address (zero-copy).
+ * Uses StringPiece to wrap the raw pointer without copying.
+ */
+JNIEXPORT jboolean JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatchDirect(
+    JNIEnv *env, jclass cls, jlong handle, jlong textAddress, jint textLength) {
+
+    if (handle == 0) {
+        last_error = "Pattern handle is null";
+        return JNI_FALSE;
+    }
+
+    if (textAddress == 0) {
+        last_error = "Text address is null";
+        return JNI_FALSE;
+    }
+
+    if (textLength < 0) {
+        last_error = "Text length is negative";
+        return JNI_FALSE;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+
+        // Zero-copy: wrap the raw pointer in StringPiece
+        // StringPiece does NOT copy data - it's just a pointer + length
+        const char* text = reinterpret_cast<const char*>(textAddress);
+        re2::StringPiece input(text, static_cast<size_t>(textLength));
+
+        // Use RE2::FullMatch with StringPiece - no copies involved
+        return RE2::FullMatch(input, *re) ? JNI_TRUE : JNI_FALSE;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct full match exception: ") + e.what();
+        return JNI_FALSE;
+    }
+}
+
+/**
+ * Partial match using direct memory address (zero-copy).
+ * Uses StringPiece to wrap the raw pointer without copying.
+ */
+JNIEXPORT jboolean JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatchDirect(
+    JNIEnv *env, jclass cls, jlong handle, jlong textAddress, jint textLength) {
+
+    if (handle == 0) {
+        last_error = "Pattern handle is null";
+        return JNI_FALSE;
+    }
+
+    if (textAddress == 0) {
+        last_error = "Text address is null";
+        return JNI_FALSE;
+    }
+
+    if (textLength < 0) {
+        last_error = "Text length is negative";
+        return JNI_FALSE;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+
+        // Zero-copy: wrap the raw pointer in StringPiece
+        const char* text = reinterpret_cast<const char*>(textAddress);
+        re2::StringPiece input(text, static_cast<size_t>(textLength));
+
+        // Use RE2::PartialMatch with StringPiece - no copies involved
+        return RE2::PartialMatch(input, *re) ? JNI_TRUE : JNI_FALSE;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct partial match exception: ") + e.what();
+        return JNI_FALSE;
+    }
+}
+
+/**
+ * Bulk full match using direct memory addresses (zero-copy bulk).
+ * Processes multiple memory regions in a single JNI call.
+ */
+JNIEXPORT jbooleanArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatchDirectBulk(
+    JNIEnv *env, jclass cls, jlong handle, jlongArray textAddresses, jintArray textLengths) {
+
+    if (handle == 0 || textAddresses == nullptr || textLengths == nullptr) {
+        last_error = "Null pointer";
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        jsize addressCount = env->GetArrayLength(textAddresses);
+        jsize lengthCount = env->GetArrayLength(textLengths);
+
+        if (addressCount != lengthCount) {
+            last_error = "Address and length arrays must have same size";
+            return nullptr;
+        }
+
+        // Allocate result array
+        jbooleanArray results = env->NewBooleanArray(addressCount);
+        if (results == nullptr) {
+            last_error = "Failed to allocate result array";
+            return nullptr;
+        }
+
+        // Get array elements (this does copy the arrays, but not the text data)
+        jlong* addresses = env->GetLongArrayElements(textAddresses, nullptr);
+        jint* lengths = env->GetIntArrayElements(textLengths, nullptr);
+
+        if (addresses == nullptr || lengths == nullptr) {
+            if (addresses != nullptr) env->ReleaseLongArrayElements(textAddresses, addresses, JNI_ABORT);
+            if (lengths != nullptr) env->ReleaseIntArrayElements(textLengths, lengths, JNI_ABORT);
+            last_error = "Failed to get array elements";
+            return nullptr;
+        }
+
+        // Process all inputs with zero-copy text access
+        std::vector<jboolean> matches(addressCount);
+        for (jsize i = 0; i < addressCount; i++) {
+            if (addresses[i] == 0 || lengths[i] < 0) {
+                matches[i] = JNI_FALSE;
+                continue;
+            }
+
+            // Zero-copy: wrap each address in StringPiece
+            const char* text = reinterpret_cast<const char*>(addresses[i]);
+            re2::StringPiece input(text, static_cast<size_t>(lengths[i]));
+            matches[i] = RE2::FullMatch(input, *re) ? JNI_TRUE : JNI_FALSE;
+        }
+
+        // Release arrays and write results
+        env->ReleaseLongArrayElements(textAddresses, addresses, JNI_ABORT);
+        env->ReleaseIntArrayElements(textLengths, lengths, JNI_ABORT);
+        env->SetBooleanArrayRegion(results, 0, addressCount, matches.data());
+
+        return results;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct bulk full match exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+/**
+ * Bulk partial match using direct memory addresses (zero-copy bulk).
+ * Processes multiple memory regions in a single JNI call.
+ */
+JNIEXPORT jbooleanArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatchDirectBulk(
+    JNIEnv *env, jclass cls, jlong handle, jlongArray textAddresses, jintArray textLengths) {
+
+    if (handle == 0 || textAddresses == nullptr || textLengths == nullptr) {
+        last_error = "Null pointer";
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        jsize addressCount = env->GetArrayLength(textAddresses);
+        jsize lengthCount = env->GetArrayLength(textLengths);
+
+        if (addressCount != lengthCount) {
+            last_error = "Address and length arrays must have same size";
+            return nullptr;
+        }
+
+        // Allocate result array
+        jbooleanArray results = env->NewBooleanArray(addressCount);
+        if (results == nullptr) {
+            last_error = "Failed to allocate result array";
+            return nullptr;
+        }
+
+        // Get array elements
+        jlong* addresses = env->GetLongArrayElements(textAddresses, nullptr);
+        jint* lengths = env->GetIntArrayElements(textLengths, nullptr);
+
+        if (addresses == nullptr || lengths == nullptr) {
+            if (addresses != nullptr) env->ReleaseLongArrayElements(textAddresses, addresses, JNI_ABORT);
+            if (lengths != nullptr) env->ReleaseIntArrayElements(textLengths, lengths, JNI_ABORT);
+            last_error = "Failed to get array elements";
+            return nullptr;
+        }
+
+        // Process all inputs with zero-copy text access
+        std::vector<jboolean> matches(addressCount);
+        for (jsize i = 0; i < addressCount; i++) {
+            if (addresses[i] == 0 || lengths[i] < 0) {
+                matches[i] = JNI_FALSE;
+                continue;
+            }
+
+            // Zero-copy: wrap each address in StringPiece
+            const char* text = reinterpret_cast<const char*>(addresses[i]);
+            re2::StringPiece input(text, static_cast<size_t>(lengths[i]));
+            matches[i] = RE2::PartialMatch(input, *re) ? JNI_TRUE : JNI_FALSE;
+        }
+
+        // Release arrays and write results
+        env->ReleaseLongArrayElements(textAddresses, addresses, JNI_ABORT);
+        env->ReleaseIntArrayElements(textLengths, lengths, JNI_ABORT);
+        env->SetBooleanArrayRegion(results, 0, addressCount, matches.data());
+
+        return results;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct bulk partial match exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+/**
+ * Extract capture groups using direct memory address (zero-copy input).
+ * Output strings are necessarily new Java strings.
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractGroupsDirect(
+    JNIEnv *env, jclass cls, jlong handle, jlong textAddress, jint textLength) {
+
+    if (handle == 0 || textAddress == 0) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+
+        // Zero-copy: wrap the raw pointer in StringPiece
+        const char* text = reinterpret_cast<const char*>(textAddress);
+        re2::StringPiece input(text, static_cast<size_t>(textLength));
+
+        int numGroups = re->NumberOfCapturingGroups();
+        std::vector<re2::StringPiece> groups(numGroups + 1);  // +1 for full match
+
+        // Match and extract groups
+        if (!re->Match(input, 0, input.size(), RE2::UNANCHORED, groups.data(), numGroups + 1)) {
+            return nullptr;  // No match
+        }
+
+        // Create Java string array
+        jclass stringClass = env->FindClass("java/lang/String");
+        jobjectArray result = env->NewObjectArray(numGroups + 1, stringClass, nullptr);
+        if (result == nullptr) {
+            return nullptr;
+        }
+
+        // Fill array with groups (output must be Java strings)
+        for (int i = 0; i <= numGroups; i++) {
+            if (groups[i].data() != nullptr) {
+                jstring jstr = env->NewStringUTF(std::string(groups[i].data(), groups[i].size()).c_str());
+                env->SetObjectArrayElement(result, i, jstr);
+                env->DeleteLocalRef(jstr);
+            }
+        }
+
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct extract groups exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+/**
+ * Find all matches using direct memory address (zero-copy input).
+ * Output strings are necessarily new Java strings.
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllMatchesDirect(
+    JNIEnv *env, jclass cls, jlong handle, jlong textAddress, jint textLength) {
+
+    if (handle == 0 || textAddress == 0) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+
+        // Zero-copy: wrap the raw pointer in StringPiece
+        const char* text = reinterpret_cast<const char*>(textAddress);
+        re2::StringPiece input(text, static_cast<size_t>(textLength));
+
+        int numGroups = re->NumberOfCapturingGroups();
+        std::vector<std::vector<std::string>> allMatches;
+
+        // Find all non-overlapping matches
+        std::vector<re2::StringPiece> groups(numGroups + 1);
+
+        while (re->Match(input, 0, input.size(), RE2::UNANCHORED, groups.data(), numGroups + 1)) {
+            std::vector<std::string> matchGroups;
+            for (int i = 0; i <= numGroups; i++) {
+                if (groups[i].data() != nullptr) {
+                    matchGroups.push_back(std::string(groups[i].data(), groups[i].size()));
+                } else {
+                    matchGroups.push_back("");
+                }
+            }
+            allMatches.push_back(matchGroups);
+
+            // Advance past this match
+            if (groups[0].size() == 0) {
+                break;  // Avoid infinite loop on zero-length match
+            }
+            input.remove_prefix(groups[0].data() - input.data() + groups[0].size());
+        }
+
+        if (allMatches.empty()) {
+            return nullptr;
+        }
+
+        // Create Java array of arrays
+        jclass stringArrayClass = env->FindClass("[Ljava/lang/String;");
+        jobjectArray result = env->NewObjectArray(allMatches.size(), stringArrayClass, nullptr);
+
+        for (size_t i = 0; i < allMatches.size(); i++) {
+            jclass stringClass = env->FindClass("java/lang/String");
+            jobjectArray groupArray = env->NewObjectArray(allMatches[i].size(), stringClass, nullptr);
+
+            for (size_t j = 0; j < allMatches[i].size(); j++) {
+                jstring jstr = env->NewStringUTF(allMatches[i][j].c_str());
+                env->SetObjectArrayElement(groupArray, j, jstr);
+                env->DeleteLocalRef(jstr);
+            }
+
+            env->SetObjectArrayElement(result, i, groupArray);
+            env->DeleteLocalRef(groupArray);
+        }
+
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct find all matches exception: ") + e.what();
+        return nullptr;
+    }
+}
+
 } // extern "C"

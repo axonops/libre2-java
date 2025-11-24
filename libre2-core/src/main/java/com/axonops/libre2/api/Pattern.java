@@ -32,6 +32,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+// DirectBuffer is a public interface - no reflection needed
+import sun.nio.ch.DirectBuffer;
+
 /**
  * A compiled regular expression pattern.
  *
@@ -855,16 +858,10 @@ public final class Pattern implements AutoCloseable {
 
         if (buffer.isDirect()) {
             // Zero-copy path for DirectByteBuffer
-            Long address = getDirectBufferAddress(buffer);
-            if (address != null) {
-                long finalAddress = address + buffer.position();
-                int length = buffer.remaining();
-                return matches(finalAddress, length);
-            } else {
-                // Couldn't extract address - fall back to String
-                logger.debug("RE2: Could not extract address from DirectByteBuffer, using String fallback");
-                return matchesFromByteBuffer(buffer);
-            }
+            // DirectBuffer is a public interface - simple cast works
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return matches(address, length);
         } else {
             // Heap-backed ByteBuffer - convert to String
             return matchesFromByteBuffer(buffer);
@@ -890,15 +887,9 @@ public final class Pattern implements AutoCloseable {
 
         if (buffer.isDirect()) {
             // Zero-copy path
-            Long address = getDirectBufferAddress(buffer);
-            if (address != null) {
-                long finalAddress = address + buffer.position();
-                int length = buffer.remaining();
-                return find(finalAddress, length);
-            } else {
-                logger.debug("RE2: Could not extract address from DirectByteBuffer, using String fallback");
-                return findFromByteBuffer(buffer);
-            }
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return find(address, length);
         } else {
             // Heap-backed - convert to String
             return findFromByteBuffer(buffer);
@@ -922,15 +913,9 @@ public final class Pattern implements AutoCloseable {
 
         if (buffer.isDirect()) {
             // Zero-copy path
-            Long address = getDirectBufferAddress(buffer);
-            if (address != null) {
-                long finalAddress = address + buffer.position();
-                int length = buffer.remaining();
-                return extractGroups(finalAddress, length);
-            } else {
-                logger.debug("RE2: Could not extract address from DirectByteBuffer, using String fallback");
-                return extractGroupsFromByteBuffer(buffer);
-            }
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return extractGroups(address, length);
         } else {
             // Heap-backed
             return extractGroupsFromByteBuffer(buffer);
@@ -954,36 +939,12 @@ public final class Pattern implements AutoCloseable {
 
         if (buffer.isDirect()) {
             // Zero-copy path
-            Long address = getDirectBufferAddress(buffer);
-            if (address != null) {
-                long finalAddress = address + buffer.position();
-                int length = buffer.remaining();
-                return findAllMatches(finalAddress, length);
-            } else {
-                logger.debug("RE2: Could not extract address from DirectByteBuffer, using String fallback");
-                return findAllMatchesFromByteBuffer(buffer);
-            }
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return findAllMatches(address, length);
         } else {
             // Heap-backed
             return findAllMatchesFromByteBuffer(buffer);
-        }
-    }
-
-    /**
-     * Helper: Extract native address from DirectByteBuffer using reflection.
-     * Returns null if extraction fails (will fall back to String API).
-     */
-    private static Long getDirectBufferAddress(ByteBuffer buffer) {
-        try {
-            // Use reflection to access sun.nio.ch.DirectBuffer.address()
-            // This avoids compile-time dependency on internal API
-            java.lang.reflect.Method addressMethod = buffer.getClass().getMethod("address");
-            addressMethod.setAccessible(true);
-            return (Long) addressMethod.invoke(buffer);
-        } catch (Exception e) {
-            // Reflection failed - not a problem, we'll use String fallback
-            logger.trace("RE2: Failed to extract DirectByteBuffer address via reflection", e);
-            return null;
         }
     }
 

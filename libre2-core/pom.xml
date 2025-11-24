@@ -18,6 +18,11 @@
 
     <!-- Version inherited from parent: 0.9.1 -->
 
+    <properties>
+        <!-- Override parent to allow add-exports (release flag incompatible) -->
+        <maven.compiler.release></maven.compiler.release>
+    </properties>
+
     <dependencies>
         <!-- SLF4J API for logging - users must provide -->
         <dependency>
@@ -66,13 +71,23 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration combine.self="override">
+                    <!-- Use source/target instead of release to enable add-exports -->
+                    <source>17</source>
+                    <target>17</target>
+                    <compilerArgs>
+                        <!-- Export sun.nio.ch for DirectBuffer interface access -->
+                        <arg>--add-exports</arg>
+                        <arg>java.base/sun.nio.ch=ALL-UNNAMED</arg>
+                    </compilerArgs>
+                </configuration>
             </plugin>
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!-- Chronicle Bytes requires access to JDK internals in Java 17+ -->
+                    <!-- JVM arguments for Chronicle Bytes and DirectBuffer access -->
                     <argLine>
                         --add-exports=java.base/jdk.internal.ref=ALL-UNNAMED
                         --add-exports=java.base/sun.nio.ch=ALL-UNNAMED

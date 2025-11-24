@@ -223,53 +223,72 @@ _None - Phase 1 complete_
 
 **Goal:** Enable structured data extraction from matches
 **Branch:** `feature/capture-groups`
-**Status:** NOT STARTED
-**Started:** -
+**Status:** IN PROGRESS (Single-string APIs complete)
+**Started:** 2025-11-24
 **Completed:** -
 
-**Dependencies:** Phase 0 complete
+**Dependencies:** Phase 0 complete ✅
 
 ### Checklist
 
 #### MatchResult Class
-- [ ] Create MatchResult class
-- [ ] `boolean matched()`
-- [ ] `String group()` - full match (group 0)
-- [ ] `String group(int index)` - indexed groups
-- [ ] `String group(String name)` - named groups
-- [ ] `int groupCount()`
-- [ ] `int start()` - match start position
-- [ ] `int end()` - match end position
-- [ ] `String input()` - original input
+- [x] Create MatchResult class ✅
+- [x] `boolean matched()` ✅
+- [x] `String group()` - full match (group 0) ✅
+- [x] `String group(int index)` - indexed groups ✅
+- [x] `String group(String name)` - named groups ✅
+- [x] `int groupCount()` ✅
+- [x] `String input()` - original input ✅
+- [x] `String[] groups()` - all groups array ✅
+- [x] `Map<String, Integer> namedGroups()` - named group map ✅
+- [N/A] `int start()` - match start position (RE2 doesn't provide offsets easily)
+- [N/A] `int end()` - match end position (RE2 doesn't provide offsets easily)
 
 #### Single-String APIs
-- [ ] `MatchResult match(String input)`
-- [ ] `MatchResult find(String input)`
-- [ ] `List<MatchResult> findAll(String input)`
+- [x] `MatchResult match(String input)` ✅
+- [x] `MatchResult find(String input)` ✅
+- [x] `List<MatchResult> findAll(String input)` ✅
 
 #### Batch APIs
-- [ ] `MatchResult[] matchWithGroups(Collection<String> inputs)`
-- [ ] `MatchResult[] findInEach(Collection<String> inputs)`
-- [ ] `Map<String, List<MatchResult>> findAllInEach(Collection<String> inputs)`
+- [ ] `MatchResult[] matchWithGroups(Collection<String> inputs)` (DEFERRED - evaluate if needed)
+- [ ] `MatchResult[] findInEach(Collection<String> inputs)` (DEFERRED - evaluate if needed)
+- [ ] `Map<String, List<MatchResult>> findAllInEach(Collection<String> inputs)` (DEFERRED - evaluate if needed)
 
 #### Testing
-- [ ] Unit tests: MatchResult class
-- [ ] Unit tests: Indexed group extraction
-- [ ] Unit tests: Named group extraction
-- [ ] Unit tests: findAll multiple matches
-- [ ] Unit tests: Batch capture group extraction
-- [ ] Unit tests: Edge cases (no groups, invalid indices, etc.)
+- [x] Unit tests: MatchResult class ✅
+- [x] Unit tests: Indexed group extraction ✅
+- [x] Unit tests: Named group extraction ✅
+- [x] Unit tests: findAll multiple matches ✅
+- [x] Unit tests: Edge cases (no groups, invalid indices, etc.) ✅
+- [x] Real-world scenarios (email, phone, URLs, log parsing) ✅
 - [ ] Integration test: Combining with bulk matching
+- [ ] Integration test: Combining with ByteBuffer API
 
 #### Documentation
-- [ ] Javadoc for MatchResult class
-- [ ] Javadoc for all capture group methods
-- [ ] Usage examples in Pattern.java
+- [x] Javadoc for MatchResult class ✅
+- [x] Javadoc for all capture group methods ✅
+- [x] Usage examples in Pattern.java ✅
 - [ ] Update QUICKSTART.md with capture group section
 
 ### Work Log
 
-_No work logged yet_
+**2025-11-24 Session 1:**
+- Created MatchResult class (immutable, thread-safe, 220 lines)
+- Added 3 single-string capture methods to Pattern.java:
+  - `match(String)` - full match with groups
+  - `find(String)` - first match with groups
+  - `findAll(String)` - all matches with groups
+- Helper method: `getNamedGroupsMap()` for lazy-loading named groups
+- Fix: `match()` validates full match (group[0] must equal input)
+- Created CaptureGroupsTest.java - 35 tests
+- All tests passing ✅
+
+**Implementation Details:**
+- MatchResult is immutable final class
+- Uses native methods from Phase 0: extractGroups, findAllMatches, getNamedGroups
+- Named groups parsed from flattened array [name, index, name, index, ...]
+- Full match validation to distinguish match() from find()
+- Defensive copies for groups() array
 
 ### Blockers
 
@@ -277,7 +296,10 @@ _None_
 
 ### Notes
 
-_None_
+**Batch APIs Decision:**
+Deferred batch capture group APIs for now. Single-string APIs cover most use cases.
+Users can iterate and call `match()`/`find()` if needed. Will evaluate if batch
+APIs provide significant value before implementing.
 
 ---
 

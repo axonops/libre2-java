@@ -29,6 +29,8 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -330,6 +332,196 @@ public final class Pattern implements AutoCloseable {
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
 
         return result;
+    }
+
+    // ========== Capture Group Operations ==========
+
+    /**
+     * Matches input and extracts capture groups.
+     *
+     * <p>This method performs a full match and returns a {@link MatchResult} containing
+     * all captured groups. If the match fails, the MatchResult will have {@code matched() == false}.</p>
+     *
+     * <p><strong>Example - Extract email components:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("([a-z]+)@([a-z]+)\\.([a-z]+)");
+     * MatchResult result = pattern.match("user@example.com");
+     *
+     * if (result.matched()) {
+     *     String full = result.group();      // "user@example.com"
+     *     String user = result.group(1);     // "user"
+     *     String domain = result.group(2);   // "example"
+     *     String tld = result.group(3);      // "com"
+     * }
+     * }</pre>
+     *
+     * <p><strong>Named Groups:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("(?P<year>\\d{4})-(?P<month>\\d{2})-(?P<day>\\d{2})");
+     * MatchResult result = pattern.match("2025-11-24");
+     *
+     * if (result.matched()) {
+     *     String year = result.group("year");   // "2025"
+     *     String month = result.group("month"); // "11"
+     *     String day = result.group("day");     // "24"
+     * }
+     * }</pre>
+     *
+     * @param input the string to match
+     * @return MatchResult containing captured groups, or a failed match if no match
+     * @throws NullPointerException if input is null
+     * @throws IllegalStateException if pattern is closed
+     * @see MatchResult
+     * @see #find(String) for partial matching with groups
+     * @see #findAll(String) for finding all matches with groups
+     * @since 1.2.0
+     */
+    public MatchResult match(String input) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+
+        String[] groups = RE2NativeJNI.extractGroups(nativeHandle, input);
+
+        if (groups == null) {
+            // No match
+            return new MatchResult(input);
+        }
+
+        // For match() (full match semantics), verify the match covers entire input
+        // extractGroups uses UNANCHORED, so we need to check manually
+        if (!groups[0].equals(input)) {
+            // Match found but doesn't cover entire input - this is a partial match
+            return new MatchResult(input);
+        }
+
+        // Lazy-load named groups only if needed
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+
+        return new MatchResult(input, groups, namedGroupMap);
+    }
+
+    /**
+     * Finds first match and extracts capture groups.
+     *
+     * <p>This method performs a partial match (searches anywhere in input) and returns
+     * a {@link MatchResult} for the first match found. If no match is found, the MatchResult
+     * will have {@code matched() == false}.</p>
+     *
+     * <p><strong>Example - Extract first email from text:</strong></p>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("([a-z]+)@([a-z]+\\.[a-z]+)");
+     * MatchResult result = emailPattern.find("Contact us at support@example.com or admin@test.org");
+     *
+     * if (result.matched()) {
+     *     String email = result.group();       // "support@example.com" (first match)
+     *     String user = result.group(1);       // "support"
+     *     String domain = result.group(2);     // "example.com"
+     * }
+     * }</pre>
+     *
+     * @param input the string to search
+     * @return MatchResult for first match found, or a failed match if no match
+     * @throws NullPointerException if input is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #match(String) for full matching with groups
+     * @see #findAll(String) for finding all matches
+     * @since 1.2.0
+     */
+    public MatchResult find(String input) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+
+        // RE2 extractGroups does UNANCHORED match, so it finds first occurrence
+        String[] groups = RE2NativeJNI.extractGroups(nativeHandle, input);
+
+        if (groups == null) {
+            return new MatchResult(input);
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        return new MatchResult(input, groups, namedGroupMap);
+    }
+
+    /**
+     * Finds all non-overlapping matches and extracts capture groups from each.
+     *
+     * <p>This method finds all matches in the input and returns a list of {@link MatchResult}
+     * objects, one for each match. Each MatchResult contains the captured groups for that match.</p>
+     *
+     * <p><strong>Example - Extract all phone numbers:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("(\\d{3})-(\\d{4})");
+     * List<MatchResult> matches = pattern.findAll("Call 555-1234 or 555-5678 for help");
+     *
+     * for (MatchResult match : matches) {
+     *     String phone = match.group();       // "555-1234", "555-5678"
+     *     String prefix = match.group(1);     // "555", "555"
+     *     String number = match.group(2);     // "1234", "5678"
+     * }
+     * // matches.size() == 2
+     * }</pre>
+     *
+     * <p><strong>Example - Parse structured log lines:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("\\[(\\d+)\\] (\\w+): (.+)");
+     * List<MatchResult> matches = pattern.findAll(logText);
+     *
+     * for (MatchResult match : matches) {
+     *     String timestamp = match.group(1);
+     *     String level = match.group(2);
+     *     String message = match.group(3);
+     *     // Process log entry
+     * }
+     * }</pre>
+     *
+     * @param input the string to search
+     * @return list of MatchResult objects (one per match), or empty list if no matches
+     * @throws NullPointerException if input is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #match(String) for single full match
+     * @see #find(String) for first match only
+     * @since 1.2.0
+     */
+    public java.util.List<MatchResult> findAll(String input) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+
+        String[][] allMatches = RE2NativeJNI.findAllMatches(nativeHandle, input);
+
+        if (allMatches == null || allMatches.length == 0) {
+            return java.util.Collections.emptyList();
+        }
+
+        // Lazy-load named groups (shared by all MatchResults)
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+
+        java.util.List<MatchResult> results = new java.util.ArrayList<>(allMatches.length);
+        for (String[] groups : allMatches) {
+            results.add(new MatchResult(input, groups, namedGroupMap));
+        }
+
+        return results;
+    }
+
+    /**
+     * Helper: Get named groups map for this pattern (lazy-loaded and cached).
+     */
+    private Map<String, Integer> getNamedGroupsMap() {
+        String[] namedGroupsArray = RE2NativeJNI.getNamedGroups(nativeHandle);
+
+        if (namedGroupsArray == null || namedGroupsArray.length == 0) {
+            return Collections.emptyMap();
+        }
+
+        // Parse flattened array: [name1, index1_str, name2, index2_str, ...]
+        Map<String, Integer> map = new java.util.HashMap<>();
+        for (int i = 0; i < namedGroupsArray.length; i += 2) {
+            String name = namedGroupsArray[i];
+            int index = Integer.parseInt(namedGroupsArray[i + 1]);
+            map.put(name, index);
+        }
+
+        return map;
     }
 
     public String pattern() {

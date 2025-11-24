@@ -20,11 +20,20 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Tests for bulk matching operations (Collection and array variants).
  */
 class BulkMatchingTest {
+
+    /**
+     * Detects if running under QEMU emulation (set by CI workflow).
+     * Large dataset tests are skipped under QEMU as they're too slow.
+     */
+    private static boolean isQemuEmulation() {
+        return "true".equals(System.getenv("QEMU_EMULATION"));
+    }
 
     @Test
     void testMatchAll_Collection_Basic() {
@@ -671,6 +680,8 @@ class BulkMatchingTest {
 
     @Test
     void testBulk_VeryLargeCollection_10k() {
+        assumeTrue(!isQemuEmulation(), "Skipping large dataset test under QEMU emulation (too slow)");
+
         Pattern pattern = Pattern.compile("item\\d{4}");  // item + 4 digits
 
         // Create 10,000 strings
@@ -703,6 +714,8 @@ class BulkMatchingTest {
 
     @Test
     void testBulk_VeryLargeMap_10k() {
+        assumeTrue(!isQemuEmulation(), "Skipping large dataset test under QEMU emulation (too slow)");
+
         Pattern pattern = Pattern.compile("user_\\d+");
 
         // Create 10,000 entry map

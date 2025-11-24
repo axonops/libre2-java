@@ -25,15 +25,26 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Performance tests comparing bulk vs individual matching operations.
+ * These tests are skipped under QEMU emulation as performance is not representative.
  */
 class BulkMatchingPerformanceTest {
     private static final Logger logger = LoggerFactory.getLogger(BulkMatchingPerformanceTest.class);
 
+    /**
+     * Detects if running under QEMU emulation (set by CI workflow).
+     */
+    private static boolean isQemuEmulation() {
+        return "true".equals(System.getenv("QEMU_EMULATION"));
+    }
+
     @Test
     void testBulkVsIndividual_10kStrings() {
+        assumeTrue(!isQemuEmulation(), "Skipping performance test under QEMU emulation");
+
         Pattern pattern = Pattern.compile("item\\d+");
 
         // Create 10,000 test strings
@@ -86,6 +97,8 @@ class BulkMatchingPerformanceTest {
 
     @Test
     void testFilter_Performance() {
+        assumeTrue(!isQemuEmulation(), "Skipping performance test under QEMU emulation");
+
         Pattern pattern = Pattern.compile("[a-z0-9]+@[a-z]+\\.com");  // Allow digits in username
 
         // Create mix of valid and invalid emails
@@ -121,6 +134,8 @@ class BulkMatchingPerformanceTest {
 
     @Test
     void testMapFiltering_Performance() {
+        assumeTrue(!isQemuEmulation(), "Skipping performance test under QEMU emulation");
+
         Pattern pattern = Pattern.compile("user\\d+");
 
         // Create large map

@@ -12,7 +12,9 @@
 |---------|-------|-----|------|-------|
 | 1 (Sonnet 4.5) | 0 | 120k | 120k | Initial implementation, native build |
 | 2 (Sonnet 4.5 1M) | 120k | ~173k | ~53k | Test fixes, benchmarks complete |
-| 3 (Sonnet 4.5 1M) | 173k | ~255k | ~82k | Public API exposure via adapter pattern |
+| 3 (Sonnet 4.5 1M) | 173k | ~280k | ~107k | Public API - adapter pattern → overloaded methods |
+
+**Total: ~280k / 1M tokens (28%)**
 
 ---
 
@@ -155,19 +157,18 @@
 
 ## Files Modified/Created
 
-### New Files (Phase 1 + Phase 2)
-- `chronicle_progress.md` - This progress tracking file
+### New Files
+- `chronicle_progress.md` - Progress tracking file
 - `libre2-core/src/main/java/com/axonops/libre2/jni/RE2DirectMemory.java` - Chronicle Bytes helper (240 lines)
-- `libre2-core/src/main/java/com/axonops/libre2/api/ZeroCopyPattern.java` - Public API adapter (280 lines)
-- `libre2-core/src/main/java/com/axonops/libre2/api/ZeroCopyRE2.java` - Public API convenience (172 lines)
 - `libre2-core/src/test/java/com/axonops/libre2/jni/DirectMemoryTest.java` - 38 JNI layer tests
 - `libre2-core/src/test/java/com/axonops/libre2/jni/ZeroCopyPerformanceTest.java` - 11 benchmarks
-- `libre2-core/src/test/java/com/axonops/libre2/api/ChroniclePublicApiTest.java` - 33 public API tests
+- `libre2-core/src/test/java/com/axonops/libre2/api/OffHeapMatchingTest.java` - 17 public API tests
 
 ### Modified Files
 - `pom.xml` - Chronicle dependency version + shade plugin
 - `libre2-core/pom.xml` - Chronicle dependency + shade plugin config + surefire JVM args
 - `libre2-core/src/main/java/com/axonops/libre2/jni/RE2NativeJNI.java` - Added 6 Direct methods (+158 lines)
+- `libre2-core/src/main/java/com/axonops/libre2/api/Pattern.java` - Added 6 overloaded methods (+185 lines)
 - `native/wrapper/re2_jni.cpp` - Native implementations (+347 lines)
 - `native/jni/com_axonops_libre2_jni_RE2NativeJNI.h` - Added 6 function declarations
 - `.github/workflows/build-native.yml` - Updated function count 20→26
@@ -215,23 +216,34 @@
 - ZeroCopyPerformanceTest: 11/11 benchmarks passed ✅
 - Full test suite: 374/374 tests passed ✅ (no regressions)
 
-### Session 3 (2025-11-24) - Public API Exposure
+### Session 3 (2025-11-24) - Public API Exposure (REVISED)
+**Initial approach (rejected):**
+- Created ZeroCopyPattern adapter wrapping Pattern
+- Created ZeroCopyRE2 convenience class
+- Problem identified: Forces users to choose String OR zero-copy
+
+**Final approach (implemented):**
+- Added overloaded methods to Pattern: `matches(long address, int length)`
+- No Chronicle types in public API - just raw address/length primitives
+- Supports mixed usage: String and off-heap in same Pattern
+- Works with ANY off-heap system, not just Chronicle
+
 **Work completed:**
-- Created adapter pattern architecture to expose zero-copy without polluting main API
-- Implemented `ZeroCopyPattern` - wraps Pattern, adds Chronicle Bytes methods
-- Implemented `ZeroCopyRE2` - static convenience methods
-- Reverted Chronicle imports from Pattern.java and RE2.java
-- Created ChroniclePublicApiTest with 33 integration tests
+- Removed ZeroCopyPattern and ZeroCopyRE2 adapter classes
+- Added 6 overloaded methods to Pattern.java accepting (address, length)
+- Created OffHeapMatchingTest.java - 17 tests showing mixed usage
+- Kept RE2DirectMemory as optional helper in jni package (for Chronicle convenience)
 - All tests passing
 
 **Design decision:**
-- Rejected: Adding Chronicle Bytes methods directly to Pattern/RE2 (pollutes API)
-- Chosen: Adapter pattern - users opt-in by wrapping Pattern
-- Benefits: Clean main API, no shaded package imports, backward compatible
+- Rejected: ZeroCopyPattern adapter (assumes all-or-nothing usage)
+- Rejected: Exposing Chronicle Bytes in public API
+- Chosen: Method overloading with raw address/length primitives
+- Benefits: Natural mixed usage, works with any off-heap system, zero Chronicle exposure
 
 **Test results:**
-- ChroniclePublicApiTest: 33/33 tests passed ✅
-- Full test suite: 407/407 tests passed ✅ (no regressions)
+- OffHeapMatchingTest: 17/17 tests passed ✅
+- Full test suite: 391/391 tests passed ✅ (no regressions)
 
 ---
 
@@ -261,86 +273,111 @@
 
 ### Objectives
 
-Expose zero-copy functionality through clean public API while keeping Chronicle Bytes optional for users not needing it.
+Expose zero-copy functionality through clean public API that:
+- Works with ANY off-heap memory system (Chronicle Bytes, DirectByteBuffer, Netty, etc.)
+- Doesn't expose Chronicle types in public API
+- Supports mixed usage (String + off-heap in same app)
+- Zero breaking changes to existing code
 
-### Design Decision: Adapter Pattern
+### Design Decision: Method Overloading (address, length)
 
-**Problem:** Adding Chronicle Bytes to Pattern/RE2 methods would:
-- Force users to import shaded Chronicle packages
-- Pollute main API with optional functionality
-- Make simple use cases more complex
+**Rejected Approach:** Adapter classes like `ZeroCopyPattern`
+- Problem: Assumes all usage is zero-copy (unrealistic)
+- Problem: Exposes Chronicle types in public API
+- Problem: Extra complexity for users
 
-**Solution:** Separate adapter classes:
-- `ZeroCopyPattern` - Wraps Pattern, adds Chronicle Bytes methods
-- `ZeroCopyRE2` - Static convenience methods for Chronicle Bytes
-- Main `Pattern` and `RE2` APIs remain Chronicle-free
+**Chosen Approach:** Simple overloaded methods on Pattern
+- `matches(String)` - existing String API
+- `matches(long address, int length)` - zero-copy for ANY off-heap memory
+- Users mix String and off-heap naturally in same app
 
 ### Implementation
 
-**New Classes:**
-- `ZeroCopyPattern.java` - Adapter class (280 lines)
-  - Wraps Pattern via `ZeroCopyPattern.wrap(pattern)`
-  - Methods: `matches(Bytes)`, `find(Bytes)`, `matchAll(Bytes[])`, `findAll(Bytes[])`, `extractGroups(Bytes)`, `findAllMatches(Bytes)`
-  - Full JavaDoc with usage examples
+**Updated Pattern.java:**
+Added 6 new overloaded methods accepting `(long address, int length)`:
+- `matches(long address, int length)` - full match, zero-copy
+- `find(long address, int length)` - partial match, zero-copy
+- `matchAll(long[] addresses, int[] lengths)` - bulk full match
+- `findAll(long[] addresses, int[] lengths)` - bulk partial match
+- `extractGroups(long address, int length)` - capture groups
+- `findAllMatches(long address, int length)` - find all matches
 
-- `ZeroCopyRE2.java` - Convenience entry point (172 lines)
-  - Static methods: `compile()`, `matches()`, `find()`
-  - Mirrors RE2 API but for Chronicle Bytes
+**Helper for Chronicle Users:**
+- `RE2DirectMemory.java` (in jni package) - convenience wrapper for Chronicle Bytes
+- Users NOT using Chronicle call `pattern.matches(address, length)` directly
+- Users WITH Chronicle can use helper: `RE2DirectMemory.fullMatch(handle, bytes)`
 
-**Updated Tests:**
-- `ChroniclePublicApiTest.java` - 33 public API integration tests
-- All tests verify adapter delegates correctly
-- All tests verify results match String API
+**Tests:**
+- `OffHeapMatchingTest.java` - 17 tests demonstrating mixed usage
+- All tests verify off-heap results match String API results
+- Tests show Chronicle Bytes, explains other off-heap systems work too
 
 ### Test Results
 
-- **ChroniclePublicApiTest:** 33/33 tests passed ✅
+- **OffHeapMatchingTest:** 17/17 tests passed ✅
 - **DirectMemoryTest (JNI layer):** 38/38 tests passed ✅
-- **Full test suite:** 407/407 tests passed ✅
+- **Full test suite:** 391/391 tests passed ✅
 - **No regressions**
 
 ### Usage Examples
 
-**Option 1: Adapter Pattern (Recommended for repeated matching)**
+**Option 1: Chronicle Bytes Users (most common)**
 ```java
-// Compile once, match many times
-Pattern pattern = Pattern.compile("[a-z]+@[a-z]+\\.[a-z]+");
-ZeroCopyPattern zeroCopy = ZeroCopyPattern.wrap(pattern);
-
-Bytes<?> bytes = Bytes.allocateElasticDirect();
-try {
-    bytes.write("user@example.com".getBytes(StandardCharsets.UTF_8));
-    boolean matches = zeroCopy.matches(bytes);  // 46-99% faster
-} finally {
-    bytes.releaseLast();
-}
-```
-
-**Option 2: Direct Convenience Methods (One-shot matching)**
-```java
-Bytes<?> bytes = Bytes.allocateElasticDirect();
-try {
-    bytes.write("12345".getBytes(StandardCharsets.UTF_8));
-    boolean matches = ZeroCopyRE2.matches("\\d+", bytes);
-} finally {
-    bytes.releaseLast();
-}
-```
-
-**Option 3: Traditional String API (No Chronicle needed)**
-```java
-// Users who don't need zero-copy can use traditional API
 Pattern pattern = Pattern.compile("\\d+");
-boolean matches = pattern.matches("12345");  // Simple, no Chronicle
+
+// Some inputs are Strings
+boolean r1 = pattern.matches("12345");  // String API
+
+// Some inputs are Chronicle Bytes (off-heap)
+Bytes<?> bytes = Bytes.allocateElasticDirect();
+try {
+    bytes.write("67890".getBytes(StandardCharsets.UTF_8));
+    long address = bytes.addressForRead(0);
+    int length = (int) bytes.readRemaining();
+    boolean r2 = pattern.matches(address, length);  // 46-99% faster!
+} finally {
+    bytes.releaseLast();
+}
+
+// Mix them naturally in same app!
+```
+
+**Option 2: DirectByteBuffer Users**
+```java
+Pattern pattern = Pattern.compile("\\d+");
+
+ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+buffer.put("12345".getBytes(StandardCharsets.UTF_8));
+buffer.flip();
+
+long address = ((sun.nio.ch.DirectBuffer) buffer).address();
+boolean matches = pattern.matches(address, buffer.remaining());
+```
+
+**Option 3: Bulk with Chronicle Bytes**
+```java
+Pattern pattern = Pattern.compile("valid_.*");
+Bytes<?>[] bytesArray = ...; // Multiple off-heap buffers
+
+// Extract addresses/lengths
+long[] addresses = new long[bytesArray.length];
+int[] lengths = new int[bytesArray.length];
+for (int i = 0; i < bytesArray.length; i++) {
+    addresses[i] = bytesArray[i].addressForRead(0);
+    lengths[i] = (int) bytesArray[i].readRemaining();
+}
+
+boolean[] results = pattern.matchAll(addresses, lengths);  // 91.5% faster!
 ```
 
 ### Architecture Benefits
 
-✅ **Clean separation** - Main API has no Chronicle dependencies
-✅ **Optional** - Users choose String or zero-copy based on needs
-✅ **No breaking changes** - Existing code works unchanged
-✅ **Type safety** - No shaded package imports in user code
-✅ **Backward compatible** - Pattern/RE2 APIs unchanged
+✅ **No Chronicle types in public API** - accepts raw `long address` and `int length`
+✅ **Works with ANY off-heap system** - Chronicle Bytes, DirectByteBuffer, Netty ByteBuf, etc.
+✅ **Natural mixed usage** - String and off-heap in same app, same Pattern
+✅ **Zero breaking changes** - existing String API unchanged
+✅ **Simple API** - just overloaded methods, no adapters needed
+✅ **Helper available** - RE2DirectMemory for Chronicle Bytes convenience (optional)
 
 ---
 

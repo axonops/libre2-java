@@ -34,6 +34,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Chronicle Bytes for zero-copy direct memory access -->
+        <!-- Shaded into the JAR to avoid version conflicts -->
+        <dependency>
+            <groupId>net.openhft</groupId>
+            <artifactId>chronicle-bytes</artifactId>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -84,6 +91,51 @@
                         </manifestEntries>
                     </archive>
                 </configuration>
+            </plugin>
+
+            <!-- Maven Shade Plugin to relocate Chronicle dependencies -->
+            <!-- Prevents version conflicts when user has different Chronicle version -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <relocations>
+                                <!-- Relocate all OpenHFT Chronicle classes -->
+                                <relocation>
+                                    <pattern>net.openhft</pattern>
+                                    <shadedPattern>com.axonops.libre2.shaded.openhft</shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Built-By>AxonOps</Built-By>
+                                        <Bundle-SymbolicName>com.axonops.libre2-core</Bundle-SymbolicName>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                            <createDependencyReducedPom>true</createDependencyReducedPom>
+                            <minimizeJar>false</minimizeJar>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

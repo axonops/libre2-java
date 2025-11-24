@@ -55,6 +55,9 @@
         <junit.version>5.10.0</junit.version>
         <assertj.version>3.24.2</assertj.version>
         <logback.version>1.4.11</logback.version>
+
+        <!-- Chronicle dependency versions -->
+        <chronicle-bytes.version>2.25ea1</chronicle-bytes.version>
     </properties>
 
     <dependencyManagement>
@@ -97,6 +100,13 @@
                 <artifactId>logback-classic</artifactId>
                 <version>${logback.version}</version>
             </dependency>
+
+            <!-- Chronicle Bytes for zero-copy direct memory access -->
+            <dependency>
+                <groupId>net.openhft</groupId>
+                <artifactId>chronicle-bytes</artifactId>
+                <version>${chronicle-bytes.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -132,6 +142,13 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-assembly-plugin</artifactId>
                     <version>3.6.0</version>
+                </plugin>
+
+                <!-- Maven Shade Plugin for dependency relocation -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>3.5.1</version>
                 </plugin>
             </plugins>
         </pluginManagement>

@@ -79,6 +79,144 @@ JNIEXPORT jboolean JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_patternOk
 JNIEXPORT jlong JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_patternMemory
   (JNIEnv *, jclass, jlong);
 
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    fullMatchBulk
+ * Signature: (J[Ljava/lang/String;)[Z
+ */
+JNIEXPORT jbooleanArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatchBulk
+  (JNIEnv *, jclass, jlong, jobjectArray);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    partialMatchBulk
+ * Signature: (J[Ljava/lang/String;)[Z
+ */
+JNIEXPORT jbooleanArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatchBulk
+  (JNIEnv *, jclass, jlong, jobjectArray);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    extractGroups
+ * Signature: (JLjava/lang/String;)[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractGroups
+  (JNIEnv *, jclass, jlong, jstring);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    extractGroupsBulk
+ * Signature: (J[Ljava/lang/String;)[[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractGroupsBulk
+  (JNIEnv *, jclass, jlong, jobjectArray);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    findAllMatches
+ * Signature: (JLjava/lang/String;)[[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllMatches
+  (JNIEnv *, jclass, jlong, jstring);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    getNamedGroups
+ * Signature: (J)[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_getNamedGroups
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    replaceFirst
+ * Signature: (JLjava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceFirst
+  (JNIEnv *, jclass, jlong, jstring, jstring);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    replaceAll
+ * Signature: (JLjava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAll
+  (JNIEnv *, jclass, jlong, jstring, jstring);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    replaceAllBulk
+ * Signature: (J[Ljava/lang/String;Ljava/lang/String;)[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAllBulk
+  (JNIEnv *, jclass, jlong, jobjectArray, jstring);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    quoteMeta
+ * Signature: (Ljava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_quoteMeta
+  (JNIEnv *, jclass, jstring);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    programFanout
+ * Signature: (J)[I
+ */
+JNIEXPORT jintArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_programFanout
+  (JNIEnv *, jclass, jlong);
+
+/* ========== Zero-Copy Direct Memory Operations ========== */
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    fullMatchDirect
+ * Signature: (JJI)Z
+ */
+JNIEXPORT jboolean JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatchDirect
+  (JNIEnv *, jclass, jlong, jlong, jint);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    partialMatchDirect
+ * Signature: (JJI)Z
+ */
+JNIEXPORT jboolean JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatchDirect
+  (JNIEnv *, jclass, jlong, jlong, jint);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    fullMatchDirectBulk
+ * Signature: (J[J[I)[Z
+ */
+JNIEXPORT jbooleanArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatchDirectBulk
+  (JNIEnv *, jclass, jlong, jlongArray, jintArray);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    partialMatchDirectBulk
+ * Signature: (J[J[I)[Z
+ */
+JNIEXPORT jbooleanArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatchDirectBulk
+  (JNIEnv *, jclass, jlong, jlongArray, jintArray);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    extractGroupsDirect
+ * Signature: (JJI)[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractGroupsDirect
+  (JNIEnv *, jclass, jlong, jlong, jint);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    findAllMatchesDirect
+ * Signature: (JJI)[[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllMatchesDirect
+  (JNIEnv *, jclass, jlong, jlong, jint);
+
 #ifdef __cplusplus
 }
 #endif

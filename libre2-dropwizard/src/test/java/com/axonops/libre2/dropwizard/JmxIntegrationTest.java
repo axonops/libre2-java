@@ -42,9 +42,16 @@ class JmxIntegrationTest {
     @AfterEach
     void cleanup() {
         if (jmxReporter != null) {
-            jmxReporter.stop();
+            jmxReporter.close();  // close() is more thorough than stop()
         }
         Pattern.setGlobalCache(originalCache);
+
+        // Allow time for JMX unregistration to complete
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @Test

@@ -52,7 +52,7 @@ final class IdleEvictionTask {
             thread.setPriority(Thread.MIN_PRIORITY); // Low priority - don't interfere with queries
             thread.start();
 
-            logger.info("RE2: Idle eviction thread started - interval: {}s",
+            logger.debug("RE2: Idle eviction thread started - interval: {}s",
                 config.evictionScanIntervalSeconds());
         }
     }
@@ -85,7 +85,8 @@ final class IdleEvictionTask {
      * Runs idle eviction less frequently (every 60s by default).
      */
     private void run() {
-        logger.debug("RE2: Idle eviction thread running");
+        logger.debug("RE2: Idle eviction thread initialized - idleScanInterval: {}s, deferredCleanupInterval: {}s",
+            config.evictionScanIntervalSeconds(), config.deferredCleanupIntervalSeconds());
 
         long lastIdleScan = System.currentTimeMillis();
         long idleScanIntervalMs = config.evictionScanIntervalSeconds() * 1000;

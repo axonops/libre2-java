@@ -12,6 +12,7 @@
 |---------|-------|-----|------|-------|
 | 1 (Sonnet 4.5) | 0 | 120k | 120k | Initial implementation, native build |
 | 2 (Sonnet 4.5 1M) | 120k | ~173k | ~53k | Test fixes, benchmarks complete |
+| 3 (Sonnet 4.5 1M) | 173k | ~255k | ~82k | Public API exposure via adapter pattern |
 
 ---
 
@@ -154,11 +155,14 @@
 
 ## Files Modified/Created
 
-### New Files
+### New Files (Phase 1 + Phase 2)
 - `chronicle_progress.md` - This progress tracking file
 - `libre2-core/src/main/java/com/axonops/libre2/jni/RE2DirectMemory.java` - Chronicle Bytes helper (240 lines)
-- `libre2-core/src/test/java/com/axonops/libre2/jni/DirectMemoryTest.java` - 38 correctness tests
+- `libre2-core/src/main/java/com/axonops/libre2/api/ZeroCopyPattern.java` - Public API adapter (280 lines)
+- `libre2-core/src/main/java/com/axonops/libre2/api/ZeroCopyRE2.java` - Public API convenience (172 lines)
+- `libre2-core/src/test/java/com/axonops/libre2/jni/DirectMemoryTest.java` - 38 JNI layer tests
 - `libre2-core/src/test/java/com/axonops/libre2/jni/ZeroCopyPerformanceTest.java` - 11 benchmarks
+- `libre2-core/src/test/java/com/axonops/libre2/api/ChroniclePublicApiTest.java` - 33 public API tests
 
 ### Modified Files
 - `pom.xml` - Chronicle dependency version + shade plugin
@@ -211,6 +215,24 @@
 - ZeroCopyPerformanceTest: 11/11 benchmarks passed ✅
 - Full test suite: 374/374 tests passed ✅ (no regressions)
 
+### Session 3 (2025-11-24) - Public API Exposure
+**Work completed:**
+- Created adapter pattern architecture to expose zero-copy without polluting main API
+- Implemented `ZeroCopyPattern` - wraps Pattern, adds Chronicle Bytes methods
+- Implemented `ZeroCopyRE2` - static convenience methods
+- Reverted Chronicle imports from Pattern.java and RE2.java
+- Created ChroniclePublicApiTest with 33 integration tests
+- All tests passing
+
+**Design decision:**
+- Rejected: Adding Chronicle Bytes methods directly to Pattern/RE2 (pollutes API)
+- Chosen: Adapter pattern - users opt-in by wrapping Pattern
+- Benefits: Clean main API, no shaded package imports, backward compatible
+
+**Test results:**
+- ChroniclePublicApiTest: 33/33 tests passed ✅
+- Full test suite: 407/407 tests passed ✅ (no regressions)
+
 ---
 
 ## Phase 1 Summary - COMPLETE ✅
@@ -233,14 +255,103 @@
 
 **Key Insight:** The Direct API maintains constant ~150-200ns/op regardless of input size, while the String API degrades linearly due to copy overhead.
 
-### Next Steps (Future Phases)
+---
 
-**Phase 2: Chronicle Map Cache (Optional)**
+## Phase 2: Public API Exposure - COMPLETE ✅
+
+### Objectives
+
+Expose zero-copy functionality through clean public API while keeping Chronicle Bytes optional for users not needing it.
+
+### Design Decision: Adapter Pattern
+
+**Problem:** Adding Chronicle Bytes to Pattern/RE2 methods would:
+- Force users to import shaded Chronicle packages
+- Pollute main API with optional functionality
+- Make simple use cases more complex
+
+**Solution:** Separate adapter classes:
+- `ZeroCopyPattern` - Wraps Pattern, adds Chronicle Bytes methods
+- `ZeroCopyRE2` - Static convenience methods for Chronicle Bytes
+- Main `Pattern` and `RE2` APIs remain Chronicle-free
+
+### Implementation
+
+**New Classes:**
+- `ZeroCopyPattern.java` - Adapter class (280 lines)
+  - Wraps Pattern via `ZeroCopyPattern.wrap(pattern)`
+  - Methods: `matches(Bytes)`, `find(Bytes)`, `matchAll(Bytes[])`, `findAll(Bytes[])`, `extractGroups(Bytes)`, `findAllMatches(Bytes)`
+  - Full JavaDoc with usage examples
+
+- `ZeroCopyRE2.java` - Convenience entry point (172 lines)
+  - Static methods: `compile()`, `matches()`, `find()`
+  - Mirrors RE2 API but for Chronicle Bytes
+
+**Updated Tests:**
+- `ChroniclePublicApiTest.java` - 33 public API integration tests
+- All tests verify adapter delegates correctly
+- All tests verify results match String API
+
+### Test Results
+
+- **ChroniclePublicApiTest:** 33/33 tests passed ✅
+- **DirectMemoryTest (JNI layer):** 38/38 tests passed ✅
+- **Full test suite:** 407/407 tests passed ✅
+- **No regressions**
+
+### Usage Examples
+
+**Option 1: Adapter Pattern (Recommended for repeated matching)**
+```java
+// Compile once, match many times
+Pattern pattern = Pattern.compile("[a-z]+@[a-z]+\\.[a-z]+");
+ZeroCopyPattern zeroCopy = ZeroCopyPattern.wrap(pattern);
+
+Bytes<?> bytes = Bytes.allocateElasticDirect();
+try {
+    bytes.write("user@example.com".getBytes(StandardCharsets.UTF_8));
+    boolean matches = zeroCopy.matches(bytes);  // 46-99% faster
+} finally {
+    bytes.releaseLast();
+}
+```
+
+**Option 2: Direct Convenience Methods (One-shot matching)**
+```java
+Bytes<?> bytes = Bytes.allocateElasticDirect();
+try {
+    bytes.write("12345".getBytes(StandardCharsets.UTF_8));
+    boolean matches = ZeroCopyRE2.matches("\\d+", bytes);
+} finally {
+    bytes.releaseLast();
+}
+```
+
+**Option 3: Traditional String API (No Chronicle needed)**
+```java
+// Users who don't need zero-copy can use traditional API
+Pattern pattern = Pattern.compile("\\d+");
+boolean matches = pattern.matches("12345");  // Simple, no Chronicle
+```
+
+### Architecture Benefits
+
+✅ **Clean separation** - Main API has no Chronicle dependencies
+✅ **Optional** - Users choose String or zero-copy based on needs
+✅ **No breaking changes** - Existing code works unchanged
+✅ **Type safety** - No shaded package imports in user code
+✅ **Backward compatible** - Pattern/RE2 APIs unchanged
+
+---
+
+## Next Steps (Future Phases)
+
+**Phase 3: Chronicle Map Cache (Optional)**
 - Replace PatternCache with Chronicle Map for off-heap caching
 - Further reduce GC pressure
 - Optional persistence for fast restarts
 
-**Phase 3: NUMA Optimization (Advanced)**
+**Phase 4: NUMA Optimization (Advanced)**
 - Per-NUMA-socket caches using Chronicle Thread Affinity
 - Topology-aware pattern distribution
 - For multi-socket servers only

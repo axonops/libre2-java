@@ -176,9 +176,8 @@ public final class PatternCache {
                 cached.touch();
                 hits.increment();
                 metrics.incrementCounter(MetricNames.PATTERNS_CACHE_HITS);
-                logger.trace("RE2: Cache hit - hash: {}, hitRate: {:.1f}%",
-                    PatternHasher.hash(patternString),
-                    getCacheHitRate());
+                logger.trace("RE2: Cache hit - hash: {}",
+                    PatternHasher.hash(patternString));
                 return cached.pattern();
             }
         }

@@ -219,7 +219,7 @@ public final class Pattern implements AutoCloseable {
      * Tests if content at memory address fully matches this pattern (zero-copy).
      *
      * <p>This method accepts a raw memory address and length, enabling zero-copy matching
-     * with any off-heap memory system (Chronicle Bytes, DirectByteBuffer, Netty ByteBuf, etc.).</p>
+     * with any off-heap memory system.</p>
      *
      * <p><strong>Performance:</strong> 46-99% faster than String API depending on input size.
      * For 10KB+ inputs, provides 99%+ improvement.</p>
@@ -231,28 +231,22 @@ public final class Pattern implements AutoCloseable {
      *   <li>Not be released/freed until this method returns</li>
      * </ul>
      *
-     * <p><strong>Usage with Chronicle Bytes:</strong></p>
-     * <pre>{@code
-     * Pattern pattern = Pattern.compile("\\d+");
-     * Bytes<?> bytes = Bytes.allocateElasticDirect();
-     * try {
-     *     bytes.write("12345".getBytes(StandardCharsets.UTF_8));
-     *     long address = bytes.addressForRead(0);
-     *     int length = (int) bytes.readRemaining();
-     *     boolean matches = pattern.matches(address, length);  // Zero-copy!
-     * } finally {
-     *     bytes.releaseLast();
-     * }
-     * }</pre>
-     *
      * <p><strong>Usage with DirectByteBuffer:</strong></p>
      * <pre>{@code
+     * import sun.nio.ch.DirectBuffer;
+     *
+     * Pattern pattern = Pattern.compile("\\d+");
      * ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
      * buffer.put("12345".getBytes(StandardCharsets.UTF_8));
      * buffer.flip();
-     * long address = ((sun.nio.ch.DirectBuffer) buffer).address();
-     * boolean matches = pattern.matches(address, buffer.remaining());
+     *
+     * long address = ((DirectBuffer) buffer).address();
+     * int length = buffer.remaining();
+     * boolean matches = pattern.matches(address, length);  // Zero-copy!
      * }</pre>
+     *
+     * <p><strong>Note:</strong> Most users should use {@link #matches(ByteBuffer)} instead,
+     * which handles address extraction automatically.</p>
      *
      * @param address native memory address of UTF-8 encoded text
      * @param length number of bytes to read from the address
@@ -260,7 +254,7 @@ public final class Pattern implements AutoCloseable {
      * @throws IllegalArgumentException if address is 0 or length is negative
      * @throws IllegalStateException if pattern is closed
      * @see #matches(String) String-based variant
-     * @see com.axonops.libre2.jni.RE2DirectMemory#fullMatch(long, net.openhft.chronicle.bytes.Bytes) Chronicle Bytes helper
+     * @see #matches(ByteBuffer) ByteBuffer variant with automatic routing
      * @since 1.1.0
      */
     public boolean matches(long address, int length) {
@@ -294,25 +288,28 @@ public final class Pattern implements AutoCloseable {
      * <p><strong>Memory Safety:</strong> The memory at {@code address} must remain
      * valid for the duration of this call.</p>
      *
-     * <p><strong>Usage with Chronicle Bytes:</strong></p>
+     * <p><strong>Usage with DirectByteBuffer:</strong></p>
      * <pre>{@code
+     * import sun.nio.ch.DirectBuffer;
+     *
      * Pattern pattern = Pattern.compile("@[a-z]+\\.[a-z]+");
-     * Bytes<?> bytes = Bytes.allocateElasticDirect();
-     * try {
-     *     bytes.write("Contact: user@example.com".getBytes(StandardCharsets.UTF_8));
-     *     long address = bytes.addressForRead(0);
-     *     int length = (int) bytes.readRemaining();
-     *     boolean found = pattern.find(address, length);  // true
-     * } finally {
-     *     bytes.releaseLast();
-     * }
+     * ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+     * buffer.put("Contact: user@example.com".getBytes(StandardCharsets.UTF_8));
+     * buffer.flip();
+     *
+     * long address = ((DirectBuffer) buffer).address();
+     * int length = buffer.remaining();
+     * boolean found = pattern.find(address, length);  // Zero-copy!
      * }</pre>
+     *
+     * <p><strong>Note:</strong> Most users should use {@link #find(ByteBuffer)} instead.</p>
      *
      * @param address native memory address of UTF-8 encoded text
      * @param length number of bytes to read from the address
      * @return true if pattern matches anywhere in content, false otherwise
      * @throws IllegalArgumentException if address is 0 or length is negative
      * @throws IllegalStateException if pattern is closed
+     * @see #find(ByteBuffer) ByteBuffer variant with automatic routing
      * @since 1.1.0
      */
     public boolean find(long address, int length) {
@@ -671,16 +668,18 @@ public final class Pattern implements AutoCloseable {
      * <p><strong>Memory Safety:</strong> All memory regions must remain valid
      * for the duration of this call.</p>
      *
-     * <p><strong>Usage with Chronicle Bytes:</strong></p>
+     * <p><strong>Usage with DirectByteBuffer array:</strong></p>
      * <pre>{@code
-     * Pattern pattern = Pattern.compile("\\d+");
-     * Bytes<?>[] bytesArray = ...; // Multiple Chronicle Bytes
+     * import sun.nio.ch.DirectBuffer;
      *
-     * long[] addresses = new long[bytesArray.length];
-     * int[] lengths = new int[bytesArray.length];
-     * for (int i = 0; i < bytesArray.length; i++) {
-     *     addresses[i] = bytesArray[i].addressForRead(0);
-     *     lengths[i] = (int) bytesArray[i].readRemaining();
+     * Pattern pattern = Pattern.compile("\\d+");
+     * ByteBuffer[] buffers = ...; // Multiple DirectByteBuffers
+     *
+     * long[] addresses = new long[buffers.length];
+     * int[] lengths = new int[buffers.length];
+     * for (int i = 0; i < buffers.length; i++) {
+     *     addresses[i] = ((DirectBuffer) buffers[i]).address();
+     *     lengths[i] = buffers[i].remaining();
      * }
      *
      * boolean[] results = pattern.matchAll(addresses, lengths);  // 91.5% faster!

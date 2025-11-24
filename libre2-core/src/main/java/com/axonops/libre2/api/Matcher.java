@@ -16,12 +16,9 @@
 
 package com.axonops.libre2.api;
 
-import com.axonops.libre2.jni.RE2DirectMemory;
 import com.axonops.libre2.jni.RE2NativeJNI;
 import com.axonops.libre2.metrics.RE2MetricsRegistry;
 import com.axonops.libre2.metrics.MetricNames;
-import com.axonops.libre2.util.ResourceTracker;
-import net.openhft.chronicle.bytes.Bytes;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;

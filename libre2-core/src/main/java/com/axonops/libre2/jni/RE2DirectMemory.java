@@ -297,20 +297,24 @@ public final class RE2DirectMemory {
      *
      * <p>This is a convenience method that converts a Java String to Chronicle Bytes,
      * enabling the use of zero-copy matching APIs. The returned Bytes object must be
-     * closed when no longer needed.</p>
+     * released via {@code releaseLast()} when no longer needed.</p>
+     *
+     * <p><strong>IMPORTANT:</strong> This method creates <strong>direct (off-heap)</strong>
+     * memory. Heap-backed Bytes do not support {@code addressForRead()} which is required
+     * for zero-copy operation.</p>
      *
      * <p><strong>Note:</strong> This method does involve an initial copy to convert
      * the String to UTF-8 bytes in off-heap memory. However, subsequent matching
      * operations on the returned Bytes will be zero-copy.</p>
      *
      * @param text the text to convert to Chronicle Bytes
-     * @return a new Bytes object containing the UTF-8 encoded text (must be closed)
+     * @return a new direct Bytes object containing the UTF-8 encoded text (must call releaseLast())
      * @throws NullPointerException if text is null
      */
     public static Bytes<?> toBytes(String text) {
         Objects.requireNonNull(text, "text must not be null");
         byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
-        Bytes<?> bytes = Bytes.allocateElasticDirect(utf8.length);
+        Bytes<?> bytes = Bytes.allocateElasticDirect();
         bytes.write(utf8);
         return bytes;
     }

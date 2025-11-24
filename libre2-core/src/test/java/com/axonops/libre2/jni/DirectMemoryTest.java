@@ -58,6 +58,23 @@ class DirectMemoryTest {
         }
     }
 
+    /**
+     * Helper method to safely use Bytes with automatic cleanup.
+     * Chronicle Bytes doesn't implement AutoCloseable, so we use this wrapper.
+     *
+     * IMPORTANT: Uses allocateElasticDirect() to create OFF-HEAP memory, not heap-backed.
+     * Heap-backed Bytes don't support addressForRead() because GC can move them.
+     */
+    private <T> T withBytes(String text, java.util.function.Function<Bytes<?>, T> action) {
+        Bytes<?> bytes = Bytes.allocateElasticDirect();
+        try {
+            bytes.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return action.apply(bytes);
+        } finally {
+            bytes.releaseLast();
+        }
+    }
+
     // ========== Full Match Tests ==========
 
     @Test
@@ -66,10 +83,8 @@ class DirectMemoryTest {
         patternHandle = RE2NativeJNI.compile("hello", true);
         assertThat(patternHandle).isNotZero();
 
-        try (Bytes<?> bytes = Bytes.from("hello")) {
-            boolean result = RE2DirectMemory.fullMatch(patternHandle, bytes);
-            assertThat(result).isTrue();
-        }
+        boolean result = withBytes("hello", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        assertThat(result).isTrue();
     }
 
     @Test
@@ -77,10 +92,8 @@ class DirectMemoryTest {
     void fullMatchDirect_partialContent_noMatch() {
         patternHandle = RE2NativeJNI.compile("hello", true);
 
-        try (Bytes<?> bytes = Bytes.from("hello world")) {
-            boolean result = RE2DirectMemory.fullMatch(patternHandle, bytes);
-            assertThat(result).isFalse();
-        }
+        boolean result = withBytes("hello world", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        assertThat(result).isFalse();
     }
 
     @Test
@@ -88,10 +101,8 @@ class DirectMemoryTest {
     void fullMatchDirect_regexPattern_matches() {
         patternHandle = RE2NativeJNI.compile("hello\\s+world", true);
 
-        try (Bytes<?> bytes = Bytes.from("hello   world")) {
-            boolean result = RE2DirectMemory.fullMatch(patternHandle, bytes);
-            assertThat(result).isTrue();
-        }
+        boolean result = withBytes("hello   world", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        assertThat(result).isTrue();
     }
 
     @Test
@@ -99,22 +110,18 @@ class DirectMemoryTest {
     void fullMatchDirect_caseSensitive_respected() {
         // Case sensitive
         patternHandle = RE2NativeJNI.compile("Hello", true);
-        try (Bytes<?> bytes = Bytes.from("hello")) {
-            assertThat(RE2DirectMemory.fullMatch(patternHandle, bytes)).isFalse();
-        }
-        try (Bytes<?> bytes = Bytes.from("Hello")) {
-            assertThat(RE2DirectMemory.fullMatch(patternHandle, bytes)).isTrue();
-        }
+        boolean result1 = withBytes("hello", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        boolean result2 = withBytes("Hello", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        assertThat(result1).isFalse();
+        assertThat(result2).isTrue();
         RE2NativeJNI.freePattern(patternHandle);
 
         // Case insensitive
         patternHandle = RE2NativeJNI.compile("Hello", false);
-        try (Bytes<?> bytes = Bytes.from("hello")) {
-            assertThat(RE2DirectMemory.fullMatch(patternHandle, bytes)).isTrue();
-        }
-        try (Bytes<?> bytes = Bytes.from("HELLO")) {
-            assertThat(RE2DirectMemory.fullMatch(patternHandle, bytes)).isTrue();
-        }
+        boolean result3 = withBytes("hello", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        boolean result4 = withBytes("HELLO", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        assertThat(result3).isTrue();
+        assertThat(result4).isTrue();
     }
 
     // ========== Partial Match Tests ==========
@@ -124,10 +131,8 @@ class DirectMemoryTest {
     void partialMatchDirect_substring_matches() {
         patternHandle = RE2NativeJNI.compile("world", true);
 
-        try (Bytes<?> bytes = Bytes.from("hello world")) {
-            boolean result = RE2DirectMemory.partialMatch(patternHandle, bytes);
-            assertThat(result).isTrue();
-        }
+        boolean result = withBytes("hello world", bytes -> RE2DirectMemory.partialMatch(patternHandle, bytes));
+        assertThat(result).isTrue();
     }
 
     @Test
@@ -135,10 +140,8 @@ class DirectMemoryTest {
     void partialMatchDirect_nonExistent_noMatch() {
         patternHandle = RE2NativeJNI.compile("xyz", true);
 
-        try (Bytes<?> bytes = Bytes.from("hello world")) {
-            boolean result = RE2DirectMemory.partialMatch(patternHandle, bytes);
-            assertThat(result).isFalse();
-        }
+        boolean result = withBytes("hello world", bytes -> RE2DirectMemory.partialMatch(patternHandle, bytes));
+        assertThat(result).isFalse();
     }
 
     @Test
@@ -146,10 +149,8 @@ class DirectMemoryTest {
     void partialMatchDirect_regexPattern_matches() {
         patternHandle = RE2NativeJNI.compile("\\d{4}-\\d{2}-\\d{2}", true);
 
-        try (Bytes<?> bytes = Bytes.from("Date: 2025-11-24 is today")) {
-            boolean result = RE2DirectMemory.partialMatch(patternHandle, bytes);
-            assertThat(result).isTrue();
-        }
+        boolean result = withBytes("Date: 2025-11-24 is today", bytes -> RE2DirectMemory.partialMatch(patternHandle, bytes));
+        assertThat(result).isTrue();
     }
 
     // ========== Consistency Tests (Direct vs String API) ==========
@@ -172,14 +173,12 @@ class DirectMemoryTest {
         boolean stringResult = RE2NativeJNI.fullMatch(patternHandle, text);
 
         // Direct API
-        try (Bytes<?> bytes = Bytes.from(text)) {
-            boolean directResult = RE2DirectMemory.fullMatch(patternHandle, bytes);
+        boolean directResult = withBytes(text, bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
 
-            assertThat(directResult)
-                .as("Direct API should match String API for pattern '%s' and text '%s'", pattern, text)
-                .isEqualTo(stringResult)
-                .isEqualTo(expected);
-        }
+        assertThat(directResult)
+            .as("Direct API should match String API for pattern '%s' and text '%s'", pattern, text)
+            .isEqualTo(stringResult)
+            .isEqualTo(expected);
     }
 
     @ParameterizedTest
@@ -199,14 +198,12 @@ class DirectMemoryTest {
         boolean stringResult = RE2NativeJNI.partialMatch(patternHandle, text);
 
         // Direct API
-        try (Bytes<?> bytes = Bytes.from(text)) {
-            boolean directResult = RE2DirectMemory.partialMatch(patternHandle, bytes);
+        boolean directResult = withBytes(text, bytes -> RE2DirectMemory.partialMatch(patternHandle, bytes));
 
-            assertThat(directResult)
-                .as("Direct API should match String API for pattern '%s' and text '%s'", pattern, text)
-                .isEqualTo(stringResult)
-                .isEqualTo(expected);
-        }
+        assertThat(directResult)
+            .as("Direct API should match String API for pattern '%s' and text '%s'", pattern, text)
+            .isEqualTo(stringResult)
+            .isEqualTo(expected);
     }
 
     // ========== Bulk Operations Tests ==========
@@ -218,11 +215,11 @@ class DirectMemoryTest {
 
         Bytes<?>[] inputs = new Bytes<?>[5];
         try {
-            inputs[0] = Bytes.from("test");     // match
-            inputs[1] = Bytes.from("testing");  // no match (not full)
-            inputs[2] = Bytes.from("test");     // match
-            inputs[3] = Bytes.from("other");    // no match
-            inputs[4] = Bytes.from("test");     // match
+            inputs[0] = createDirectBytes("test");     // match
+            inputs[1] = createDirectBytes("testing");  // no match (not full)
+            inputs[2] = createDirectBytes("test");     // match
+            inputs[3] = createDirectBytes("other");    // no match
+            inputs[4] = createDirectBytes("test");     // match
 
             boolean[] results = RE2DirectMemory.fullMatchBulk(patternHandle, inputs);
 
@@ -241,11 +238,11 @@ class DirectMemoryTest {
 
         Bytes<?>[] inputs = new Bytes<?>[5];
         try {
-            inputs[0] = Bytes.from("test");       // match
-            inputs[1] = Bytes.from("testing");    // match (partial)
-            inputs[2] = Bytes.from("a test");     // match
-            inputs[3] = Bytes.from("other");      // no match
-            inputs[4] = Bytes.from("atestb");     // match
+            inputs[0] = createDirectBytes("test");       // match
+            inputs[1] = createDirectBytes("testing");    // match (partial)
+            inputs[2] = createDirectBytes("a test");     // match
+            inputs[3] = createDirectBytes("other");      // no match
+            inputs[4] = createDirectBytes("atestb");     // match
 
             boolean[] results = RE2DirectMemory.partialMatchBulk(patternHandle, inputs);
 
@@ -271,7 +268,7 @@ class DirectMemoryTest {
         Bytes<?>[] inputs = new Bytes<?>[texts.length];
         try {
             for (int i = 0; i < texts.length; i++) {
-                inputs[i] = Bytes.from(texts[i]);
+                inputs[i] = createDirectBytes(texts[i]);
             }
 
             boolean[] directResults = RE2DirectMemory.partialMatchBulk(patternHandle, inputs);
@@ -286,6 +283,16 @@ class DirectMemoryTest {
         }
     }
 
+    /**
+     * Creates direct (off-heap) Bytes from a String.
+     * Heap-backed Bytes don't support addressForRead().
+     */
+    private Bytes<?> createDirectBytes(String text) {
+        Bytes<?> bytes = Bytes.allocateElasticDirect();
+        bytes.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return bytes;
+    }
+
     // ========== Extract Groups Tests ==========
 
     @Test
@@ -293,11 +300,8 @@ class DirectMemoryTest {
     void extractGroupsDirect_captureGroups_extracted() {
         patternHandle = RE2NativeJNI.compile("(\\d{4})-(\\d{2})-(\\d{2})", true);
 
-        try (Bytes<?> bytes = Bytes.from("2025-11-24")) {
-            String[] groups = RE2DirectMemory.extractGroups(patternHandle, bytes);
-
-            assertThat(groups).containsExactly("2025-11-24", "2025", "11", "24");
-        }
+        String[] groups = withBytes("2025-11-24", bytes -> RE2DirectMemory.extractGroups(patternHandle, bytes));
+        assertThat(groups).containsExactly("2025-11-24", "2025", "11", "24");
     }
 
     @Test
@@ -305,11 +309,8 @@ class DirectMemoryTest {
     void extractGroupsDirect_noMatch_returnsNull() {
         patternHandle = RE2NativeJNI.compile("(\\d+)", true);
 
-        try (Bytes<?> bytes = Bytes.from("no digits here")) {
-            String[] groups = RE2DirectMemory.extractGroups(patternHandle, bytes);
-
-            assertThat(groups).isNull();
-        }
+        String[] groups = withBytes("no digits here", bytes -> RE2DirectMemory.extractGroups(patternHandle, bytes));
+        assertThat(groups).isNull();
     }
 
     @Test
@@ -322,13 +323,11 @@ class DirectMemoryTest {
         String[] stringGroups = RE2NativeJNI.extractGroups(patternHandle, text);
 
         // Direct API
-        try (Bytes<?> bytes = Bytes.from(text)) {
-            String[] directGroups = RE2DirectMemory.extractGroups(patternHandle, bytes);
+        String[] directGroups = withBytes(text, bytes -> RE2DirectMemory.extractGroups(patternHandle, bytes));
 
-            assertThat(directGroups)
-                .as("Direct extractGroups should match String extractGroups")
-                .containsExactly(stringGroups);
-        }
+        assertThat(directGroups)
+            .as("Direct extractGroups should match String extractGroups")
+            .containsExactly(stringGroups);
     }
 
     // ========== Find All Matches Tests ==========
@@ -338,15 +337,14 @@ class DirectMemoryTest {
     void findAllMatchesDirect_multipleOccurrences_found() {
         patternHandle = RE2NativeJNI.compile("\\d+", true);
 
-        try (Bytes<?> bytes = Bytes.from("a1b22c333d4444")) {
-            String[][] matches = RE2DirectMemory.findAllMatches(patternHandle, bytes);
+        String[][] matches = withBytes("a1b22c333d4444", bytes -> RE2DirectMemory.findAllMatches(patternHandle, bytes));
 
-            assertThat(matches).hasSize(4);
-            assertThat(matches[0][0]).isEqualTo("1");
-            assertThat(matches[1][0]).isEqualTo("22");
-            assertThat(matches[2][0]).isEqualTo("333");
-            assertThat(matches[3][0]).isEqualTo("4444");
-        }
+        assertThat(matches).isNotNull();
+        assertThat(matches.length).isEqualTo(4);
+        assertThat(matches[0][0]).isEqualTo("1");
+        assertThat(matches[1][0]).isEqualTo("22");
+        assertThat(matches[2][0]).isEqualTo("333");
+        assertThat(matches[3][0]).isEqualTo("4444");
     }
 
     @Test
@@ -354,11 +352,8 @@ class DirectMemoryTest {
     void findAllMatchesDirect_noMatches_returnsNull() {
         patternHandle = RE2NativeJNI.compile("\\d+", true);
 
-        try (Bytes<?> bytes = Bytes.from("no digits")) {
-            String[][] matches = RE2DirectMemory.findAllMatches(patternHandle, bytes);
-
-            assertThat(matches).isNull();
-        }
+        String[][] matches = withBytes("no digits", bytes -> RE2DirectMemory.findAllMatches(patternHandle, bytes));
+        assertThat(matches).isNull();
     }
 
     // ========== Edge Cases ==========
@@ -368,10 +363,8 @@ class DirectMemoryTest {
     void directMatch_emptyString_handles() {
         patternHandle = RE2NativeJNI.compile("", true);
 
-        try (Bytes<?> bytes = Bytes.from("")) {
-            boolean fullMatch = RE2DirectMemory.fullMatch(patternHandle, bytes);
-            assertThat(fullMatch).isTrue();
-        }
+        boolean fullMatch = withBytes("", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        assertThat(fullMatch).isTrue();
     }
 
     @Test
@@ -379,10 +372,8 @@ class DirectMemoryTest {
     void directMatch_unicode_handles() {
         patternHandle = RE2NativeJNI.compile("\\p{L}+", true);
 
-        try (Bytes<?> bytes = Bytes.from("Hello")) {
-            boolean result = RE2DirectMemory.fullMatch(patternHandle, bytes);
-            assertThat(result).isTrue();
-        }
+        boolean result = withBytes("Hello", bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        assertThat(result).isTrue();
     }
 
     @ParameterizedTest
@@ -392,12 +383,10 @@ class DirectMemoryTest {
         patternHandle = RE2NativeJNI.compile("a+", true);
 
         String text = "a".repeat(size);
-        try (Bytes<?> bytes = Bytes.from(text)) {
-            boolean directResult = RE2DirectMemory.fullMatch(patternHandle, bytes);
-            boolean stringResult = RE2NativeJNI.fullMatch(patternHandle, text);
+        boolean directResult = withBytes(text, bytes -> RE2DirectMemory.fullMatch(patternHandle, bytes));
+        boolean stringResult = RE2NativeJNI.fullMatch(patternHandle, text);
 
-            assertThat(directResult).isEqualTo(stringResult).isTrue();
-        }
+        assertThat(directResult).isEqualTo(stringResult).isTrue();
     }
 
     // ========== Validation Tests ==========
@@ -415,10 +404,13 @@ class DirectMemoryTest {
     @Test
     @DisplayName("Should throw on zero pattern handle")
     void fullMatch_zeroHandle_throws() {
-        try (Bytes<?> bytes = Bytes.from("test")) {
+        Bytes<?> bytes = createDirectBytes("test");
+        try {
             assertThatIllegalArgumentException()
                 .isThrownBy(() -> RE2DirectMemory.fullMatch(0, bytes))
                 .withMessageContaining("0");
+        } finally {
+            bytes.releaseLast();
         }
     }
 
@@ -429,9 +421,12 @@ class DirectMemoryTest {
     void toBytes_createsUsableBytes() {
         patternHandle = RE2NativeJNI.compile("hello", true);
 
-        try (Bytes<?> bytes = RE2DirectMemory.toBytes("hello")) {
+        Bytes<?> bytes = RE2DirectMemory.toBytes("hello");
+        try {
             boolean result = RE2DirectMemory.fullMatch(patternHandle, bytes);
             assertThat(result).isTrue();
+        } finally {
+            bytes.releaseLast();
         }
     }
 }

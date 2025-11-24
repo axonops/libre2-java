@@ -69,6 +69,23 @@ class ZeroCopyPerformanceTest {
         }
     }
 
+    /**
+     * Helper method to safely use Bytes with automatic cleanup.
+     * Chronicle Bytes doesn't implement AutoCloseable, so we use this wrapper.
+     *
+     * IMPORTANT: Uses allocateElasticDirect() to create OFF-HEAP memory, not heap-backed.
+     * Heap-backed Bytes don't support addressForRead() because GC can move them.
+     */
+    private static <T> T withBytes(String text, java.util.function.Function<Bytes<?>, T> action) {
+        Bytes<?> bytes = Bytes.allocateElasticDirect();
+        try {
+            bytes.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return action.apply(bytes);
+        } finally {
+            bytes.releaseLast();
+        }
+    }
+
     // ========== Small Input Benchmarks (64 bytes) ==========
 
     @Test
@@ -96,8 +113,8 @@ class ZeroCopyPerformanceTest {
     @DisplayName("Benchmark: Small input (64 bytes) - Direct API")
     void benchmarkSmallInput_directApi() {
         String input = generateInput(64);
-
-        try (Bytes<?> bytes = Bytes.from(input)) {
+        Bytes<?> bytes = createDirectBytes(input);
+        try {
             // Warmup
             for (int i = 0; i < WARMUP_ITERATIONS; i++) {
                 RE2DirectMemory.partialMatch(patternHandle, bytes);
@@ -112,6 +129,8 @@ class ZeroCopyPerformanceTest {
 
             double nsPerOp = (double) elapsedNanos / BENCHMARK_ITERATIONS;
             System.out.printf("Small (64B) Direct API: %.2f ns/op%n", nsPerOp);
+        } finally {
+            bytes.releaseLast();
         }
     }
 
@@ -142,8 +161,8 @@ class ZeroCopyPerformanceTest {
     @DisplayName("Benchmark: Medium input (1KB) - Direct API")
     void benchmarkMediumInput_directApi() {
         String input = generateInput(1024);
-
-        try (Bytes<?> bytes = Bytes.from(input)) {
+        Bytes<?> bytes = createDirectBytes(input);
+        try {
             // Warmup
             for (int i = 0; i < WARMUP_ITERATIONS; i++) {
                 RE2DirectMemory.partialMatch(patternHandle, bytes);
@@ -158,6 +177,8 @@ class ZeroCopyPerformanceTest {
 
             double nsPerOp = (double) elapsedNanos / BENCHMARK_ITERATIONS;
             System.out.printf("Medium (1KB) Direct API: %.2f ns/op%n", nsPerOp);
+        } finally {
+            bytes.releaseLast();
         }
     }
 
@@ -188,8 +209,8 @@ class ZeroCopyPerformanceTest {
     @DisplayName("Benchmark: Large input (10KB) - Direct API")
     void benchmarkLargeInput_directApi() {
         String input = generateInput(10240);
-
-        try (Bytes<?> bytes = Bytes.from(input)) {
+        Bytes<?> bytes = createDirectBytes(input);
+        try {
             // Warmup
             for (int i = 0; i < WARMUP_ITERATIONS; i++) {
                 RE2DirectMemory.partialMatch(patternHandle, bytes);
@@ -204,6 +225,8 @@ class ZeroCopyPerformanceTest {
 
             double nsPerOp = (double) elapsedNanos / BENCHMARK_ITERATIONS;
             System.out.printf("Large (10KB) Direct API: %.2f ns/op%n", nsPerOp);
+        } finally {
+            bytes.releaseLast();
         }
     }
 
@@ -236,8 +259,8 @@ class ZeroCopyPerformanceTest {
     void benchmarkVeryLargeInput_directApi() {
         String input = generateInput(102400);
         int iterations = BENCHMARK_ITERATIONS / 10;
-
-        try (Bytes<?> bytes = Bytes.from(input)) {
+        Bytes<?> bytes = createDirectBytes(input);
+        try {
             // Warmup
             for (int i = 0; i < WARMUP_ITERATIONS / 10; i++) {
                 RE2DirectMemory.partialMatch(patternHandle, bytes);
@@ -252,6 +275,8 @@ class ZeroCopyPerformanceTest {
 
             double nsPerOp = (double) elapsedNanos / iterations;
             System.out.printf("Very Large (100KB) Direct API: %.2f ns/op%n", nsPerOp);
+        } finally {
+            bytes.releaseLast();
         }
     }
 
@@ -290,7 +315,7 @@ class ZeroCopyPerformanceTest {
         Bytes<?>[] inputs = new Bytes<?>[BULK_SIZE];
         try {
             for (int i = 0; i < BULK_SIZE; i++) {
-                inputs[i] = Bytes.from(generateInput(1024));
+                inputs[i] = createDirectBytes(generateInput(1024));
             }
 
             int iterations = BENCHMARK_ITERATIONS / 10;
@@ -347,7 +372,8 @@ class ZeroCopyPerformanceTest {
             double stringNsPerOp = (double) stringNanos / iterations;
 
             // Direct API benchmark
-            try (Bytes<?> bytes = Bytes.from(input)) {
+            Bytes<?> bytes = createDirectBytes(input);
+            try {
                 for (int i = 0; i < warmup; i++) {
                     RE2DirectMemory.partialMatch(patternHandle, bytes);
                 }
@@ -360,6 +386,8 @@ class ZeroCopyPerformanceTest {
 
                 double speedup = (stringNsPerOp - directNsPerOp) / stringNsPerOp * 100;
                 results.add(new BenchmarkResult(size, stringNsPerOp, directNsPerOp, speedup));
+            } finally {
+                bytes.releaseLast();
             }
         }
 
@@ -413,6 +441,16 @@ class ZeroCopyPerformanceTest {
         } else {
             return (size / (1024 * 1024)) + "MB";
         }
+    }
+
+    /**
+     * Creates direct (off-heap) Bytes from a String.
+     * Heap-backed Bytes don't support addressForRead().
+     */
+    private static Bytes<?> createDirectBytes(String text) {
+        Bytes<?> bytes = Bytes.allocateElasticDirect();
+        bytes.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return bytes;
     }
 
     /**

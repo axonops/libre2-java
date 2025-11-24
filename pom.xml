@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.axonops</groupId>
+    <artifactId>libre2-parent</artifactId>
+    <version>0.9.1</version>
+    <packaging>pom</packaging>
+
+    <name>libre2-java Parent</name>
+    <description>Parent POM for libre2-java multi-module project</description>
+    <url>https://github.com/axonops/libre2-java</url>
+
+    <modules>
+        <module>libre2-core</module>
+        <module>libre2-dropwizard</module>
+    </modules>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>axonops</id>
+            <name>AxonOps Team</name>
+            <organization>AxonOps</organization>
+            <organizationUrl>https://axonops.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <url>https://github.com/axonops/libre2-java</url>
+        <connection>scm:git:git://github.com/axonops/libre2-java.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/axonops/libre2-java.git</developerConnection>
+    </scm>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>17</maven.compiler.release>
+
+        <!-- Dependency versions -->
+        <slf4j.version>2.0.9</slf4j.version>
+        <dropwizard-metrics.version>4.2.19</dropwizard-metrics.version>
+
+        <!-- Test dependency versions -->
+        <junit.version>5.10.0</junit.version>
+        <assertj.version>3.24.2</assertj.version>
+        <logback.version>1.4.11</logback.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- SLF4J API -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+
+            <!-- Dropwizard Metrics -->
+            <dependency>
+                <groupId>io.dropwizard.metrics</groupId>
+                <artifactId>metrics-core</artifactId>
+                <version>${dropwizard-metrics.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.dropwizard.metrics</groupId>
+                <artifactId>metrics-jmx</artifactId>
+                <version>${dropwizard-metrics.version}</version>
+            </dependency>
+
+            <!-- Test dependencies -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Maven Compiler Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.11.0</version>
+                    <configuration>
+                        <release>17</release>
+                    </configuration>
+                </plugin>
+
+                <!-- Maven Surefire Plugin for tests -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.1.2</version>
+                </plugin>
+
+                <!-- Maven JAR Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.3.0</version>
+                </plugin>
+
+                <!-- Maven Assembly Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-assembly-plugin</artifactId>
+                    <version>3.6.0</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

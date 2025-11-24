@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.axonops</groupId>
+        <artifactId>libre2-parent</artifactId>
+        <version>0.9.1</version>
+    </parent>
+
+    <artifactId>libre2-dropwizard</artifactId>
+    <packaging>jar</packaging>
+
+    <name>libre2-dropwizard</name>
+    <description>Dropwizard Metrics integration with automatic JMX - usable with any framework (Cassandra, Spring Boot, etc.)</description>
+
+    <!-- Version inherited from parent: 0.9.1 -->
+
+    <dependencies>
+        <!-- Core library -->
+        <dependency>
+            <groupId>com.axonops</groupId>
+            <artifactId>libre2-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Dropwizard Metrics JMX (for automatic JMX registration) -->
+        <dependency>
+            <groupId>io.dropwizard.metrics</groupId>
+            <artifactId>metrics-jmx</artifactId>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

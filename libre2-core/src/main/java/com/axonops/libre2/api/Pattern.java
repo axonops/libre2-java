@@ -171,7 +171,7 @@ public final class Pattern implements AutoCloseable {
             metrics.incrementCounter(MetricNames.PATTERNS_COMPILED);
 
             Pattern compiled = new Pattern(pattern, caseSensitive, handle, fromCache);
-            logger.debug("RE2: Pattern compiled - hash: {}, length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}, timeNs: {}",
+            logger.trace("RE2: Pattern compiled - hash: {}, length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}, timeNs: {}",
                 hash, pattern.length(), caseSensitive, fromCache, compiled.nativeMemoryBytes, durationNanos);
 
             compilationSuccessful = true;

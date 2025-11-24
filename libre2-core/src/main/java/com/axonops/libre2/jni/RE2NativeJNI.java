@@ -114,4 +114,120 @@ public final class RE2NativeJNI {
      * @return size in bytes, or 0 if handle is 0
      */
     public static native long patternMemory(long handle);
+
+    // ========== Bulk Matching Operations ==========
+
+    /**
+     * Performs full match on multiple strings in single JNI call.
+     * Minimizes JNI overhead for high-throughput scenarios.
+     *
+     * @param handle compiled pattern handle
+     * @param texts array of strings to match
+     * @return boolean array (parallel to texts) indicating matches, or null on error
+     */
+    public static native boolean[] fullMatchBulk(long handle, String[] texts);
+
+    /**
+     * Performs partial match on multiple strings in single JNI call.
+     * Minimizes JNI overhead for high-throughput scenarios.
+     *
+     * @param handle compiled pattern handle
+     * @param texts array of strings to match
+     * @return boolean array (parallel to texts) indicating matches, or null on error
+     */
+    public static native boolean[] partialMatchBulk(long handle, String[] texts);
+
+    // ========== Capture Group Operations ==========
+
+    /**
+     * Extracts capture groups from a single match.
+     * Returns array where [0] = full match, [1+] = capturing groups.
+     *
+     * @param handle compiled pattern handle
+     * @param text text to match
+     * @return string array of groups, or null if no match
+     */
+    public static native String[] extractGroups(long handle, String text);
+
+    /**
+     * Extracts capture groups from multiple strings in single JNI call.
+     *
+     * @param handle compiled pattern handle
+     * @param texts array of strings to match
+     * @return array of string arrays (groups per input), or null on error
+     */
+    public static native String[][] extractGroupsBulk(long handle, String[] texts);
+
+    /**
+     * Finds all non-overlapping matches in text with capture groups.
+     * Returns array of match results, each containing groups.
+     *
+     * @param handle compiled pattern handle
+     * @param text text to search
+     * @return array of match data (flattened: [match1_groups..., match2_groups...]), or null on error
+     */
+    public static native String[][] findAllMatches(long handle, String text);
+
+    /**
+     * Gets map of named capturing groups to their indices.
+     * Returns flattened array: [name1, index1, name2, index2, ...]
+     *
+     * @param handle compiled pattern handle
+     * @return flattened name-index pairs, or null if no named groups
+     */
+    public static native String[] getNamedGroups(long handle);
+
+    // ========== Replace Operations ==========
+
+    /**
+     * Replaces first match with replacement string.
+     * Supports backreferences ($1, $2, etc.) via RE2::Rewrite.
+     *
+     * @param handle compiled pattern handle
+     * @param text input text
+     * @param replacement replacement string (supports $1, $2 backreferences)
+     * @return text with first match replaced, or original text if no match
+     */
+    public static native String replaceFirst(long handle, String text, String replacement);
+
+    /**
+     * Replaces all non-overlapping matches with replacement string.
+     * Supports backreferences ($1, $2, etc.) via RE2::Rewrite.
+     *
+     * @param handle compiled pattern handle
+     * @param text input text
+     * @param replacement replacement string (supports $1, $2 backreferences)
+     * @return text with all matches replaced, or original text if no matches
+     */
+    public static native String replaceAll(long handle, String text, String replacement);
+
+    /**
+     * Replaces all matches in multiple strings in single JNI call.
+     *
+     * @param handle compiled pattern handle
+     * @param texts array of input texts
+     * @param replacement replacement string (supports $1, $2 backreferences)
+     * @return array of replaced strings (parallel to texts), or null on error
+     */
+    public static native String[] replaceAllBulk(long handle, String[] texts, String replacement);
+
+    // ========== Utility Operations ==========
+
+    /**
+     * Escapes special regex characters for literal matching.
+     * Static method - no pattern handle required.
+     *
+     * @param text text to escape
+     * @return escaped text safe for use in regex patterns
+     */
+    public static native String quoteMeta(String text);
+
+    /**
+     * Gets pattern complexity histogram (DFA branching factor).
+     * Returns histogram array where index is fanout value and element is count.
+     *
+     * @param handle compiled pattern handle
+     * @return histogram array, or null on error
+     */
+    public static native int[] programFanout(long handle);
 }

@@ -36,19 +36,19 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ResourceTracker {
     private final Logger logger = LoggerFactory.getLogger(ResourceTracker.class);
 
-    // ACTIVE counts (current simultaneous)
+    // ACTIVE counts (current simultaneous) - keep as AtomicInteger for fast limit checks on hot path
     private final AtomicInteger activePatternsCount = new AtomicInteger(0);
     private final AtomicInteger activeMatchersCount = new AtomicInteger(0);
 
-    // Cumulative counters (lifetime, for metrics only)
-    private final AtomicLong totalPatternsCompiled = new AtomicLong(0);
-    private final AtomicLong totalPatternsClosed = new AtomicLong(0);
-    private final AtomicLong totalMatchersCreated = new AtomicLong(0);
-    private final AtomicLong totalMatchersClosed = new AtomicLong(0);
+    // Cumulative counters (lifetime, for metrics only) - use LongAdder for better write performance
+    private final java.util.concurrent.atomic.LongAdder totalPatternsCompiled = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder totalPatternsClosed = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder totalMatchersCreated = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder totalMatchersClosed = new java.util.concurrent.atomic.LongAdder();
 
-    // Rejection counters
-    private final AtomicLong patternLimitRejections = new AtomicLong(0);
-    private final AtomicLong matcherLimitRejections = new AtomicLong(0);
+    // Rejection counters (rare, but use LongAdder for consistency with other counters)
+    private final java.util.concurrent.atomic.LongAdder patternLimitRejections = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder matcherLimitRejections = new java.util.concurrent.atomic.LongAdder();
 
     public ResourceTracker() {
         // Instance per cache
@@ -63,11 +63,11 @@ public final class ResourceTracker {
      */
     public void trackPatternAllocated(int maxSimultaneous, RE2MetricsRegistry metricsRegistry) {
         int current = activePatternsCount.incrementAndGet();
-        totalPatternsCompiled.incrementAndGet();
+        totalPatternsCompiled.increment();
 
         if (current > maxSimultaneous) {
             activePatternsCount.decrementAndGet(); // Roll back
-            patternLimitRejections.incrementAndGet();
+            patternLimitRejections.increment();
 
             // Record resource exhausted error
             if (metricsRegistry != null) {
@@ -79,7 +79,7 @@ public final class ResourceTracker {
                 " (this is ACTIVE count, not cumulative - patterns can be freed and recompiled)");
         }
 
-        logger.trace("RE2: Pattern allocated - active: {}, cumulative: {}", current, totalPatternsCompiled.get());
+        logger.trace("RE2: Pattern allocated - active: {}, cumulative: {}", current, totalPatternsCompiled.sum());
     }
 
     /**
@@ -90,7 +90,7 @@ public final class ResourceTracker {
     public void trackPatternFreed(RE2MetricsRegistry metricsRegistry) {
         int currentBefore = activePatternsCount.get();
         int current = activePatternsCount.decrementAndGet();
-        totalPatternsClosed.incrementAndGet();
+        totalPatternsClosed.increment();
 
         // Record pattern freed metric (Counter, not Gauge)
         if (metricsRegistry != null) {
@@ -109,7 +109,7 @@ public final class ResourceTracker {
             activePatternsCount.set(0);
         }
 
-        logger.trace("RE2: Pattern freed - active: {}, cumulative closed: {}", current, totalPatternsClosed.get());
+        logger.trace("RE2: Pattern freed - active: {}, cumulative closed: {}", current, totalPatternsClosed.sum());
     }
 
     /**
@@ -125,21 +125,21 @@ public final class ResourceTracker {
      * Gets total patterns compiled over library lifetime (cumulative).
      */
     public long getTotalPatternsCompiled() {
-        return totalPatternsCompiled.get();
+        return totalPatternsCompiled.sum();
     }
 
     /**
      * Gets total patterns closed over library lifetime (cumulative).
      */
     public long getTotalPatternsClosed() {
-        return totalPatternsClosed.get();
+        return totalPatternsClosed.sum();
     }
 
     /**
      * Gets rejection count for pattern limit.
      */
     public long getPatternLimitRejections() {
-        return patternLimitRejections.get();
+        return patternLimitRejections.sum();
     }
 
     /**
@@ -147,7 +147,7 @@ public final class ResourceTracker {
      */
     public void trackMatcherAllocated() {
         activeMatchersCount.incrementAndGet();
-        totalMatchersCreated.incrementAndGet();
+        totalMatchersCreated.increment();
     }
 
     /**
@@ -157,7 +157,7 @@ public final class ResourceTracker {
      */
     public void trackMatcherFreed(RE2MetricsRegistry metricsRegistry) {
         int current = activeMatchersCount.decrementAndGet();
-        totalMatchersClosed.incrementAndGet();
+        totalMatchersClosed.increment();
 
         // Record matcher freed metric (Counter, not Gauge)
         if (metricsRegistry != null) {
@@ -181,21 +181,21 @@ public final class ResourceTracker {
      * Gets total matchers created over library lifetime.
      */
     public long getTotalMatchersCreated() {
-        return totalMatchersCreated.get();
+        return totalMatchersCreated.sum();
     }
 
     /**
      * Gets total matchers closed over library lifetime.
      */
     public long getTotalMatchersClosed() {
-        return totalMatchersClosed.get();
+        return totalMatchersClosed.sum();
     }
 
     /**
      * Gets rejection count for matcher limit.
      */
     public long getMatcherLimitRejections() {
-        return matcherLimitRejections.get();
+        return matcherLimitRejections.sum();
     }
 
     /**
@@ -204,12 +204,12 @@ public final class ResourceTracker {
     public void reset() {
         activePatternsCount.set(0);
         activeMatchersCount.set(0);
-        totalPatternsCompiled.set(0);
-        totalPatternsClosed.set(0);
-        totalMatchersCreated.set(0);
-        totalMatchersClosed.set(0);
-        patternLimitRejections.set(0);
-        matcherLimitRejections.set(0);
+        totalPatternsCompiled.reset();
+        totalPatternsClosed.reset();
+        totalMatchersCreated.reset();
+        totalMatchersClosed.reset();
+        patternLimitRejections.reset();
+        matcherLimitRejections.reset();
         logger.trace("RE2: ResourceTracker reset");
     }
 
@@ -219,10 +219,10 @@ public final class ResourceTracker {
     public ResourceStatistics getStatistics() {
         return new ResourceStatistics(
             activePatternsCount.get(),
-            totalPatternsCompiled.get(),
-            totalPatternsClosed.get(),
-            patternLimitRejections.get(),
-            matcherLimitRejections.get()
+            totalPatternsCompiled.sum(),
+            totalPatternsClosed.sum(),
+            patternLimitRejections.sum(),
+            matcherLimitRejections.sum()
         );
     }
 

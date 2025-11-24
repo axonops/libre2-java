@@ -117,7 +117,7 @@ public final class PatternCache {
             // Production applications should call shutdown() explicitly or rely on
             // try-with-resources if cache lifecycle is scoped.
 
-            logger.info("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s, deferredCleanup: every {}s",
+            logger.debug("RE2: Pattern cache initialized - maxSize: {}, idleTimeout: {}s, scanInterval: {}s, deferredCleanup: every {}s",
                 config.maxCacheSize(),
                 config.idleTimeoutSeconds(),
                 config.evictionScanIntervalSeconds(),
@@ -443,7 +443,7 @@ public final class PatternCache {
         int cacheSize = cache.size();
         int deferredSize = deferredCleanup.size();
 
-        logger.info("RE2: Clearing cache - {} cached patterns, {} deferred patterns",
+        logger.debug("RE2: Clearing cache - {} cached patterns, {} deferred patterns",
             cacheSize, deferredSize);
 
         // Close and remove all cached patterns

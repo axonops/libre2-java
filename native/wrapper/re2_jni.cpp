@@ -220,4 +220,477 @@ JNIEXPORT jlong JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_patternMemory(
     }
 }
 
+// ========== Bulk Matching Operations ==========
+
+JNIEXPORT jbooleanArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_fullMatchBulk(
+    JNIEnv *env, jclass cls, jlong handle, jobjectArray texts) {
+
+    if (handle == 0 || texts == nullptr) {
+        last_error = "Null pointer";
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        jsize length = env->GetArrayLength(texts);
+
+        // Allocate result array
+        jbooleanArray results = env->NewBooleanArray(length);
+        if (results == nullptr) {
+            last_error = "Failed to allocate result array";
+            return nullptr;
+        }
+
+        // Process all strings in native code (single JNI crossing)
+        std::vector<jboolean> matches(length);
+        for (jsize i = 0; i < length; i++) {
+            jstring jstr = (jstring)env->GetObjectArrayElement(texts, i);
+            if (jstr == nullptr) {
+                matches[i] = JNI_FALSE;
+                continue;
+            }
+
+            JStringGuard guard(env, jstr);
+            if (guard.valid()) {
+                matches[i] = RE2::FullMatch(guard.get(), *re) ? JNI_TRUE : JNI_FALSE;
+            } else {
+                matches[i] = JNI_FALSE;
+            }
+
+            env->DeleteLocalRef(jstr);
+        }
+
+        // Write results back to Java
+        env->SetBooleanArrayRegion(results, 0, length, matches.data());
+        return results;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Bulk match exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+JNIEXPORT jbooleanArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_partialMatchBulk(
+    JNIEnv *env, jclass cls, jlong handle, jobjectArray texts) {
+
+    if (handle == 0 || texts == nullptr) {
+        last_error = "Null pointer";
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        jsize length = env->GetArrayLength(texts);
+
+        jbooleanArray results = env->NewBooleanArray(length);
+        if (results == nullptr) {
+            last_error = "Failed to allocate result array";
+            return nullptr;
+        }
+
+        std::vector<jboolean> matches(length);
+        for (jsize i = 0; i < length; i++) {
+            jstring jstr = (jstring)env->GetObjectArrayElement(texts, i);
+            if (jstr == nullptr) {
+                matches[i] = JNI_FALSE;
+                continue;
+            }
+
+            JStringGuard guard(env, jstr);
+            if (guard.valid()) {
+                matches[i] = RE2::PartialMatch(guard.get(), *re) ? JNI_TRUE : JNI_FALSE;
+            } else {
+                matches[i] = JNI_FALSE;
+            }
+
+            env->DeleteLocalRef(jstr);
+        }
+
+        env->SetBooleanArrayRegion(results, 0, length, matches.data());
+        return results;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Bulk partial match exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+// ========== Capture Group Operations ==========
+
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractGroups(
+    JNIEnv *env, jclass cls, jlong handle, jstring text) {
+
+    if (handle == 0 || text == nullptr) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        JStringGuard guard(env, text);
+        if (!guard.valid()) {
+            return nullptr;
+        }
+
+        int numGroups = re->NumberOfCapturingGroups();
+        std::vector<re2::StringPiece> groups(numGroups + 1);  // +1 for full match
+
+        // Match and extract groups
+        if (!re->Match(guard.get(), 0, strlen(guard.get()), RE2::UNANCHORED, groups.data(), numGroups + 1)) {
+            return nullptr;  // No match
+        }
+
+        // Create Java string array
+        jclass stringClass = env->FindClass("java/lang/String");
+        jobjectArray result = env->NewObjectArray(numGroups + 1, stringClass, nullptr);
+        if (result == nullptr) {
+            return nullptr;
+        }
+
+        // Fill array with groups
+        for (int i = 0; i <= numGroups; i++) {
+            if (groups[i].data() != nullptr) {
+                jstring jstr = env->NewStringUTF(std::string(groups[i].data(), groups[i].size()).c_str());
+                env->SetObjectArrayElement(result, i, jstr);
+                env->DeleteLocalRef(jstr);
+            }
+        }
+
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Extract groups exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractGroupsBulk(
+    JNIEnv *env, jclass cls, jlong handle, jobjectArray texts) {
+
+    if (handle == 0 || texts == nullptr) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        jsize length = env->GetArrayLength(texts);
+        int numGroups = re->NumberOfCapturingGroups();
+
+        // Create outer array (one element per input text)
+        jclass stringArrayClass = env->FindClass("[Ljava/lang/String;");
+        jobjectArray result = env->NewObjectArray(length, stringArrayClass, nullptr);
+        if (result == nullptr) {
+            return nullptr;
+        }
+
+        // Process each text
+        for (jsize i = 0; i < length; i++) {
+            jstring jstr = (jstring)env->GetObjectArrayElement(texts, i);
+            if (jstr == nullptr) {
+                continue;
+            }
+
+            JStringGuard guard(env, jstr);
+            if (!guard.valid()) {
+                env->DeleteLocalRef(jstr);
+                continue;
+            }
+
+            std::vector<re2::StringPiece> groups(numGroups + 1);
+            if (re->Match(guard.get(), 0, strlen(guard.get()), RE2::UNANCHORED, groups.data(), numGroups + 1)) {
+                // Create string array for this match's groups
+                jclass stringClass = env->FindClass("java/lang/String");
+                jobjectArray groupArray = env->NewObjectArray(numGroups + 1, stringClass, nullptr);
+
+                for (int j = 0; j <= numGroups; j++) {
+                    if (groups[j].data() != nullptr) {
+                        jstring groupStr = env->NewStringUTF(std::string(groups[j].data(), groups[j].size()).c_str());
+                        env->SetObjectArrayElement(groupArray, j, groupStr);
+                        env->DeleteLocalRef(groupStr);
+                    }
+                }
+
+                env->SetObjectArrayElement(result, i, groupArray);
+                env->DeleteLocalRef(groupArray);
+            }
+
+            env->DeleteLocalRef(jstr);
+        }
+
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Extract groups bulk exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllMatches(
+    JNIEnv *env, jclass cls, jlong handle, jstring text) {
+
+    if (handle == 0 || text == nullptr) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        JStringGuard guard(env, text);
+        if (!guard.valid()) {
+            return nullptr;
+        }
+
+        int numGroups = re->NumberOfCapturingGroups();
+        std::vector<std::vector<std::string>> allMatches;
+
+        // Find all non-overlapping matches
+        re2::StringPiece input(guard.get());
+        std::vector<re2::StringPiece> groups(numGroups + 1);
+
+        while (re->Match(input, 0, input.size(), RE2::UNANCHORED, groups.data(), numGroups + 1)) {
+            std::vector<std::string> matchGroups;
+            for (int i = 0; i <= numGroups; i++) {
+                if (groups[i].data() != nullptr) {
+                    matchGroups.push_back(std::string(groups[i].data(), groups[i].size()));
+                } else {
+                    matchGroups.push_back("");
+                }
+            }
+            allMatches.push_back(matchGroups);
+
+            // Advance past this match
+            if (groups[0].size() == 0) {
+                break;  // Avoid infinite loop on zero-length match
+            }
+            input.remove_prefix(groups[0].data() - input.data() + groups[0].size());
+        }
+
+        if (allMatches.empty()) {
+            return nullptr;
+        }
+
+        // Create Java array of arrays
+        jclass stringArrayClass = env->FindClass("[Ljava/lang/String;");
+        jobjectArray result = env->NewObjectArray(allMatches.size(), stringArrayClass, nullptr);
+
+        for (size_t i = 0; i < allMatches.size(); i++) {
+            jclass stringClass = env->FindClass("java/lang/String");
+            jobjectArray groupArray = env->NewObjectArray(allMatches[i].size(), stringClass, nullptr);
+
+            for (size_t j = 0; j < allMatches[i].size(); j++) {
+                jstring jstr = env->NewStringUTF(allMatches[i][j].c_str());
+                env->SetObjectArrayElement(groupArray, j, jstr);
+                env->DeleteLocalRef(jstr);
+            }
+
+            env->SetObjectArrayElement(result, i, groupArray);
+            env->DeleteLocalRef(groupArray);
+        }
+
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Find all matches exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_getNamedGroups(
+    JNIEnv *env, jclass cls, jlong handle) {
+
+    if (handle == 0) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        const std::map<std::string, int>& namedGroups = re->NamedCapturingGroups();
+
+        if (namedGroups.empty()) {
+            return nullptr;
+        }
+
+        // Flatten to array: [name1, index1_as_string, name2, index2_as_string, ...]
+        jclass stringClass = env->FindClass("java/lang/String");
+        jobjectArray result = env->NewObjectArray(namedGroups.size() * 2, stringClass, nullptr);
+
+        int idx = 0;
+        for (const auto& entry : namedGroups) {
+            jstring name = env->NewStringUTF(entry.first.c_str());
+            jstring index = env->NewStringUTF(std::to_string(entry.second).c_str());
+
+            env->SetObjectArrayElement(result, idx++, name);
+            env->SetObjectArrayElement(result, idx++, index);
+
+            env->DeleteLocalRef(name);
+            env->DeleteLocalRef(index);
+        }
+
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Get named groups exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+// ========== Replace Operations ==========
+
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceFirst(
+    JNIEnv *env, jclass cls, jlong handle, jstring text, jstring replacement) {
+
+    if (handle == 0 || text == nullptr || replacement == nullptr) {
+        return text;  // Return original if invalid
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        JStringGuard textGuard(env, text);
+        JStringGuard replGuard(env, replacement);
+
+        if (!textGuard.valid() || !replGuard.valid()) {
+            return text;
+        }
+
+        std::string result(textGuard.get());
+        RE2::Replace(&result, *re, replGuard.get());
+
+        return env->NewStringUTF(result.c_str());
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Replace first exception: ") + e.what();
+        return text;
+    }
+}
+
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAll(
+    JNIEnv *env, jclass cls, jlong handle, jstring text, jstring replacement) {
+
+    if (handle == 0 || text == nullptr || replacement == nullptr) {
+        return text;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        JStringGuard textGuard(env, text);
+        JStringGuard replGuard(env, replacement);
+
+        if (!textGuard.valid() || !replGuard.valid()) {
+            return text;
+        }
+
+        std::string result(textGuard.get());
+        RE2::GlobalReplace(&result, *re, replGuard.get());
+
+        return env->NewStringUTF(result.c_str());
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Replace all exception: ") + e.what();
+        return text;
+    }
+}
+
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAllBulk(
+    JNIEnv *env, jclass cls, jlong handle, jobjectArray texts, jstring replacement) {
+
+    if (handle == 0 || texts == nullptr || replacement == nullptr) {
+        return texts;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        JStringGuard replGuard(env, replacement);
+        if (!replGuard.valid()) {
+            return texts;
+        }
+
+        jsize length = env->GetArrayLength(texts);
+        jclass stringClass = env->FindClass("java/lang/String");
+        jobjectArray result = env->NewObjectArray(length, stringClass, nullptr);
+
+        for (jsize i = 0; i < length; i++) {
+            jstring jstr = (jstring)env->GetObjectArrayElement(texts, i);
+            if (jstr == nullptr) {
+                continue;
+            }
+
+            JStringGuard textGuard(env, jstr);
+            if (textGuard.valid()) {
+                std::string replaced(textGuard.get());
+                RE2::GlobalReplace(&replaced, *re, replGuard.get());
+
+                jstring resultStr = env->NewStringUTF(replaced.c_str());
+                env->SetObjectArrayElement(result, i, resultStr);
+                env->DeleteLocalRef(resultStr);
+            } else {
+                env->SetObjectArrayElement(result, i, jstr);
+            }
+
+            env->DeleteLocalRef(jstr);
+        }
+
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Replace all bulk exception: ") + e.what();
+        return texts;
+    }
+}
+
+// ========== Utility Operations ==========
+
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_quoteMeta(
+    JNIEnv *env, jclass cls, jstring text) {
+
+    if (text == nullptr) {
+        return nullptr;
+    }
+
+    try {
+        JStringGuard guard(env, text);
+        if (!guard.valid()) {
+            return nullptr;
+        }
+
+        std::string escaped = RE2::QuoteMeta(guard.get());
+        return env->NewStringUTF(escaped.c_str());
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Quote meta exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+JNIEXPORT jintArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_programFanout(
+    JNIEnv *env, jclass cls, jlong handle) {
+
+    if (handle == 0) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        std::vector<int> histogram;
+
+        // Get fanout histogram (RE2 fills the vector)
+        int numFanout = re->ProgramFanout(&histogram);
+        if (numFanout == 0 || histogram.empty()) {
+            return nullptr;
+        }
+
+        // Convert vector<int> to Java int array
+        jintArray result = env->NewIntArray(histogram.size());
+        if (result == nullptr) {
+            return nullptr;
+        }
+
+        // Copy data (cast to jint if needed)
+        std::vector<jint> jintData(histogram.begin(), histogram.end());
+        env->SetIntArrayRegion(result, 0, jintData.size(), jintData.data());
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Program fanout exception: ") + e.what();
+        return nullptr;
+    }
+}
+
 } // extern "C"

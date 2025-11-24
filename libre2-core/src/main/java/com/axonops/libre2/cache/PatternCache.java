@@ -73,25 +73,24 @@ public final class PatternCache {
     // Deferred cleanup: Patterns evicted from cache but still in use (refCount > 0)
     private final CopyOnWriteArrayList<CachedPattern> deferredCleanup = new CopyOnWriteArrayList<>();
 
-    // Statistics (write-heavy counters - use LongAdder for better concurrency under high load)
-    // Incremented on every cache operation, read occasionally for metrics
-    private final java.util.concurrent.atomic.LongAdder hits = new java.util.concurrent.atomic.LongAdder();
-    private final java.util.concurrent.atomic.LongAdder misses = new java.util.concurrent.atomic.LongAdder();
-    private final java.util.concurrent.atomic.LongAdder evictionsLRU = new java.util.concurrent.atomic.LongAdder();
-    private final java.util.concurrent.atomic.LongAdder evictionsIdle = new java.util.concurrent.atomic.LongAdder();
-    private final java.util.concurrent.atomic.LongAdder evictionsDeferred = new java.util.concurrent.atomic.LongAdder();
+    // Statistics (all atomic, lock-free)
+    private final AtomicLong hits = new AtomicLong(0);
+    private final AtomicLong misses = new AtomicLong(0);
+    private final AtomicLong evictionsLRU = new AtomicLong(0);
+    private final AtomicLong evictionsIdle = new AtomicLong(0);
+    private final AtomicLong evictionsDeferred = new AtomicLong(0);
 
-    // Native memory tracking (need addAndGet for atomic peak tracking - keep as AtomicLong)
+    // Native memory tracking (off-heap memory consumed by patterns)
     private final AtomicLong totalNativeMemoryBytes = new AtomicLong(0);
-    private final AtomicLong deferredNativeMemoryBytes = new AtomicLong(0);
-
-    // Peak tracking (need fast reads for compare-and-set updates - keep as AtomicLong)
     private final AtomicLong peakNativeMemoryBytes = new AtomicLong(0);
+
+    // Deferred cleanup tracking
+    private final AtomicLong deferredNativeMemoryBytes = new AtomicLong(0);
     private final AtomicLong peakDeferredNativeMemoryBytes = new AtomicLong(0);
     private final AtomicInteger peakDeferredPatternCount = new AtomicInteger(0);
 
-    // Invalid pattern recompilations (defensive check triggered - rare but still a counter)
-    private final java.util.concurrent.atomic.LongAdder invalidPatternRecompilations = new java.util.concurrent.atomic.LongAdder();
+    // Invalid pattern recompilations (defensive check triggered)
+    private final AtomicLong invalidPatternRecompilations = new AtomicLong(0);
 
     public PatternCache(RE2Config config) {
         this.config = config;
@@ -150,7 +149,7 @@ public final class PatternCache {
         RE2MetricsRegistry metrics = config.metricsRegistry();
 
         if (!config.cacheEnabled()) {
-            misses.increment();
+            misses.incrementAndGet();
             metrics.incrementCounter(MetricNames.PATTERNS_CACHE_MISSES);
             return compiler.get();
         }
@@ -164,7 +163,7 @@ public final class PatternCache {
             if (config.validateCachedPatterns() && !cached.pattern().isValid()) {
                 String hash = PatternHasher.hash(patternString);
                 logger.warn("RE2: Invalid cached pattern detected - hash: {}, recompiling", hash);
-                invalidPatternRecompilations.increment();
+                invalidPatternRecompilations.incrementAndGet();
                 metrics.incrementCounter(MetricNames.PATTERNS_INVALID_RECOMPILED);
                 // Remove invalid pattern and decrement memory
                 if (cache.remove(key, cached)) {
@@ -174,7 +173,7 @@ public final class PatternCache {
             } else {
                 // Cache hit - update access time atomically
                 cached.touch();
-                hits.increment();
+                hits.incrementAndGet();
                 metrics.incrementCounter(MetricNames.PATTERNS_CACHE_HITS);
                 logger.trace("RE2: Cache hit - hash: {}",
                     PatternHasher.hash(patternString));
@@ -184,7 +183,7 @@ public final class PatternCache {
 
         // Cache miss - use computeIfAbsent for safe concurrent compilation
         // Only ONE thread compiles each unique pattern
-        misses.increment();
+        misses.incrementAndGet();
         metrics.incrementCounter(MetricNames.PATTERNS_CACHE_MISSES);
         logger.trace("RE2: Cache miss - hash: {}, compiling", PatternHasher.hash(patternString));
 
@@ -276,7 +275,7 @@ public final class PatternCache {
                 if (cached.pattern().getRefCount() > 0) {
                     // Pattern in use - defer cleanup
                     deferredCleanup.add(cached);
-                    evictionsDeferred.increment();
+                    evictionsDeferred.incrementAndGet();
 
                     // Track deferred memory
                     long deferredMemory = deferredNativeMemoryBytes.addAndGet(cached.memoryBytes());
@@ -287,7 +286,7 @@ public final class PatternCache {
                 } else {
                     // Safe to free immediately
                     cached.forceClose();
-                    evictionsLRU.increment();
+                    evictionsLRU.incrementAndGet();
                     config.metricsRegistry().incrementCounter(MetricNames.CACHE_EVICTIONS_LRU);
                     logger.trace("RE2: LRU evicting pattern (immediate): {}", entry.getKey());
                 }
@@ -328,7 +327,7 @@ public final class PatternCache {
                 if (cached.pattern().getRefCount() > 0) {
                     // Pattern idle but still in use - defer cleanup
                     deferredCleanup.add(cached);
-                    evictionsDeferred.increment();
+                    evictionsDeferred.incrementAndGet();
 
                     // Track deferred memory
                     long deferredMemory = deferredNativeMemoryBytes.addAndGet(cached.memoryBytes());
@@ -344,7 +343,7 @@ public final class PatternCache {
                     // Can free immediately
                     logger.trace("RE2: Idle evicting pattern (immediate): {}", entry.getKey());
                     cached.forceClose();
-                    evictionsIdle.increment();
+                    evictionsIdle.incrementAndGet();
                     config.metricsRegistry().incrementCounter(MetricNames.CACHE_EVICTIONS_IDLE);
                 }
                 evictedCount.incrementAndGet();
@@ -400,11 +399,11 @@ public final class PatternCache {
      * Gets current cache hit rate as percentage.
      */
     private double getCacheHitRate() {
-        long totalRequests = hits.sum() + misses.sum();
+        long totalRequests = hits.get() + misses.get();
         if (totalRequests == 0) {
             return 0.0;
         }
-        return (hits.sum() * 100.0) / totalRequests;
+        return (hits.get() * 100.0) / totalRequests;
     }
 
     /**
@@ -415,17 +414,17 @@ public final class PatternCache {
         int deferredSize = deferredCleanup.size();
 
         return new CacheStatistics(
-            hits.sum(),
-            misses.sum(),
-            evictionsLRU.sum(),
-            evictionsIdle.sum(),
-            evictionsDeferred.sum(),
+            hits.get(),
+            misses.get(),
+            evictionsLRU.get(),
+            evictionsIdle.get(),
+            evictionsDeferred.get(),
             currentSize,
             config.maxCacheSize(),
             deferredSize,
             totalNativeMemoryBytes.get(),
             peakNativeMemoryBytes.get(),
-            invalidPatternRecompilations.sum()
+            invalidPatternRecompilations.get()
         );
     }
 
@@ -479,17 +478,13 @@ public final class PatternCache {
      * Resets cache statistics (for testing only).
      */
     public void resetStatistics() {
-        hits.reset();
-        misses.reset();
-        evictionsLRU.reset();
-        evictionsIdle.reset();
-        evictionsDeferred.reset();
-        totalNativeMemoryBytes.set(0);
-        deferredNativeMemoryBytes.set(0);
-        peakNativeMemoryBytes.set(0);
-        peakDeferredNativeMemoryBytes.set(0);
-        peakDeferredPatternCount.set(0);
-        invalidPatternRecompilations.reset();
+        hits.set(0);
+        misses.set(0);
+        evictionsLRU.set(0);
+        evictionsIdle.set(0);
+        evictionsDeferred.set(0);
+        peakNativeMemoryBytes.set(totalNativeMemoryBytes.get());
+        invalidPatternRecompilations.set(0);
         logger.trace("RE2: Cache statistics reset");
     }
 

@@ -27,6 +27,8 @@ import com.axonops.libre2.util.ResourceTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -805,6 +807,226 @@ public final class Pattern implements AutoCloseable {
         }
 
         return RE2NativeJNI.findAllMatchesDirect(nativeHandle, address, length);
+    }
+
+    // ========== ByteBuffer API (Automatic Zero-Copy Routing) ==========
+
+    /**
+     * Tests if ByteBuffer content fully matches this pattern.
+     *
+     * <p>This method intelligently routes to the optimal implementation:</p>
+     * <ul>
+     *   <li><strong>DirectByteBuffer:</strong> Uses zero-copy via {@link #matches(long, int)} (46-99% faster)</li>
+     *   <li><strong>HeapByteBuffer:</strong> Converts to String and uses {@link #matches(String)}</li>
+     * </ul>
+     *
+     * <p><strong>Usage Example:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("\\d+");
+     *
+     * // DirectByteBuffer - zero-copy, 46-99% faster
+     * ByteBuffer directBuffer = ByteBuffer.allocateDirect(1024);
+     * directBuffer.put("12345".getBytes(StandardCharsets.UTF_8));
+     * directBuffer.flip();
+     * boolean r1 = pattern.matches(directBuffer);  // Zero-copy!
+     *
+     * // HeapByteBuffer - falls back to String API
+     * ByteBuffer heapBuffer = ByteBuffer.wrap("67890".getBytes(StandardCharsets.UTF_8));
+     * boolean r2 = pattern.matches(heapBuffer);  // Converted to String
+     * }</pre>
+     *
+     * <p><strong>Performance:</strong> When using DirectByteBuffer, provides 46-99% improvement.
+     * When using heap ByteBuffer, equivalent to String API (no improvement).</p>
+     *
+     * <p><strong>Memory Safety:</strong> The buffer's backing memory must remain valid
+     * for the duration of this call. Do NOT release direct buffers until method returns.</p>
+     *
+     * @param buffer ByteBuffer containing UTF-8 encoded text (direct or heap-backed)
+     * @return true if entire content matches this pattern, false otherwise
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #matches(String) String-based variant
+     * @see #matches(long, int) Raw address variant
+     * @since 1.1.0
+     */
+    public boolean matches(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            // Zero-copy path for DirectByteBuffer
+            Long address = getDirectBufferAddress(buffer);
+            if (address != null) {
+                long finalAddress = address + buffer.position();
+                int length = buffer.remaining();
+                return matches(finalAddress, length);
+            } else {
+                // Couldn't extract address - fall back to String
+                logger.debug("RE2: Could not extract address from DirectByteBuffer, using String fallback");
+                return matchesFromByteBuffer(buffer);
+            }
+        } else {
+            // Heap-backed ByteBuffer - convert to String
+            return matchesFromByteBuffer(buffer);
+        }
+    }
+
+    /**
+     * Tests if pattern matches anywhere in ByteBuffer content.
+     *
+     * <p>Intelligently routes to zero-copy (DirectByteBuffer) or String API (heap buffer).</p>
+     *
+     * <p><strong>Performance:</strong> 46-99% faster for DirectByteBuffer.</p>
+     *
+     * @param buffer ByteBuffer containing UTF-8 encoded text
+     * @return true if pattern matches anywhere in content, false otherwise
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.1.0
+     */
+    public boolean find(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            // Zero-copy path
+            Long address = getDirectBufferAddress(buffer);
+            if (address != null) {
+                long finalAddress = address + buffer.position();
+                int length = buffer.remaining();
+                return find(finalAddress, length);
+            } else {
+                logger.debug("RE2: Could not extract address from DirectByteBuffer, using String fallback");
+                return findFromByteBuffer(buffer);
+            }
+        } else {
+            // Heap-backed - convert to String
+            return findFromByteBuffer(buffer);
+        }
+    }
+
+    /**
+     * Extracts capture groups from ByteBuffer content.
+     *
+     * <p>Intelligently routes to zero-copy (DirectByteBuffer) or String API (heap buffer).</p>
+     *
+     * @param buffer ByteBuffer containing UTF-8 encoded text
+     * @return String array where [0] = full match, [1+] = capturing groups, or null if no match
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.1.0
+     */
+    public String[] extractGroups(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            // Zero-copy path
+            Long address = getDirectBufferAddress(buffer);
+            if (address != null) {
+                long finalAddress = address + buffer.position();
+                int length = buffer.remaining();
+                return extractGroups(finalAddress, length);
+            } else {
+                logger.debug("RE2: Could not extract address from DirectByteBuffer, using String fallback");
+                return extractGroupsFromByteBuffer(buffer);
+            }
+        } else {
+            // Heap-backed
+            return extractGroupsFromByteBuffer(buffer);
+        }
+    }
+
+    /**
+     * Finds all non-overlapping matches in ByteBuffer content.
+     *
+     * <p>Intelligently routes to zero-copy (DirectByteBuffer) or String API (heap buffer).</p>
+     *
+     * @param buffer ByteBuffer containing UTF-8 encoded text
+     * @return array of match results with capture groups, or null if no matches
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.1.0
+     */
+    public String[][] findAllMatches(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            // Zero-copy path
+            Long address = getDirectBufferAddress(buffer);
+            if (address != null) {
+                long finalAddress = address + buffer.position();
+                int length = buffer.remaining();
+                return findAllMatches(finalAddress, length);
+            } else {
+                logger.debug("RE2: Could not extract address from DirectByteBuffer, using String fallback");
+                return findAllMatchesFromByteBuffer(buffer);
+            }
+        } else {
+            // Heap-backed
+            return findAllMatchesFromByteBuffer(buffer);
+        }
+    }
+
+    /**
+     * Helper: Extract native address from DirectByteBuffer using reflection.
+     * Returns null if extraction fails (will fall back to String API).
+     */
+    private static Long getDirectBufferAddress(ByteBuffer buffer) {
+        try {
+            // Use reflection to access sun.nio.ch.DirectBuffer.address()
+            // This avoids compile-time dependency on internal API
+            java.lang.reflect.Method addressMethod = buffer.getClass().getMethod("address");
+            addressMethod.setAccessible(true);
+            return (Long) addressMethod.invoke(buffer);
+        } catch (Exception e) {
+            // Reflection failed - not a problem, we'll use String fallback
+            logger.trace("RE2: Failed to extract DirectByteBuffer address via reflection", e);
+            return null;
+        }
+    }
+
+    /**
+     * Helper: Extract String from ByteBuffer for matches() (heap-backed fallback).
+     */
+    private boolean matchesFromByteBuffer(ByteBuffer buffer) {
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.duplicate().get(bytes);  // Use duplicate to not modify position
+        String text = new String(bytes, StandardCharsets.UTF_8);
+        return matches(text);
+    }
+
+    /**
+     * Helper: Extract String from ByteBuffer for find() (heap-backed fallback).
+     */
+    private boolean findFromByteBuffer(ByteBuffer buffer) {
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.duplicate().get(bytes);
+        String text = new String(bytes, StandardCharsets.UTF_8);
+        try (Matcher m = matcher(text)) {
+            return m.find();
+        }
+    }
+
+    /**
+     * Helper: Extract String from ByteBuffer for extractGroups() (heap-backed fallback).
+     */
+    private String[] extractGroupsFromByteBuffer(ByteBuffer buffer) {
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.duplicate().get(bytes);
+        String text = new String(bytes, StandardCharsets.UTF_8);
+        return RE2NativeJNI.extractGroups(nativeHandle, text);
+    }
+
+    /**
+     * Helper: Extract String from ByteBuffer for findAllMatches() (heap-backed fallback).
+     */
+    private String[][] findAllMatchesFromByteBuffer(ByteBuffer buffer) {
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.duplicate().get(bytes);
+        String text = new String(bytes, StandardCharsets.UTF_8);
+        return RE2NativeJNI.findAllMatches(nativeHandle, text);
     }
 
     /**

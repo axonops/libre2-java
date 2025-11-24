@@ -450,8 +450,15 @@ public final class Pattern implements AutoCloseable {
             return new boolean[0];
         }
 
-        String[] array = inputs.toArray(new String[0]);
-        return matchAll(array);
+        try {
+            String[] array = inputs.toArray(new String[0]);
+            return matchAll(array);
+        } catch (ArrayStoreException e) {
+            throw new IllegalArgumentException(
+                "Collection contains non-String elements. All elements must be String type. " +
+                "If you have Collection<Integer> or other types, convert to strings first: " +
+                "collection.stream().map(Object::toString).toList()", e);
+        }
     }
 
     /**
@@ -543,7 +550,14 @@ public final class Pattern implements AutoCloseable {
             return new java.util.ArrayList<>();
         }
 
-        String[] array = inputs.toArray(new String[0]);
+        String[] array;
+        try {
+            array = inputs.toArray(new String[0]);
+        } catch (ArrayStoreException e) {
+            throw new IllegalArgumentException(
+                "Collection contains non-String elements. Use stream().map(Object::toString).toList() to convert.", e);
+        }
+
         boolean[] matches = matchAll(array);
 
         java.util.List<String> result = new java.util.ArrayList<>();
@@ -591,7 +605,14 @@ public final class Pattern implements AutoCloseable {
             return new java.util.ArrayList<>();
         }
 
-        String[] array = inputs.toArray(new String[0]);
+        String[] array;
+        try {
+            array = inputs.toArray(new String[0]);
+        } catch (ArrayStoreException e) {
+            throw new IllegalArgumentException(
+                "Collection contains non-String elements. Use stream().map(Object::toString).toList() to convert.", e);
+        }
+
         boolean[] matches = matchAll(array);
 
         java.util.List<String> result = new java.util.ArrayList<>();
@@ -648,7 +669,14 @@ public final class Pattern implements AutoCloseable {
             return 0;
         }
 
-        String[] array = inputs.toArray(new String[0]);
+        String[] array;
+        try {
+            array = inputs.toArray(new String[0]);
+        } catch (ArrayStoreException e) {
+            throw new IllegalArgumentException(
+                "Collection contains non-String elements. Use stream().map(Object::toString).toList() to convert.", e);
+        }
+
         boolean[] matches = matchAll(array);
 
         int removed = 0;
@@ -708,7 +736,14 @@ public final class Pattern implements AutoCloseable {
             return 0;
         }
 
-        String[] array = inputs.toArray(new String[0]);
+        String[] array;
+        try {
+            array = inputs.toArray(new String[0]);
+        } catch (ArrayStoreException e) {
+            throw new IllegalArgumentException(
+                "Collection contains non-String elements. Use stream().map(Object::toString).toList() to convert.", e);
+        }
+
         boolean[] matches = matchAll(array);
 
         int removed = 0;

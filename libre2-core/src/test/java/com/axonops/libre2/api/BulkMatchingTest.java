@@ -15,6 +15,10 @@
  */
 package com.axonops.libre2.api;
 
+import com.axonops.libre2.cache.PatternCache;
+import com.axonops.libre2.test.TestUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -26,6 +30,19 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * Tests for bulk matching operations (Collection and array variants).
  */
 class BulkMatchingTest {
+
+    private static PatternCache originalCache;
+
+    @BeforeAll
+    static void setUpClass() {
+        // Use test config to avoid JMX InstanceAlreadyExistsException
+        originalCache = TestUtils.replaceGlobalCache(TestUtils.testConfigBuilder().build());
+    }
+
+    @AfterAll
+    static void tearDownClass() {
+        TestUtils.restoreGlobalCache(originalCache);
+    }
 
     /**
      * Detects if running under QEMU emulation (set by CI workflow).

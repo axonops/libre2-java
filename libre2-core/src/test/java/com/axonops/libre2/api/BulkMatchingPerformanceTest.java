@@ -15,6 +15,10 @@
  */
 package com.axonops.libre2.api;
 
+import com.axonops.libre2.cache.PatternCache;
+import com.axonops.libre2.test.TestUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +37,18 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class BulkMatchingPerformanceTest {
     private static final Logger logger = LoggerFactory.getLogger(BulkMatchingPerformanceTest.class);
+
+    private static PatternCache originalCache;
+
+    @BeforeAll
+    static void setUpClass() {
+        originalCache = TestUtils.replaceGlobalCache(TestUtils.testConfigBuilder().build());
+    }
+
+    @AfterAll
+    static void tearDownClass() {
+        TestUtils.restoreGlobalCache(originalCache);
+    }
 
     /**
      * Detects if running under QEMU emulation (set by CI workflow).

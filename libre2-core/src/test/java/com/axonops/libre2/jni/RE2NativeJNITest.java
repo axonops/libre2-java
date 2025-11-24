@@ -15,7 +15,12 @@
  */
 package com.axonops.libre2.jni;
 
+import com.axonops.libre2.api.Pattern;
+import com.axonops.libre2.cache.PatternCache;
+import com.axonops.libre2.test.TestUtils;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,9 +38,18 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class RE2NativeJNITest {
 
-    static {
-        // Ensure native library loaded
-        RE2LibraryLoader.loadLibrary();
+    private static PatternCache originalCache;
+
+    @BeforeAll
+    static void setUpClass() {
+        // Replace global cache with test config (disables JMX to prevent InstanceAlreadyExistsException)
+        originalCache = TestUtils.replaceGlobalCache(TestUtils.testConfigBuilder().build());
+    }
+
+    @AfterAll
+    static void tearDownClass() {
+        // Restore original cache
+        TestUtils.restoreGlobalCache(originalCache);
     }
 
     private long handle;

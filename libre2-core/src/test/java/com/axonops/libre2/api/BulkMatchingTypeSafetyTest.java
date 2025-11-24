@@ -15,6 +15,10 @@
  */
 package com.axonops.libre2.api;
 
+import com.axonops.libre2.cache.PatternCache;
+import com.axonops.libre2.test.TestUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -26,6 +30,18 @@ import static org.junit.jupiter.api.Assertions.*;
  * Demonstrates how the API handles non-String types, Unicode, emoji, and special characters.
  */
 class BulkMatchingTypeSafetyTest {
+
+    private static PatternCache originalCache;
+
+    @BeforeAll
+    static void setUpClass() {
+        originalCache = TestUtils.replaceGlobalCache(TestUtils.testConfigBuilder().build());
+    }
+
+    @AfterAll
+    static void tearDownClass() {
+        TestUtils.restoreGlobalCache(originalCache);
+    }
 
     // ========== Type Safety Tests ==========
 

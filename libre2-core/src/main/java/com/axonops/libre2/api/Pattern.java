@@ -399,14 +399,50 @@ public final class Pattern implements AutoCloseable {
     /**
      * Matches multiple inputs in a single JNI call (minimizes overhead).
      *
-     * <p>This is significantly faster than calling {@link #matches(String)} in a loop
-     * when processing many strings, as it reduces JNI crossing overhead from O(n) to O(1).
+     * <p>This method processes an entire collection in one native call, significantly reducing
+     * JNI crossing overhead compared to calling {@link #matches(String)} in a loop. The performance
+     * benefit increases with collection size and pattern complexity.
      *
-     * <p><b>Performance:</b> For 10,000 strings, this is 10-20x faster than individual calls.
+     * <p><b>Example - Validate multiple emails:</b>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}");
+     * List<String> emails = List.of("user@example.com", "invalid", "admin@test.org");
+     * boolean[] results = emailPattern.matchAll(emails);
+     * // results = [true, false, true]
      *
-     * @param inputs collection of strings to match
-     * @return array of booleans (parallel to inputs) indicating matches
+     * // Use results
+     * for (int i = 0; i < emails.size(); i++) {
+     *     if (results[i]) {
+     *         System.out.println("Valid: " + emails.get(i));
+     *     }
+     * }
+     * }</pre>
+     *
+     * <p><b>Performance Characteristics:</b>
+     * <ul>
+     *   <li><b>Throughput:</b> ~3-5 million matches/second for simple patterns</li>
+     *   <li><b>Overhead:</b> Single JNI call (~50ns) vs N calls (~50ns each)</li>
+     *   <li><b>Best for:</b> 100+ strings, or complex patterns where matching cost > JNI cost</li>
+     *   <li><b>Benchmark:</b> See {@code BulkMatchingPerformanceTest} for detailed comparisons</li>
+     * </ul>
+     *
+     * <p><b>Supported Collection Types:</b>
+     * <ul>
+     *   <li>{@link java.util.List} - ArrayList, LinkedList, Vector, etc.</li>
+     *   <li>{@link java.util.Set} - HashSet, TreeSet, LinkedHashSet, etc.</li>
+     *   <li>{@link java.util.Queue} - LinkedList, ArrayDeque, PriorityQueue, etc.</li>
+     *   <li>Any Collection implementation</li>
+     * </ul>
+     *
+     * <p><b>Thread Safety:</b> Pattern is thread-safe, but if the collection is being
+     * modified concurrently by other threads, you must synchronize externally.
+     *
+     * @param inputs collection of strings to match (supports List, Set, Queue, etc.)
+     * @return boolean array parallel to inputs (same size and order) indicating matches
      * @throws NullPointerException if inputs is null
+     * @see #matchAll(String[]) array variant
+     * @see #filter(java.util.Collection) to extract only matching elements
+     * @since 1.0.0
      */
     public boolean[] matchAll(java.util.Collection<String> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -419,11 +455,23 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Matches multiple inputs in a single JNI call (minimizes overhead).
+     * Matches multiple inputs in a single JNI call (array variant).
+     *
+     * <p>Optimized for arrays - no collection conversion overhead.
+     *
+     * <p><b>Example - Process array of phone numbers:</b>
+     * <pre>{@code
+     * Pattern phonePattern = Pattern.compile("\\d{3}-\\d{4}");
+     * String[] phones = {"123-4567", "invalid", "999-8888"};
+     * boolean[] results = phonePattern.matchAll(phones);
+     * // results = [true, false, true]
+     * }</pre>
      *
      * @param inputs array of strings to match
-     * @return array of booleans (parallel to inputs) indicating matches
+     * @return boolean array parallel to inputs indicating matches
      * @throws NullPointerException if inputs is null
+     * @see #matchAll(java.util.Collection) collection variant
+     * @since 1.0.0
      */
     public boolean[] matchAll(String[] inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -448,12 +496,45 @@ public final class Pattern implements AutoCloseable {
     /**
      * Filters collection, returning only matching elements.
      *
-     * <p>This creates a new List containing only strings that match the pattern.
-     * Uses bulk matching for performance.
+     * <p>Creates a new {@link java.util.List} containing only strings that match this pattern.
+     * The original collection is not modified. Uses bulk matching internally for performance.
      *
-     * @param inputs collection to filter
-     * @return new List containing only matching elements
+     * <p><b>Example - Extract valid email addresses:</b>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}");
+     * List<String> inputs = List.of(
+     *     "user@example.com",    // matches
+     *     "invalid_email",       // doesn't match
+     *     "admin@test.org"       // matches
+     * );
+     * List<String> validEmails = emailPattern.filter(inputs);
+     * // validEmails = ["user@example.com", "admin@test.org"]
+     * }</pre>
+     *
+     * <p><b>Collection Types:</b>
+     * <ul>
+     *   <li><b>Input:</b> Any Collection (List, Set, Queue, etc.)</li>
+     *   <li><b>Output:</b> Always returns {@link java.util.ArrayList}</li>
+     *   <li><b>Order:</b> Preserves iteration order of input collection</li>
+     * </ul>
+     *
+     * <p><b>Common Use Cases:</b>
+     * <ul>
+     *   <li>Extracting valid data from mixed datasets</li>
+     *   <li>Data cleaning (filter valid records)</li>
+     *   <li>Log filtering (extract matching log lines)</li>
+     *   <li>Cassandra SAI: Filter partition keys matching regex</li>
+     * </ul>
+     *
+     * <p><b>Performance:</b> Throughput ~3.9 million strings/second (benchmark: 10k strings in 2.6ms)
+     *
+     * @param inputs collection to filter (List, Set, Queue, or any Collection)
+     * @return new List containing only matching elements (preserves input order)
      * @throws NullPointerException if inputs is null
+     * @see #filterNot(java.util.Collection) inverse operation
+     * @see #retainMatches(java.util.Collection) in-place variant
+     * @see #matchAll(java.util.Collection) to get boolean array
+     * @since 1.0.0
      */
     public java.util.List<String> filter(java.util.Collection<String> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -476,14 +557,32 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Filters collection, returning only non-matching elements.
+     * Filters collection, returning only non-matching elements (inverse of {@link #filter}).
      *
-     * <p>This is the inverse of {@link #filter(java.util.Collection)} -
-     * returns elements that do NOT match the pattern.
+     * <p>Creates a new {@link java.util.List} containing only strings that do NOT match this pattern.
+     * The original collection is not modified.
+     *
+     * <p><b>Example - Remove test data, keep production:</b>
+     * <pre>{@code
+     * Pattern testPattern = Pattern.compile("test_.*");
+     * List<String> allKeys = List.of("test_key1", "prod_key1", "test_key2", "prod_key2");
+     * List<String> prodKeys = testPattern.filterNot(allKeys);
+     * // prodKeys = ["prod_key1", "prod_key2"]
+     * }</pre>
+     *
+     * <p><b>Use Cases:</b>
+     * <ul>
+     *   <li>Removing test/debug data from production datasets</li>
+     *   <li>Blacklist filtering (exclude matching patterns)</li>
+     *   <li>Data sanitization (remove sensitive patterns)</li>
+     * </ul>
      *
      * @param inputs collection to filter
-     * @return new List containing only non-matching elements
+     * @return new List containing only non-matching elements (preserves input order)
      * @throws NullPointerException if inputs is null
+     * @see #filter(java.util.Collection) inverse operation (keep matches)
+     * @see #removeMatches(java.util.Collection) in-place variant
+     * @since 1.0.0
      */
     public java.util.List<String> filterNot(java.util.Collection<String> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -506,15 +605,41 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Removes non-matching elements from collection (in-place).
+     * Removes non-matching elements from collection (in-place mutation).
      *
-     * <p>Mutates the provided collection by removing elements that don't match.
-     * Use {@link #filter(java.util.Collection)} if you need to preserve the original.
+     * <p><b>MUTATES THE INPUT:</b> This method modifies the provided collection by removing
+     * elements that don't match the pattern. Only matching elements remain after this call.
      *
-     * @param inputs mutable collection to filter
+     * <p><b>Example - Clean invalid data in-place:</b>
+     * <pre>{@code
+     * Pattern validPattern = Pattern.compile("[a-zA-Z0-9_]+");
+     * List<String> usernames = new ArrayList<>(List.of("user1", "invalid@", "admin", "bad#name"));
+     *
+     * int removed = validPattern.retainMatches(usernames);
+     * // removed = 2
+     * // usernames now = ["user1", "admin"] (invalid entries removed)
+     * }</pre>
+     *
+     * <p><b>When to Use:</b>
+     * <ul>
+     *   <li><b>Use this:</b> When you want to modify the collection in-place (memory efficient)</li>
+     *   <li><b>Use {@link #filter}:</b> When you need to preserve the original collection</li>
+     * </ul>
+     *
+     * <p><b>Collection Requirements:</b>
+     * <ul>
+     *   <li>Collection must be mutable (support {@code iterator().remove()})</li>
+     *   <li>Works with: ArrayList, LinkedList, HashSet, TreeSet, etc.</li>
+     *   <li>Fails with: Collections.unmodifiableList(), List.of(), Set.of(), etc.</li>
+     * </ul>
+     *
+     * @param inputs mutable collection to filter (List, Set, Queue, etc.)
      * @return number of elements removed
      * @throws NullPointerException if inputs is null
      * @throws UnsupportedOperationException if collection is immutable
+     * @see #filter(java.util.Collection) non-mutating variant
+     * @see #removeMatches(java.util.Collection) inverse (remove matches, keep non-matches)
+     * @since 1.0.0
      */
     public int retainMatches(java.util.Collection<String> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -541,15 +666,40 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Removes matching elements from collection (in-place).
+     * Removes matching elements from collection (in-place mutation, inverse of {@link #retainMatches}).
      *
-     * <p>Mutates the provided collection by removing elements that match.
-     * This is the inverse of {@link #retainMatches(java.util.Collection)}.
+     * <p><b>MUTATES THE INPUT:</b> This method modifies the provided collection by removing
+     * elements that match the pattern. Only non-matching elements remain after this call.
      *
-     * @param inputs mutable collection to filter
+     * <p><b>Example - Remove sensitive data patterns:</b>
+     * <pre>{@code
+     * Pattern ssnPattern = Pattern.compile("\\d{3}-\\d{2}-\\d{4}");  // SSN format
+     * List<String> logLines = new ArrayList<>(List.of(
+     *     "User logged in",
+     *     "SSN: 123-45-6789",  // sensitive!
+     *     "Processing request",
+     *     "SSN: 987-65-4321"   // sensitive!
+     * ));
+     *
+     * int removed = ssnPattern.removeMatches(logLines);
+     * // removed = 2
+     * // logLines now = ["User logged in", "Processing request"] (SSNs removed)
+     * }</pre>
+     *
+     * <p><b>Common Use Cases:</b>
+     * <ul>
+     *   <li>Data sanitization (remove PII, credentials, etc.)</li>
+     *   <li>Blacklist filtering (remove known bad patterns)</li>
+     *   <li>Log cleaning (strip sensitive information)</li>
+     * </ul>
+     *
+     * @param inputs mutable collection to filter (List, Set, Queue, etc.)
      * @return number of elements removed
      * @throws NullPointerException if inputs is null
      * @throws UnsupportedOperationException if collection is immutable
+     * @see #retainMatches(java.util.Collection) inverse (keep matches, remove non-matches)
+     * @see #filterNot(java.util.Collection) non-mutating variant
+     * @since 1.0.0
      */
     public int removeMatches(java.util.Collection<String> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -578,11 +728,43 @@ public final class Pattern implements AutoCloseable {
     // ========== Map Filtering Operations ==========
 
     /**
-     * Filters map by matching keys against pattern.
+     * Filters map by matching keys against pattern (returns new map).
      *
-     * @param inputs map where keys are tested
-     * @return new map containing only entries whose keys match
+     * <p>Creates a new {@link java.util.HashMap} containing only entries whose keys match
+     * this pattern. Values are preserved, keys are tested against the pattern.
+     *
+     * <p><b>Example - Filter configuration by environment prefix:</b>
+     * <pre>{@code
+     * Pattern prodPattern = Pattern.compile("prod_.*");
+     * Map<String, String> allConfig = Map.of(
+     *     "prod_db_host", "prod-db.example.com",
+     *     "test_db_host", "test-db.example.com",
+     *     "prod_api_key", "abc123",
+     *     "test_api_key", "xyz789"
+     * );
+     *
+     * Map<String, String> prodConfig = prodPattern.filterByKey(allConfig);
+     * // prodConfig = {"prod_db_host": "prod-db.example.com", "prod_api_key": "abc123"}
+     * }</pre>
+     *
+     * <p><b>Example - Cassandra SAI filter by partition key pattern:</b>
+     * <pre>{@code
+     * // Filter partition keys matching date pattern
+     * Pattern datePattern = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+     * Map<String, Row> partitions = ...; // partition key → row
+     * Map<String, Row> datePartitions = datePattern.filterByKey(partitions);
+     * }</pre>
+     *
+     * <p><b>Performance:</b> Throughput ~2.6 million entries/second (benchmark: 10k entries in 3.9ms)
+     *
+     * @param <V> value type
+     * @param inputs map where keys (String type) are tested against pattern
+     * @return new HashMap containing only entries whose keys match
      * @throws NullPointerException if inputs is null
+     * @see #filterByValue(java.util.Map) filter by values instead of keys
+     * @see #filterNotByKey(java.util.Map) inverse (keep non-matching keys)
+     * @see #retainMatchesByKey(java.util.Map) in-place variant
+     * @since 1.0.0
      */
     public <V> java.util.Map<String, V> filterByKey(java.util.Map<String, V> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -613,11 +795,45 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Filters map by matching values against pattern.
+     * Filters map by matching values against pattern (returns new map).
      *
-     * @param inputs map where values are tested
-     * @return new map containing only entries whose values match
+     * <p>Creates a new {@link java.util.HashMap} containing only entries whose values match
+     * this pattern. Keys are preserved, values are tested against the pattern.
+     *
+     * <p><b>Example - Filter user map by valid email addresses:</b>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}");
+     * Map<Integer, String> userEmails = Map.of(
+     *     1, "user@example.com",    // valid email
+     *     2, "invalid_email",       // not an email
+     *     3, "admin@test.org"       // valid email
+     * );
+     *
+     * Map<Integer, String> validUsers = emailPattern.filterByValue(userEmails);
+     * // validUsers = {1: "user@example.com", 3: "admin@test.org"}
+     * }</pre>
+     *
+     * <p><b>Example - Extract records with matching status:</b>
+     * <pre>{@code
+     * Pattern activePattern = Pattern.compile("active|running|online");
+     * Map<String, String> services = Map.of(
+     *     "web", "active",
+     *     "db", "stopped",
+     *     "cache", "running"
+     * );
+     *
+     * Map<String, String> activeServices = activePattern.filterByValue(services);
+     * // activeServices = {"web": "active", "cache": "running"}
+     * }</pre>
+     *
+     * @param <K> key type
+     * @param inputs map where values (String type) are tested against pattern
+     * @return new HashMap containing only entries whose values match
      * @throws NullPointerException if inputs is null
+     * @see #filterByKey(java.util.Map) filter by keys instead of values
+     * @see #filterNotByValue(java.util.Map) inverse (keep non-matching values)
+     * @see #retainMatchesByValue(java.util.Map) in-place variant
+     * @since 1.0.0
      */
     public <K> java.util.Map<K, String> filterByValue(java.util.Map<K, String> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -648,11 +864,22 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Filters map by matching keys against pattern (inverse).
+     * Filters map by keys NOT matching pattern (inverse of {@link #filterByKey}).
      *
+     * <p><b>Example:</b>
+     * <pre>{@code
+     * Pattern tmpPattern = Pattern.compile("tmp_.*");
+     * Map<String, String> data = Map.of("tmp_cache", "...", "prod_data", "...");
+     * Map<String, String> permanent = tmpPattern.filterNotByKey(data);
+     * // permanent = {"prod_data": "..."}
+     * }</pre>
+     *
+     * @param <V> value type
      * @param inputs map where keys are tested
-     * @return new map containing only entries whose keys do NOT match
+     * @return new HashMap with entries whose keys do NOT match
      * @throws NullPointerException if inputs is null
+     * @see #filterByKey inverse
+     * @since 1.0.0
      */
     public <V> java.util.Map<String, V> filterNotByKey(java.util.Map<String, V> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -681,11 +908,22 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Filters map by matching values against pattern (inverse).
+     * Filters map by values NOT matching pattern (inverse of {@link #filterByValue}).
      *
+     * <p><b>Example - Exclude error statuses:</b>
+     * <pre>{@code
+     * Pattern errorPattern = Pattern.compile("error|failed|timeout");
+     * Map<String, String> jobStatuses = Map.of("job1", "success", "job2", "error", "job3", "complete");
+     * Map<String, String> successful = errorPattern.filterNotByValue(jobStatuses);
+     * // successful = {"job1": "success", "job3": "complete"}
+     * }</pre>
+     *
+     * @param <K> key type
      * @param inputs map where values are tested
-     * @return new map containing only entries whose values do NOT match
+     * @return new HashMap with entries whose values do NOT match
      * @throws NullPointerException if inputs is null
+     * @see #filterByValue inverse
+     * @since 1.0.0
      */
     public <K> java.util.Map<K, String> filterNotByValue(java.util.Map<K, String> inputs) {
         Objects.requireNonNull(inputs, "inputs cannot be null");
@@ -714,12 +952,25 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Removes entries from map where keys don't match (in-place).
+     * Removes entries where keys don't match (in-place map mutation).
      *
+     * <p><b>MUTATES INPUT:</b> Keeps only entries whose keys match the pattern.
+     *
+     * <p><b>Example:</b>
+     * <pre>{@code
+     * Pattern userPattern = Pattern.compile("user_\\d+");
+     * Map<String, Object> cache = new HashMap<>(Map.of("user_123", obj1, "sys_config", obj2));
+     * int removed = userPattern.retainMatchesByKey(cache);
+     * // removed = 1, cache = {"user_123": obj1}
+     * }</pre>
+     *
+     * @param <V> value type
      * @param map mutable map to filter by keys
      * @return number of entries removed
      * @throws NullPointerException if map is null
      * @throws UnsupportedOperationException if map is immutable
+     * @see #filterByKey non-mutating variant
+     * @since 1.0.0
      */
     public <V> int retainMatchesByKey(java.util.Map<String, V> map) {
         Objects.requireNonNull(map, "map cannot be null");
@@ -746,12 +997,25 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Removes entries from map where values don't match (in-place).
+     * Removes entries where values don't match (in-place map mutation).
      *
+     * <p><b>MUTATES INPUT:</b> Keeps only entries whose values match.
+     *
+     * <p><b>Example:</b>
+     * <pre>{@code
+     * Pattern activePattern = Pattern.compile("active|online");
+     * Map<String, String> servers = new HashMap<>(Map.of("web", "active", "db", "offline"));
+     * userPattern.retainMatchesByValue(servers);
+     * // servers = {"web": "active"}
+     * }</pre>
+     *
+     * @param <K> key type
      * @param map mutable map to filter by values
      * @return number of entries removed
      * @throws NullPointerException if map is null
      * @throws UnsupportedOperationException if map is immutable
+     * @see #filterByValue non-mutating variant
+     * @since 1.0.0
      */
     public <K> int retainMatchesByValue(java.util.Map<K, String> map) {
         Objects.requireNonNull(map, "map cannot be null");
@@ -784,12 +1048,25 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Removes entries from map where keys match (in-place).
+     * Removes entries where keys match (in-place, inverse of {@link #retainMatchesByKey}).
      *
+     * <p><b>MUTATES INPUT:</b> Removes entries whose keys match the pattern.
+     *
+     * <p><b>Example - Remove temporary cache entries:</b>
+     * <pre>{@code
+     * Pattern tmpPattern = Pattern.compile("tmp_.*");
+     * Map<String, Data> cache = new HashMap<>(Map.of("tmp_123", data1, "perm_456", data2));
+     * tmpPattern.removeMatchesByKey(cache);
+     * // cache = {"perm_456": data2}
+     * }</pre>
+     *
+     * @param <V> value type
      * @param map mutable map to filter by keys
      * @return number of entries removed
      * @throws NullPointerException if map is null
      * @throws UnsupportedOperationException if map is immutable
+     * @see #filterNotByKey non-mutating variant
+     * @since 1.0.0
      */
     public <V> int removeMatchesByKey(java.util.Map<String, V> map) {
         Objects.requireNonNull(map, "map cannot be null");
@@ -816,12 +1093,25 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
-     * Removes entries from map where values match (in-place).
+     * Removes entries where values match (in-place, inverse of {@link #retainMatchesByValue}).
      *
+     * <p><b>MUTATES INPUT:</b> Removes entries whose values match the pattern.
+     *
+     * <p><b>Example - Remove failed jobs:</b>
+     * <pre>{@code
+     * Pattern failedPattern = Pattern.compile("failed|error|timeout");
+     * Map<Integer, String> jobs = new HashMap<>(Map.of(1, "success", 2, "failed", 3, "complete"));
+     * failedPattern.removeMatchesByValue(jobs);
+     * // jobs = {1: "success", 3: "complete"}
+     * }</pre>
+     *
+     * @param <K> key type
      * @param map mutable map to filter by values
      * @return number of entries removed
      * @throws NullPointerException if map is null
      * @throws UnsupportedOperationException if map is immutable
+     * @see #filterNotByValue non-mutating variant
+     * @since 1.0.0
      */
     public <K> int removeMatchesByValue(java.util.Map<K, String> map) {
         Objects.requireNonNull(map, "map cannot be null");

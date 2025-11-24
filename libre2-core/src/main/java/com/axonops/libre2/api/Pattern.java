@@ -299,7 +299,23 @@ public final class Pattern implements AutoCloseable {
             return;
         }
 
-        forceClose();
+        // Attempt 1: Try graceful close
+        forceClose(false);
+
+        // If still has active matchers, wait briefly and force release
+        if (!closed.get() && refCount.get() > 0) {
+            try {
+                Thread.sleep(100);  // Give matchers time to close
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            // Attempt 2: Force release regardless (DANGEROUS if matchers still active)
+            if (!closed.get()) {
+                logger.warn("RE2: Pattern still has {} active matcher(s) after 100ms wait - forcing release anyway", refCount.get());
+                forceClose(true);
+            }
+        }
     }
 
     /**
@@ -308,19 +324,37 @@ public final class Pattern implements AutoCloseable {
      * <p><strong>DO NOT CALL THIS METHOD.</strong> This is internal API for PatternCache.
      * Use {@link #close()} instead.
      *
-     * <p>CRITICAL: Only frees native resources if reference count is 0.
-     * If refCount > 0, pattern is still in use by Matchers - doesn't close.
+     * <p>Attempts graceful close first (waits for matchers). If matchers still active after wait,
+     * can force release regardless of reference count.
      *
      * <p>Public for PatternCache access (different package), but not part of public API.
      */
     public void forceClose() {
+        forceClose(false);
+    }
+
+    /**
+     * Force closes the pattern with optional unconditional release.
+     *
+     * <p><strong>INTERNAL USE ONLY.</strong>
+     *
+     * @param releaseRegardless if true, releases even if matchers are active (DANGEROUS - can cause crashes)
+     */
+    public void forceClose(boolean releaseRegardless) {
+        // First attempt: graceful close if no active matchers
         if (refCount.get() > 0) {
-            logger.warn("RE2: Cannot force close pattern - still in use by {} matcher(s)", refCount.get());
-            return;
+            if (!releaseRegardless) {
+                logger.warn("RE2: Cannot force close pattern - still in use by {} matcher(s)", refCount.get());
+                return;
+            } else {
+                // DANGEROUS: Forcing release despite active matchers
+                logger.error("RE2: FORCE releasing pattern despite {} active matcher(s) - " +
+                    "this may cause use-after-free crashes if matchers are still being used!", refCount.get());
+            }
         }
 
         if (closed.compareAndSet(false, true)) {
-            logger.trace("RE2: Force closing pattern - fromCache: {}", fromCache);
+            logger.trace("RE2: Force closing pattern - fromCache: {}, releaseRegardless: {}", fromCache, releaseRegardless);
 
             // CRITICAL: Always track freed, even if freePattern throws
             try {

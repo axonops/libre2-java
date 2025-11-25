@@ -544,4 +544,168 @@ class RE2NativeJNITest {
         assertTrue(results[0]);    // test0 matches
         assertTrue(results[999]);  // test999 matches
     }
+
+    // ========== Zero-Copy Direct Memory Operations ==========
+
+    @Test
+    void testFullMatchDirect_Success() {
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocateDirect(20);
+        buffer.put("test123".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        buffer.flip();
+
+        long address = ((sun.nio.ch.DirectBuffer) buffer).address();
+        int length = buffer.remaining();
+
+        boolean result = RE2NativeJNI.fullMatchDirect(handle, address, length);
+
+        assertTrue(result);
+    }
+
+    @Test
+    void testPartialMatchDirect_Success() {
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocateDirect(20);
+        buffer.put("before test456 after".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        buffer.flip();
+
+        long address = ((sun.nio.ch.DirectBuffer) buffer).address();
+        int length = buffer.remaining();
+
+        boolean result = RE2NativeJNI.partialMatchDirect(handle, address, length);
+
+        assertTrue(result);
+    }
+
+    @Test
+    void testFullMatchDirectBulk_Success() {
+        // Create 3 direct buffers
+        java.nio.ByteBuffer[] buffers = new java.nio.ByteBuffer[3];
+        long[] addresses = new long[3];
+        int[] lengths = new int[3];
+
+        String[] texts = {"test123", "test456", "nomatch"};
+        for (int i = 0; i < 3; i++) {
+            buffers[i] = java.nio.ByteBuffer.allocateDirect(20);
+            buffers[i].put(texts[i].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            buffers[i].flip();
+            addresses[i] = ((sun.nio.ch.DirectBuffer) buffers[i]).address();
+            lengths[i] = buffers[i].remaining();
+        }
+
+        boolean[] results = RE2NativeJNI.fullMatchDirectBulk(handle, addresses, lengths);
+
+        assertNotNull(results);
+        assertEquals(3, results.length);
+        assertTrue(results[0]);   // test123 matches
+        assertTrue(results[1]);   // test456 matches
+        assertFalse(results[2]);  // nomatch doesn't match
+    }
+
+    @Test
+    void testExtractGroupsDirect_Success() {
+        long h = RE2NativeJNI.compile("(\\d+)-(\\d+)", true);
+
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocateDirect(20);
+        buffer.put("123-456".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        buffer.flip();
+
+        long address = ((sun.nio.ch.DirectBuffer) buffer).address();
+        int length = buffer.remaining();
+
+        String[] groups = RE2NativeJNI.extractGroupsDirect(h, address, length);
+
+        assertNotNull(groups);
+        assertEquals(3, groups.length);
+        assertEquals("123-456", groups[0]);  // Full match
+        assertEquals("123", groups[1]);      // First group
+        assertEquals("456", groups[2]);      // Second group
+
+        RE2NativeJNI.freePattern(h);
+    }
+
+    @Test
+    void testFindAllMatchesDirect_Success() {
+        long h = RE2NativeJNI.compile("(\\d+)", true);
+
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocateDirect(30);
+        buffer.put("a1b22c333".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        buffer.flip();
+
+        long address = ((sun.nio.ch.DirectBuffer) buffer).address();
+        int length = buffer.remaining();
+
+        String[][] matches = RE2NativeJNI.findAllMatchesDirect(h, address, length);
+
+        assertNotNull(matches);
+        assertEquals(3, matches.length);
+        assertEquals("1", matches[0][0]);
+        assertEquals("22", matches[1][0]);
+        assertEquals("333", matches[2][0]);
+
+        RE2NativeJNI.freePattern(h);
+    }
+
+    @Test
+    void testReplaceFirstDirect_Success() {
+        long h = RE2NativeJNI.compile("\\d+", true);
+
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocateDirect(30);
+        buffer.put("Item 123 costs $456".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        buffer.flip();
+
+        long address = ((sun.nio.ch.DirectBuffer) buffer).address();
+        int length = buffer.remaining();
+
+        String result = RE2NativeJNI.replaceFirstDirect(h, address, length, "XXX");
+
+        assertEquals("Item XXX costs $456", result);
+
+        RE2NativeJNI.freePattern(h);
+    }
+
+    @Test
+    void testReplaceAllDirect_Success() {
+        long h = RE2NativeJNI.compile("\\d+", true);
+
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocateDirect(30);
+        buffer.put("Item 123 costs $456".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        buffer.flip();
+
+        long address = ((sun.nio.ch.DirectBuffer) buffer).address();
+        int length = buffer.remaining();
+
+        String result = RE2NativeJNI.replaceAllDirect(h, address, length, "XXX");
+
+        assertEquals("Item XXX costs $XXX", result);
+
+        RE2NativeJNI.freePattern(h);
+    }
+
+    @Test
+    void testReplaceAllDirectBulk_Success() {
+        long h = RE2NativeJNI.compile("\\d+", true);
+
+        // Create 3 direct buffers
+        java.nio.ByteBuffer[] buffers = new java.nio.ByteBuffer[3];
+        long[] addresses = new long[3];
+        int[] lengths = new int[3];
+
+        String[] texts = {"Found 123", "No match", "Has 456 and 789"};
+        for (int i = 0; i < 3; i++) {
+            buffers[i] = java.nio.ByteBuffer.allocateDirect(30);
+            buffers[i].put(texts[i].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            buffers[i].flip();
+            addresses[i] = ((sun.nio.ch.DirectBuffer) buffers[i]).address();
+            lengths[i] = buffers[i].remaining();
+        }
+
+        String[] results = RE2NativeJNI.replaceAllDirectBulk(h, addresses, lengths, "XXX");
+
+        assertNotNull(results);
+        assertEquals(3, results.length);
+        assertEquals("Found XXX", results[0]);
+        assertEquals("No match", results[1]);
+        assertEquals("Has XXX and XXX", results[2]);
+
+        RE2NativeJNI.freePattern(h);
+    }
 }

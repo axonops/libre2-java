@@ -1431,9 +1431,51 @@ public final class Pattern implements AutoCloseable {
      * Useful for monitoring memory pressure from pattern compilation.
      *
      * @return size in bytes
+     * @throws IllegalStateException if pattern is closed
      */
     public long getNativeMemoryBytes() {
+        checkNotClosed();
         return nativeMemoryBytes;
+    }
+
+    /**
+     * Gets the DFA fanout for this pattern.
+     *
+     * <p>Returns an array where index i contains the number of bytes that lead to
+     * different DFA states at position i. Useful for analyzing pattern complexity.</p>
+     *
+     * @return array of fanout values (one per byte position in DFA)
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public int[] getProgramFanout() {
+        checkNotClosed();
+        return RE2NativeJNI.programFanout(nativeHandle);
+    }
+
+    /**
+     * Escapes special regex characters for literal matching.
+     *
+     * <p>Converts a literal string into a regex pattern that matches that exact string.
+     * Special characters like . * + ? ( ) [ ] { } ^ $ | \ are escaped.</p>
+     *
+     * <p><strong>Example:</strong></p>
+     * <pre>{@code
+     * String literal = "price: $9.99";
+     * String escaped = Pattern.quoteMeta(literal);
+     * // escaped = "price: \\$9\\.99"
+     *
+     * Pattern p = Pattern.compile(escaped);
+     * boolean matches = p.matches("price: $9.99");  // true
+     * }</pre>
+     *
+     * @param text literal text to escape
+     * @return escaped pattern that matches the literal text exactly
+     * @throws NullPointerException if text is null
+     * @since 1.2.0
+     */
+    public static String quoteMeta(String text) {
+        return RE2NativeJNI.quoteMeta(text);
     }
 
     long getNativeHandle() {

@@ -295,10 +295,48 @@ public final class RE2 {
     /**
      * Escapes special regex characters for literal matching.
      *
-     * @param text text to escape
-     * @return escaped text safe for use as literal pattern
+     * <p>Converts a literal string into a regex pattern that matches that exact string.
+     * Special characters like . * + ? ( ) [ ] { } ^ $ | \ are escaped.</p>
+     *
+     * <p><strong>Example:</strong></p>
+     * <pre>{@code
+     * String literal = "price: $9.99";
+     * String escaped = RE2.quoteMeta(literal);
+     * Pattern p = Pattern.compile(escaped);
+     * boolean matches = p.matches("price: $9.99");  // true
+     * }</pre>
+     *
+     * @param text literal text to escape
+     * @return escaped pattern that matches the literal text exactly
+     * @throws NullPointerException if text is null
      */
     public static String quoteMeta(String text) {
-        return RE2NativeJNI.quoteMeta(text);
+        return Pattern.quoteMeta(text);
+    }
+
+    /**
+     * Gets the DFA fanout for a pattern.
+     *
+     * <p>Analyzes pattern complexity by returning DFA state transition counts.</p>
+     *
+     * @param pattern regex pattern to analyze
+     * @return array of fanout values (complexity metric)
+     */
+    public static int[] getProgramFanout(String pattern) {
+        try (Pattern p = compile(pattern)) {
+            return p.getProgramFanout();
+        }
+    }
+
+    /**
+     * Gets the native memory size of a compiled pattern.
+     *
+     * @param pattern regex pattern to analyze
+     * @return size in bytes of compiled DFA/NFA program
+     */
+    public static long getProgramSize(String pattern) {
+        try (Pattern p = compile(pattern)) {
+            return p.getNativeMemoryBytes();
+        }
     }
 }

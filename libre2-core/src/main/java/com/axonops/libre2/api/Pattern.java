@@ -841,6 +841,211 @@ public final class Pattern implements AutoCloseable {
         return map;
     }
 
+    // ========== Capture Group Zero-Copy Operations ==========
+
+    /**
+     * Matches and extracts capture groups using zero-copy (address variant).
+     *
+     * @param address native memory address of UTF-8 text
+     * @param length number of bytes
+     * @return MatchResult with captured groups
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @see #match(String) String variant
+     * @since 1.2.0
+     */
+    public MatchResult matchWithGroups(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (groups == null) {
+            return new MatchResult("");
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        return new MatchResult(groups[0], groups, namedGroupMap);
+    }
+
+    /**
+     * Matches and extracts capture groups (ByteBuffer zero-copy).
+     *
+     * @param buffer ByteBuffer
+     * @return MatchResult with captured groups
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult matchWithGroups(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return matchWithGroups(address, length);
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return match(text);
+        }
+    }
+
+    /**
+     * Finds and extracts capture groups using zero-copy (address variant).
+     *
+     * @param address native memory address
+     * @param length number of bytes
+     * @return MatchResult for first match
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult findWithGroups(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+        long durationNanos = System.nanoTime() - startNanos;
+
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (groups == null) {
+            return new MatchResult("");
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        return new MatchResult(groups[0], groups, namedGroupMap);
+    }
+
+    /**
+     * Finds and extracts capture groups (ByteBuffer zero-copy).
+     *
+     * @param buffer ByteBuffer
+     * @return MatchResult for first match
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult findWithGroups(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return findWithGroups(address, length);
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return find(text);
+        }
+    }
+
+    /**
+     * Finds all matches and extracts capture groups using zero-copy (address variant).
+     *
+     * @param address native memory address
+     * @param length number of bytes
+     * @return list of MatchResult objects
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public java.util.List<MatchResult> findAllWithGroups(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+        String[][] allMatches = RE2NativeJNI.findAllMatchesDirect(nativeHandle, address, length);
+        long durationNanos = System.nanoTime() - startNanos;
+
+        int matchCount = (allMatches != null) ? allMatches.length : 0;
+
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (matchCount > 0) {
+            metrics.incrementCounter(MetricNames.CAPTURE_FINDALL_MATCHES, matchCount);
+        }
+
+        if (allMatches == null || allMatches.length == 0) {
+            return java.util.Collections.emptyList();
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+
+        java.util.List<MatchResult> results = new java.util.ArrayList<>(allMatches.length);
+        for (String[] groups : allMatches) {
+            results.add(new MatchResult(groups[0], groups, namedGroupMap));
+        }
+
+        return results;
+    }
+
+    /**
+     * Finds all matches and extracts capture groups (ByteBuffer zero-copy).
+     *
+     * @param buffer ByteBuffer
+     * @return list of MatchResult objects
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public java.util.List<MatchResult> findAllWithGroups(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return findAllWithGroups(address, length);
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return findAll(text);
+        }
+    }
+
     // ========== Replace Operations ==========
 
     /**

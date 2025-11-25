@@ -420,7 +420,7 @@ public final class Pattern implements AutoCloseable {
 
         // For match() (full match semantics), verify the match covers entire input
         // extractGroups uses UNANCHORED, so we need to check manually
-        if (!groups[0].equals(input)) {
+        if (groups[0] == null || !groups[0].equals(input)) {
             // Match found but doesn't cover entire input - this is a partial match
             long durationNanos = System.nanoTime() - startNanos;
             RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
@@ -636,8 +636,13 @@ public final class Pattern implements AutoCloseable {
         byte[][] utf8Arrays = new byte[inputs.length][];
         int[] lengths = new int[inputs.length];
         for (int i = 0; i < inputs.length; i++) {
-            utf8Arrays[i] = inputs[i].getBytes(StandardCharsets.UTF_8);
-            lengths[i] = utf8Arrays[i].length;
+            if (inputs[i] != null) {
+                utf8Arrays[i] = inputs[i].getBytes(StandardCharsets.UTF_8);
+                lengths[i] = utf8Arrays[i].length;
+            } else {
+                utf8Arrays[i] = new byte[0];
+                lengths[i] = 0;
+            }
         }
 
         // Use bulk byte[] method instead of iterating (much faster)
@@ -1159,8 +1164,13 @@ public final class Pattern implements AutoCloseable {
         byte[][] utf8Arrays = new byte[inputs.length][];
         int[] lengths = new int[inputs.length];
         for (int i = 0; i < inputs.length; i++) {
-            utf8Arrays[i] = inputs[i].getBytes(StandardCharsets.UTF_8);
-            lengths[i] = utf8Arrays[i].length;
+            if (inputs[i] != null) {
+                utf8Arrays[i] = inputs[i].getBytes(StandardCharsets.UTF_8);
+                lengths[i] = utf8Arrays[i].length;
+            } else {
+                utf8Arrays[i] = new byte[0];
+                lengths[i] = 0;
+            }
         }
 
         String[] results = RE2NativeJNI.replaceAllBulkBytes(nativeHandle, utf8Arrays, lengths, replacement);
@@ -1799,8 +1809,13 @@ public final class Pattern implements AutoCloseable {
         byte[][] utf8Arrays = new byte[inputs.length][];
         int[] lengths = new int[inputs.length];
         for (int i = 0; i < inputs.length; i++) {
-            utf8Arrays[i] = inputs[i].getBytes(StandardCharsets.UTF_8);
-            lengths[i] = utf8Arrays[i].length;
+            if (inputs[i] != null) {
+                utf8Arrays[i] = inputs[i].getBytes(StandardCharsets.UTF_8);
+                lengths[i] = utf8Arrays[i].length;
+            } else {
+                utf8Arrays[i] = new byte[0];
+                lengths[i] = 0;
+            }
         }
 
         long startNanos = System.nanoTime();
@@ -1864,8 +1879,13 @@ public final class Pattern implements AutoCloseable {
         byte[][] utf8Arrays = new byte[inputs.length][];
         int[] lengths = new int[inputs.length];
         for (int i = 0; i < inputs.length; i++) {
-            utf8Arrays[i] = inputs[i].getBytes(StandardCharsets.UTF_8);
-            lengths[i] = utf8Arrays[i].length;
+            if (inputs[i] != null) {
+                utf8Arrays[i] = inputs[i].getBytes(StandardCharsets.UTF_8);
+                lengths[i] = utf8Arrays[i].length;
+            } else {
+                utf8Arrays[i] = new byte[0];
+                lengths[i] = 0;
+            }
         }
 
         long startNanos = System.nanoTime();

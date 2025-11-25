@@ -877,8 +877,9 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
                 // Convert StringPiece to std::string immediately (before stackBuf goes out of scope)
                 if (matched) {
                     for (int i = 0; i <= numGroups; i++) {
-                        if (groups[i].data() != nullptr) {
-                            groupStrings[i] = std::string(groups[i].data(), groups[i].size());
+                        // Always convert, even if empty (size 0) - handles empty string matches
+                        if (groups[i].data() != nullptr || groups[i].size() == 0) {
+                            groupStrings[i] = std::string(groups[i].data() ? groups[i].data() : "", groups[i].size());
                         }
                     }
                 }
@@ -912,11 +913,10 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
         jobjectArray result = env->NewObjectArray(numGroups + 1, stringClass, nullptr);
 
         for (int i = 0; i <= numGroups; i++) {
-            if (!groupStrings[i].empty()) {
-                jstring jstr = env->NewStringUTF(groupStrings[i].c_str());
-                env->SetObjectArrayElement(result, i, jstr);
-                env->DeleteLocalRef(jstr);
-            }
+            // Always set group, even if empty string (important for empty matches like ".*" matching "")
+            jstring jstr = env->NewStringUTF(groupStrings[i].c_str());
+            env->SetObjectArrayElement(result, i, jstr);
+            env->DeleteLocalRef(jstr);
         }
 
         return result;
@@ -992,8 +992,9 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
                     // Convert StringPiece to std::string immediately (before heapBuf is freed)
                     if (matched) {
                         for (int j = 0; j <= numGroups; j++) {
-                            if (groups[j].data() != nullptr) {
-                                groupStrings[j] = std::string(groups[j].data(), groups[j].size());
+                            // Always convert, even if empty (size 0) - handles empty string matches
+                            if (groups[j].data() != nullptr || groups[j].size() == 0) {
+                                groupStrings[j] = std::string(groups[j].data() ? groups[j].data() : "", groups[j].size());
                             }
                         }
                     }
@@ -1065,8 +1066,9 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllM
                     // Convert StringPiece to std::string immediately to preserve data
                     std::vector<std::string> groupStrings(numGroups + 1);
                     for (int j = 0; j <= numGroups; j++) {
-                        if (groups[j].data() != nullptr) {
-                            groupStrings[j] = std::string(groups[j].data(), groups[j].size());
+                        // Always convert, even if empty - handles empty string matches
+                        if (groups[j].data() != nullptr || groups[j].size() == 0) {
+                            groupStrings[j] = std::string(groups[j].data() ? groups[j].data() : "", groups[j].size());
                         }
                     }
                     allMatches.push_back(groupStrings);
@@ -1094,8 +1096,9 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllM
                     // Convert StringPiece to std::string immediately
                     std::vector<std::string> groupStrings(numGroups + 1);
                     for (int j = 0; j <= numGroups; j++) {
-                        if (groups[j].data() != nullptr) {
-                            groupStrings[j] = std::string(groups[j].data(), groups[j].size());
+                        // Always convert, even if empty - handles empty string matches
+                        if (groups[j].data() != nullptr || groups[j].size() == 0) {
+                            groupStrings[j] = std::string(groups[j].data() ? groups[j].data() : "", groups[j].size());
                         }
                     }
                     allMatches.push_back(groupStrings);
@@ -1121,11 +1124,10 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllM
             jobjectArray groupArray = env->NewObjectArray(numGroups + 1, stringClass, nullptr);
 
             for (int j = 0; j <= numGroups; j++) {
-                if (!allMatches[i][j].empty()) {
-                    jstring groupStr = env->NewStringUTF(allMatches[i][j].c_str());
-                    env->SetObjectArrayElement(groupArray, j, groupStr);
-                    env->DeleteLocalRef(groupStr);
-                }
+                // Always create string, even if empty (important for empty matches)
+                jstring groupStr = env->NewStringUTF(allMatches[i][j].c_str());
+                env->SetObjectArrayElement(groupArray, j, groupStr);
+                env->DeleteLocalRef(groupStr);
             }
 
             env->SetObjectArrayElement(result, i, groupArray);

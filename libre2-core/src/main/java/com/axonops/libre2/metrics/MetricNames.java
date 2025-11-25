@@ -320,34 +320,336 @@ public final class MetricNames {
     public static final String RESOURCES_MATCHERS_FREED = "resources.matchers.freed.total.count";
 
     // ========================================
-    // Performance Metrics (3)
+    // Performance Metrics - Matching
     // ========================================
+    // Pattern: Global metrics (ALL) + Specific breakdown (String, Bulk, Zero-Copy)
 
     /**
-     * Full match operation latency histogram (Matcher.matches()).
+     * Total matching operations (ALL - String + Bulk + Zero-Copy).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For EVERY matches() or find() call regardless of variant
+     * <p><b>Interpretation:</b> Total matching workload across all API variants
+     * <p><b>Breakdown:</b> Sum of MATCHING_STRING_OPERATIONS + MATCHING_BULK_OPERATIONS + MATCHING_ZERO_COPY_OPERATIONS
+     */
+    public static final String MATCHING_OPERATIONS = "matching.operations.total.count";
+
+    /**
+     * Matching operation latency (ALL variants).
      * <p><b>Type:</b> Timer (nanoseconds)
-     * <p><b>Recorded:</b> For each matches() call (exact string match)
-     * <p><b>Provides:</b> min, max, mean, p50, p75, p95, p98, p99, p99.9, rates
-     * <p><b>Interpretation:</b> RE2 guarantees linear time; high latencies indicate long input strings
+     * <p><b>Recorded:</b> For EVERY matching operation (String, bulk, zero-copy)
+     * <p><b>Interpretation:</b> Overall matching performance across all variants
+     */
+    public static final String MATCHING_LATENCY = "matching.latency";
+
+    /**
+     * Full match operation latency (ALL variants).
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each full match (String or zero-copy)
+     * <p><b>Interpretation:</b> Full match performance
      */
     public static final String MATCHING_FULL_MATCH_LATENCY = "matching.full_match.latency";
 
     /**
-     * Partial match operation latency histogram (Matcher.find()).
+     * Partial match operation latency (ALL variants).
      * <p><b>Type:</b> Timer (nanoseconds)
-     * <p><b>Recorded:</b> For each find() call (substring match)
-     * <p><b>Provides:</b> min, max, mean, p50, p75, p95, p98, p99, p99.9, rates
-     * <p><b>Interpretation:</b> Typically faster than full match; measures search performance
+     * <p><b>Recorded:</b> For each partial match (String or zero-copy)
+     * <p><b>Interpretation:</b> Partial match performance
      */
     public static final String MATCHING_PARTIAL_MATCH_LATENCY = "matching.partial_match.latency";
 
+    // --- String-specific matching metrics ---
+
     /**
-     * Total matching operations (matches() + find()).
+     * String-based matching operations only.
      * <p><b>Type:</b> Counter
-     * <p><b>Incremented:</b> For each matches() or find() call
-     * <p><b>Interpretation:</b> Total workload; compare to compilation count for reuse ratio
+     * <p><b>Incremented:</b> For each matches(String) or find(String) call
+     * <p><b>Interpretation:</b> String API usage (subset of MATCHING_OPERATIONS)
      */
-    public static final String MATCHING_OPERATIONS = "matching.operations.total.count";
+    public static final String MATCHING_STRING_OPERATIONS = "matching.string.operations.total.count";
+
+    /**
+     * String-based matching latency.
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each String matching operation
+     * <p><b>Interpretation:</b> String API performance baseline
+     */
+    public static final String MATCHING_STRING_LATENCY = "matching.string.latency";
+
+    // --- Bulk-specific matching metrics ---
+
+    /**
+     * Bulk matching operations (matchAll, filter with String arrays/collections).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> Once per bulk call
+     * <p><b>Interpretation:</b> Bulk API usage (subset of MATCHING_OPERATIONS)
+     */
+    public static final String MATCHING_BULK_OPERATIONS = "matching.bulk.operations.total.count";
+
+    /**
+     * Total items processed in bulk matching.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> By number of items in each bulk call
+     * <p><b>Interpretation:</b> Total strings processed via bulk
+     */
+    public static final String MATCHING_BULK_ITEMS = "matching.bulk.items.total.count";
+
+    /**
+     * Bulk matching latency (per item average).
+     * <p><b>Type:</b> Timer (nanoseconds per item)
+     * <p><b>Recorded:</b> Average latency per item
+     * <p><b>Interpretation:</b> Should be lower than single due to JNI amortization
+     */
+    public static final String MATCHING_BULK_LATENCY = "matching.bulk.latency";
+
+    // --- Zero-copy specific matching metrics ---
+
+    /**
+     * Zero-copy matching operations (ByteBuffer or address/length - single).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For each zero-copy single match
+     * <p><b>Interpretation:</b> Zero-copy API adoption (subset of MATCHING_OPERATIONS)
+     */
+    public static final String MATCHING_ZERO_COPY_OPERATIONS = "matching.zero_copy.operations.total.count";
+
+    /**
+     * Zero-copy matching latency.
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each zero-copy single match
+     * <p><b>Interpretation:</b> Should be 46-99% faster than String
+     */
+    public static final String MATCHING_ZERO_COPY_LATENCY = "matching.zero_copy.latency";
+
+    /**
+     * Zero-copy bulk matching operations (address/length arrays).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> Once per zero-copy bulk call
+     * <p><b>Interpretation:</b> Zero-copy bulk usage
+     */
+    public static final String MATCHING_BULK_ZERO_COPY_OPERATIONS = "matching.bulk.zero_copy.operations.total.count";
+
+    /**
+     * Zero-copy bulk matching latency (per item).
+     * <p><b>Type:</b> Timer (nanoseconds per item)
+     * <p><b>Recorded:</b> Per-item latency for zero-copy bulk
+     * <p><b>Interpretation:</b> Fastest path (bulk + zero-copy)
+     */
+    public static final String MATCHING_BULK_ZERO_COPY_LATENCY = "matching.bulk.zero_copy.latency";
+
+    // ========================================
+    // Performance Metrics - Capture Groups
+    // ========================================
+    // Pattern: Global metrics (ALL) + Specific breakdown (String, Bulk, Zero-Copy)
+
+    /**
+     * Total capture group operations (ALL - String + Bulk + Zero-Copy).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For EVERY match(), find(), findAll() with group extraction
+     * <p><b>Interpretation:</b> Total capture workload across all variants
+     * <p><b>Breakdown:</b> Sum of CAPTURE_STRING_OPERATIONS + CAPTURE_BULK_OPERATIONS + CAPTURE_ZERO_COPY_OPERATIONS
+     */
+    public static final String CAPTURE_OPERATIONS = "capture.operations.total.count";
+
+    /**
+     * Capture group extraction latency (ALL variants).
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For EVERY capture operation (String, bulk, zero-copy)
+     * <p><b>Interpretation:</b> Overall capture performance across all variants
+     */
+    public static final String CAPTURE_LATENCY = "capture.latency";
+
+    // --- String-specific capture metrics ---
+
+    /**
+     * String-based capture operations only.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For each match(String), find(String), findAll(String)
+     * <p><b>Interpretation:</b> String capture API usage (subset of CAPTURE_OPERATIONS)
+     */
+    public static final String CAPTURE_STRING_OPERATIONS = "capture.string.operations.total.count";
+
+    /**
+     * String-based capture latency.
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each String capture operation
+     * <p><b>Interpretation:</b> String capture performance baseline
+     */
+    public static final String CAPTURE_STRING_LATENCY = "capture.string.latency";
+
+    // --- Bulk-specific capture metrics ---
+
+    /**
+     * Bulk capture operations (extractGroupsBulk, matchAll with groups).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> Once per bulk capture call
+     * <p><b>Interpretation:</b> Bulk capture API usage (subset of CAPTURE_OPERATIONS)
+     */
+    public static final String CAPTURE_BULK_OPERATIONS = "capture.bulk.operations.total.count";
+
+    /**
+     * Total items in bulk capture operations.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> By number of items in each bulk capture
+     * <p><b>Interpretation:</b> Total strings processed via bulk capture
+     */
+    public static final String CAPTURE_BULK_ITEMS = "capture.bulk.items.total.count";
+
+    /**
+     * Bulk capture latency (per item average).
+     * <p><b>Type:</b> Timer (nanoseconds per item)
+     * <p><b>Recorded:</b> Average latency per item in bulk capture
+     * <p><b>Interpretation:</b> Should be lower than single due to JNI amortization
+     */
+    public static final String CAPTURE_BULK_LATENCY = "capture.bulk.latency";
+
+    // --- Zero-copy specific capture metrics ---
+
+    /**
+     * Zero-copy capture operations (ByteBuffer, address/length - single).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For each zero-copy single capture
+     * <p><b>Interpretation:</b> Zero-copy capture adoption (subset of CAPTURE_OPERATIONS)
+     */
+    public static final String CAPTURE_ZERO_COPY_OPERATIONS = "capture.zero_copy.operations.total.count";
+
+    /**
+     * Zero-copy capture latency.
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each zero-copy capture
+     * <p><b>Interpretation:</b> Should be 46-99% faster than String
+     */
+    public static final String CAPTURE_ZERO_COPY_LATENCY = "capture.zero_copy.latency";
+
+    /**
+     * Zero-copy bulk capture operations.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> Once per zero-copy bulk capture call
+     * <p><b>Interpretation:</b> Zero-copy bulk capture usage
+     */
+    public static final String CAPTURE_BULK_ZERO_COPY_OPERATIONS = "capture.bulk.zero_copy.operations.total.count";
+
+    /**
+     * Zero-copy bulk capture latency (per item).
+     * <p><b>Type:</b> Timer (nanoseconds per item)
+     * <p><b>Recorded:</b> Per-item latency for zero-copy bulk capture
+     * <p><b>Interpretation:</b> Fastest capture path
+     */
+    public static final String CAPTURE_BULK_ZERO_COPY_LATENCY = "capture.bulk.zero_copy.latency";
+
+    /**
+     * Total matches found by findAll operations (ALL variants).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> By number of matches found in each findAll()
+     * <p><b>Interpretation:</b> Total matches extracted across all findAll calls
+     */
+    public static final String CAPTURE_FINDALL_MATCHES = "capture.findall.matches.total.count";
+
+    // ========================================
+    // Performance Metrics - Replace
+    // ========================================
+    // Pattern: Global metrics (ALL) + Specific breakdown (String, Bulk, Zero-Copy)
+
+    /**
+     * Total replace operations (ALL - String + Bulk + Zero-Copy).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For EVERY replaceFirst(), replaceAll() regardless of variant
+     * <p><b>Interpretation:</b> Total replace workload across all variants
+     * <p><b>Breakdown:</b> Sum of REPLACE_STRING_OPERATIONS + REPLACE_BULK_OPERATIONS + REPLACE_ZERO_COPY_OPERATIONS
+     */
+    public static final String REPLACE_OPERATIONS = "replace.operations.total.count";
+
+    /**
+     * Replace operation latency (ALL variants).
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For EVERY replace operation (String, bulk, zero-copy)
+     * <p><b>Interpretation:</b> Overall replace performance across all variants
+     */
+    public static final String REPLACE_LATENCY = "replace.latency";
+
+    // --- String-specific replace metrics ---
+
+    /**
+     * String-based replace operations only.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For each replaceFirst(String) or replaceAll(String)
+     * <p><b>Interpretation:</b> String replace API usage (subset of REPLACE_OPERATIONS)
+     */
+    public static final String REPLACE_STRING_OPERATIONS = "replace.string.operations.total.count";
+
+    /**
+     * String-based replace latency.
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each String replace operation
+     * <p><b>Interpretation:</b> String replace performance baseline
+     */
+    public static final String REPLACE_STRING_LATENCY = "replace.string.latency";
+
+    // --- Bulk-specific replace metrics ---
+
+    /**
+     * Bulk replace operations (replaceAll with arrays/collections).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> Once per bulk replace call
+     * <p><b>Interpretation:</b> Bulk replace API usage (subset of REPLACE_OPERATIONS)
+     */
+    public static final String REPLACE_BULK_OPERATIONS = "replace.bulk.operations.total.count";
+
+    /**
+     * Total items in bulk replace operations.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> By number of items in each bulk replace
+     * <p><b>Interpretation:</b> Total strings processed via bulk replace
+     */
+    public static final String REPLACE_BULK_ITEMS = "replace.bulk.items.total.count";
+
+    /**
+     * Bulk replace latency (per item average).
+     * <p><b>Type:</b> Timer (nanoseconds per item)
+     * <p><b>Recorded:</b> Average latency per item in bulk replace
+     * <p><b>Interpretation:</b> Should be lower than single due to JNI amortization
+     */
+    public static final String REPLACE_BULK_LATENCY = "replace.bulk.latency";
+
+    // --- Zero-copy specific replace metrics ---
+
+    /**
+     * Zero-copy replace operations (ByteBuffer, address/length - single).
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> For each zero-copy single replace
+     * <p><b>Interpretation:</b> Zero-copy replace adoption (subset of REPLACE_OPERATIONS)
+     */
+    public static final String REPLACE_ZERO_COPY_OPERATIONS = "replace.zero_copy.operations.total.count";
+
+    /**
+     * Zero-copy replace latency.
+     * <p><b>Type:</b> Timer (nanoseconds)
+     * <p><b>Recorded:</b> For each zero-copy replace
+     * <p><b>Interpretation:</b> Should be 46-99% faster than String
+     */
+    public static final String REPLACE_ZERO_COPY_LATENCY = "replace.zero_copy.latency";
+
+    /**
+     * Zero-copy bulk replace operations.
+     * <p><b>Type:</b> Counter
+     * <p><b>Incremented:</b> Once per zero-copy bulk replace call
+     * <p><b>Interpretation:</b> Zero-copy bulk replace usage
+     */
+    public static final String REPLACE_BULK_ZERO_COPY_OPERATIONS = "replace.bulk.zero_copy.operations.total.count";
+
+    /**
+     * Number of items processed in zero-copy bulk replace operations.
+     * <p><b>Type:</b> Counter (items)
+     * <p><b>Recorded:</b> Count of individual buffers/addresses processed in bulk zero-copy replace
+     * <p><b>Interpretation:</b> Total items in all REPLACE_BULK_ZERO_COPY_OPERATIONS calls
+     */
+    public static final String REPLACE_BULK_ZERO_COPY_ITEMS = "replace.bulk.zero_copy.items.total.count";
+
+    /**
+     * Zero-copy bulk replace latency (per item).
+     * <p><b>Type:</b> Timer (nanoseconds per item)
+     * <p><b>Recorded:</b> Per-item latency for zero-copy bulk replace
+     * <p><b>Interpretation:</b> Fastest replace path
+     */
+    public static final String REPLACE_BULK_ZERO_COPY_LATENCY = "replace.bulk.zero_copy.latency";
 
     // ========================================
     // Error Metrics (3)

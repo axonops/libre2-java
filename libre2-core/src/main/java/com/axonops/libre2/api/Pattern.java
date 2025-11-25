@@ -272,9 +272,17 @@ public final class Pattern implements AutoCloseable {
         boolean result = RE2NativeJNI.fullMatchDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
-        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos);
+
+        // Global metrics (ALL matching operations)
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, durationNanos);
+        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos);
+
+        // Specific zero-copy metrics
+        metrics.incrementCounter(MetricNames.MATCHING_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.MATCHING_ZERO_COPY_LATENCY, durationNanos);
 
         return result;
     }
@@ -327,9 +335,17 @@ public final class Pattern implements AutoCloseable {
         boolean result = RE2NativeJNI.partialMatchDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
-        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos);
+
+        // Global metrics (ALL matching operations)
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, durationNanos);
+        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos);
+
+        // Specific zero-copy metrics
+        metrics.incrementCounter(MetricNames.MATCHING_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.MATCHING_ZERO_COPY_LATENCY, durationNanos);
 
         return result;
     }
@@ -380,10 +396,23 @@ public final class Pattern implements AutoCloseable {
         checkNotClosed();
         Objects.requireNonNull(input, "input cannot be null");
 
+        long startNanos = System.nanoTime();
+
         String[] groups = RE2NativeJNI.extractGroups(nativeHandle, input);
 
         if (groups == null) {
-            // No match
+            // No match - still track metrics (operation was attempted)
+            long durationNanos = System.nanoTime() - startNanos;
+            RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+            // Global capture metrics
+            metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+            metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+            // Specific String capture metrics
+            metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+            metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
+
             return new MatchResult(input);
         }
 
@@ -391,8 +420,32 @@ public final class Pattern implements AutoCloseable {
         // extractGroups uses UNANCHORED, so we need to check manually
         if (!groups[0].equals(input)) {
             // Match found but doesn't cover entire input - this is a partial match
+            long durationNanos = System.nanoTime() - startNanos;
+            RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+            // Global capture metrics
+            metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+            metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+            // Specific String capture metrics
+            metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+            metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
+
             return new MatchResult(input);
         }
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics (ALL capture operations)
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific String capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
 
         // Lazy-load named groups only if needed
         Map<String, Integer> namedGroupMap = getNamedGroupsMap();
@@ -431,8 +484,23 @@ public final class Pattern implements AutoCloseable {
         checkNotClosed();
         Objects.requireNonNull(input, "input cannot be null");
 
+        long startNanos = System.nanoTime();
+
         // RE2 extractGroups does UNANCHORED match, so it finds first occurrence
         String[] groups = RE2NativeJNI.extractGroups(nativeHandle, input);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics (ALL capture operations)
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific String capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
 
         if (groups == null) {
             return new MatchResult(input);
@@ -486,7 +554,28 @@ public final class Pattern implements AutoCloseable {
         checkNotClosed();
         Objects.requireNonNull(input, "input cannot be null");
 
+        long startNanos = System.nanoTime();
+
         String[][] allMatches = RE2NativeJNI.findAllMatches(nativeHandle, input);
+
+        long durationNanos = System.nanoTime() - startNanos;
+        int matchCount = (allMatches != null) ? allMatches.length : 0;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics (ALL capture operations)
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific String capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
+
+        // Track number of matches found
+        if (matchCount > 0) {
+            metrics.incrementCounter(MetricNames.CAPTURE_FINDALL_MATCHES, matchCount);
+        }
 
         if (allMatches == null || allMatches.length == 0) {
             return java.util.Collections.emptyList();
@@ -502,6 +591,168 @@ public final class Pattern implements AutoCloseable {
 
         return results;
     }
+
+    // ========== Bulk Capture Operations ==========
+
+    /**
+     * Full match multiple inputs with capture groups (bulk operation).
+     *
+     * <p>Processes all inputs in a single operation, extracting capture groups from each.</p>
+     *
+     * <p><strong>Example - Extract email components from multiple inputs:</strong></p>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("([a-z]+)@([a-z]+\\.[a-z]+)");
+     * String[] emails = {"user@example.com", "admin@test.org", "invalid"};
+     *
+     * MatchResult[] results = emailPattern.matchAllWithGroups(emails);
+     * // results[0].matched() = true, group(1) = "user", group(2) = "example.com"
+     * // results[1].matched() = true, group(1) = "admin", group(2) = "test.org"
+     * // results[2].matched() = false
+     * }</pre>
+     *
+     * @param inputs array of strings to match
+     * @return array of MatchResults (parallel to inputs, remember to close each)
+     * @throws NullPointerException if inputs is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult[] matchAllWithGroups(String[] inputs) {
+        checkNotClosed();
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+
+        if (inputs.length == 0) {
+            return new MatchResult[0];
+        }
+
+        long startNanos = System.nanoTime();
+
+        // Call extractGroups for each input individually
+        // Note: extractGroupsBulk returns String[][] with all inputs concatenated,
+        // so we process individually for now (can optimize later with proper bulk native method)
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        MatchResult[] results = new MatchResult[inputs.length];
+
+        for (int i = 0; i < inputs.length; i++) {
+            String[] groups = RE2NativeJNI.extractGroups(nativeHandle, inputs[i]);
+            if (groups != null && groups.length > 0) {
+                results[i] = new MatchResult(inputs[i], groups, namedGroupMap);
+            } else {
+                results[i] = new MatchResult(inputs[i]);
+            }
+        }
+
+        long durationNanos = System.nanoTime() - startNanos;
+        long perItemNanos = durationNanos / inputs.length;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Bulk)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics (per-item for comparability)
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS, inputs.length);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, perItemNanos);
+
+        // Specific bulk capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_BULK_OPERATIONS);
+        metrics.incrementCounter(MetricNames.CAPTURE_BULK_ITEMS, inputs.length);
+        metrics.recordTimer(MetricNames.CAPTURE_BULK_LATENCY, perItemNanos);
+
+        return results;
+    }
+
+    /**
+     * Full match multiple inputs with capture groups (bulk operation, collection variant).
+     *
+     * @param inputs collection of strings to match
+     * @return array of MatchResults (parallel to inputs, remember to close each)
+     * @throws NullPointerException if inputs is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult[] matchAllWithGroups(java.util.Collection<String> inputs) {
+        checkNotClosed();
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+
+        String[] array = inputs.toArray(new String[0]);
+        return matchAllWithGroups(array);
+    }
+
+    /**
+     * Matches input and extracts capture groups (zero-copy).
+     *
+     * <p>Zero-copy variant using raw memory address.</p>
+     *
+     * @param address native memory address of UTF-8 encoded text
+     * @param length number of bytes to read
+     * @return MatchResult with captured groups, or failed match if no match
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult match(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+
+        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific zero-copy capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (groups == null) {
+            // Need input as String for MatchResult - this is a limitation
+            // User must pass String for failed matches
+            return new MatchResult("");  // Empty input for failed zero-copy match
+        }
+
+        // For zero-copy, we don't have the original String, so MatchResult.input() will be group[0]
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        return new MatchResult(groups[0], groups, namedGroupMap);
+    }
+
+    /**
+     * Matches ByteBuffer content and extracts capture groups (zero-copy).
+     *
+     * <p>Automatically routes to zero-copy (DirectByteBuffer) or String (heap).</p>
+     *
+     * @param buffer ByteBuffer containing UTF-8 text
+     * @return MatchResult with captured groups
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult match(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return match(address, length);
+        } else {
+            // Heap - convert to String and use String variant
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return match(text);
+        }
+    }
+
 
     /**
      * Helper: Get named groups map for this pattern (lazy-loaded and cached).
@@ -522,6 +773,647 @@ public final class Pattern implements AutoCloseable {
         }
 
         return map;
+    }
+
+    // ========== Capture Group Zero-Copy Operations ==========
+
+    /**
+     * Matches and extracts capture groups using zero-copy (address variant).
+     *
+     * @param address native memory address of UTF-8 text
+     * @param length number of bytes
+     * @return MatchResult with captured groups
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @see #match(String) String variant
+     * @since 1.2.0
+     */
+    public MatchResult matchWithGroups(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (groups == null) {
+            return new MatchResult("");
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        return new MatchResult(groups[0], groups, namedGroupMap);
+    }
+
+    /**
+     * Matches and extracts capture groups (ByteBuffer zero-copy).
+     *
+     * @param buffer ByteBuffer
+     * @return MatchResult with captured groups
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult matchWithGroups(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return matchWithGroups(address, length);
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return match(text);
+        }
+    }
+
+    /**
+     * Finds and extracts capture groups using zero-copy (address variant).
+     *
+     * @param address native memory address
+     * @param length number of bytes
+     * @return MatchResult for first match
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult findWithGroups(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+        long durationNanos = System.nanoTime() - startNanos;
+
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (groups == null) {
+            return new MatchResult("");
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        return new MatchResult(groups[0], groups, namedGroupMap);
+    }
+
+    /**
+     * Finds and extracts capture groups (ByteBuffer zero-copy).
+     *
+     * @param buffer ByteBuffer
+     * @return MatchResult for first match
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult findWithGroups(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return findWithGroups(address, length);
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return find(text);
+        }
+    }
+
+    /**
+     * Finds all matches and extracts capture groups using zero-copy (address variant).
+     *
+     * @param address native memory address
+     * @param length number of bytes
+     * @return list of MatchResult objects
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public java.util.List<MatchResult> findAllWithGroups(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+        String[][] allMatches = RE2NativeJNI.findAllMatchesDirect(nativeHandle, address, length);
+        long durationNanos = System.nanoTime() - startNanos;
+
+        int matchCount = (allMatches != null) ? allMatches.length : 0;
+
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (matchCount > 0) {
+            metrics.incrementCounter(MetricNames.CAPTURE_FINDALL_MATCHES, matchCount);
+        }
+
+        if (allMatches == null || allMatches.length == 0) {
+            return java.util.Collections.emptyList();
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+
+        java.util.List<MatchResult> results = new java.util.ArrayList<>(allMatches.length);
+        for (String[] groups : allMatches) {
+            results.add(new MatchResult(groups[0], groups, namedGroupMap));
+        }
+
+        return results;
+    }
+
+    /**
+     * Finds all matches and extracts capture groups (ByteBuffer zero-copy).
+     *
+     * @param buffer ByteBuffer
+     * @return list of MatchResult objects
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public java.util.List<MatchResult> findAllWithGroups(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return findAllWithGroups(address, length);
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return findAll(text);
+        }
+    }
+
+    // ========== Replace Operations ==========
+
+    /**
+     * Replaces the first match of this pattern in the input with the replacement string.
+     *
+     * <p>If the pattern matches, the first occurrence is replaced. If no match is found,
+     * the original input is returned unchanged.</p>
+     *
+     * <p><strong>Backreferences:</strong> RE2 supports backreferences using {@code \\1}, {@code \\2}, etc.
+     * (note the double backslash for Java string escaping). Unlike java.util.regex which uses
+     * {@code $1}, {@code $2}, RE2 uses backslash notation.</p>
+     *
+     * <p><strong>Example - Simple replacement:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("\\d+");
+     * String result = pattern.replaceFirst("Item 123 costs $456", "XXX");
+     * // result = "Item XXX costs $456"
+     * }</pre>
+     *
+     * <p><strong>Example - Backreferences:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("(\\d{4})-(\\d{2})-(\\d{2})");
+     * String result = pattern.replaceFirst("Date: 2025-11-24", "\\2/\\3/\\1");
+     * // result = "Date: 11/24/2025" (reordered date components)
+     * }</pre>
+     *
+     * @param input the input string
+     * @param replacement the replacement string (supports {@code \\1}, {@code \\2}, etc. backreferences)
+     * @return the input with the first match replaced, or original input if no match
+     * @throws NullPointerException if input or replacement is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #replaceAll(String, String) to replace all matches
+     * @since 1.2.0
+     */
+    public String replaceFirst(String input, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        long startNanos = System.nanoTime();
+
+        String result = RE2NativeJNI.replaceFirst(nativeHandle, input, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics (ALL replace operations)
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, durationNanos);
+
+        // Specific String replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_STRING_LATENCY, durationNanos);
+
+        return result != null ? result : input;
+    }
+
+    /**
+     * Replaces all matches of this pattern in the input with the replacement string.
+     *
+     * <p>All non-overlapping matches are replaced. If no matches are found, the original
+     * input is returned unchanged.</p>
+     *
+     * <p><strong>Backreferences:</strong> Use {@code \\1}, {@code \\2}, etc. for captured groups.</p>
+     *
+     * <p><strong>Example - Replace all digits:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("\\d+");
+     * String result = pattern.replaceAll("Item 123 costs $456", "XXX");
+     * // result = "Item XXX costs $XXX"
+     * }</pre>
+     *
+     * <p><strong>Example - Redact emails:</strong></p>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}");
+     * String result = emailPattern.replaceAll("Contact user@example.com or admin@test.org", "[REDACTED]");
+     * // result = "Contact [REDACTED] or [REDACTED]"
+     * }</pre>
+     *
+     * <p><strong>Example - Backreferences for formatting:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("(\\d{3})-(\\d{4})");
+     * String result = pattern.replaceAll("Call 555-1234 or 555-5678", "(\\1) \\2");
+     * // result = "Call (555) 1234 or (555) 5678"
+     * }</pre>
+     *
+     * @param input the input string
+     * @param replacement the replacement string (supports {@code \\1}, {@code \\2}, etc. backreferences)
+     * @return the input with all matches replaced, or original input if no matches
+     * @throws NullPointerException if input or replacement is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #replaceFirst(String, String) to replace only the first match
+     * @since 1.2.0
+     */
+    public String replaceAll(String input, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        long startNanos = System.nanoTime();
+
+        String result = RE2NativeJNI.replaceAll(nativeHandle, input, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics (ALL replace operations)
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, durationNanos);
+
+        // Specific String replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_STRING_LATENCY, durationNanos);
+
+        return result != null ? result : input;
+    }
+
+    /**
+     * Replaces all matches in multiple strings (bulk operation).
+     *
+     * <p>Processes all inputs in a single JNI call for better performance.</p>
+     *
+     * <p><strong>Example - Batch redaction:</strong></p>
+     * <pre>{@code
+     * Pattern ssnPattern = Pattern.compile("\\d{3}-\\d{2}-\\d{4}");
+     * String[] logs = {
+     *     "User 123-45-6789 logged in",
+     *     "No PII here",
+     *     "SSN: 987-65-4321"
+     * };
+     *
+     * String[] redacted = ssnPattern.replaceAll(logs, "[REDACTED]");
+     * // redacted = ["User [REDACTED] logged in", "No PII here", "SSN: [REDACTED]"]
+     * }</pre>
+     *
+     * @param inputs array of strings to process
+     * @param replacement the replacement string (supports backreferences)
+     * @return array of strings with matches replaced (parallel to inputs)
+     * @throws NullPointerException if inputs or replacement is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #replaceAll(String, String) single-string variant
+     * @since 1.2.0
+     */
+    public String[] replaceAll(String[] inputs, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        if (inputs.length == 0) {
+            return new String[0];
+        }
+
+        long startNanos = System.nanoTime();
+
+        String[] results = RE2NativeJNI.replaceAllBulk(nativeHandle, inputs, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+        long perItemNanos = durationNanos / inputs.length;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String Bulk)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics (ALL replace operations) - use per-item for comparability
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS, inputs.length);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, perItemNanos);
+
+        // Specific String bulk replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_BULK_OPERATIONS);
+        metrics.incrementCounter(MetricNames.REPLACE_BULK_ITEMS, inputs.length);
+        metrics.recordTimer(MetricNames.REPLACE_BULK_LATENCY, perItemNanos);
+
+        return results != null ? results : inputs;
+    }
+
+    /**
+     * Replaces all matches in a collection (bulk operation).
+     *
+     * <p>Processes all inputs in a single JNI call for better performance.</p>
+     *
+     * @param inputs collection of strings to process
+     * @param replacement the replacement string (supports backreferences)
+     * @return list of strings with matches replaced (same order as inputs)
+     * @throws NullPointerException if inputs or replacement is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #replaceAll(String, String) single-string variant
+     * @since 1.2.0
+     */
+    public java.util.List<String> replaceAll(java.util.Collection<String> inputs, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        if (inputs.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+
+        String[] array = inputs.toArray(new String[0]);
+        String[] results = replaceAll(array, replacement);
+
+        return java.util.Arrays.asList(results);
+    }
+
+    // ========== Phase 3: Zero-Copy Replace Operations ==========
+
+    /**
+     * Replaces first match using zero-copy memory access (off-heap memory).
+     *
+     * <p><strong>Zero-copy operation:</strong> Accesses off-heap memory directly without copying.
+     * Caller must ensure memory remains valid during this call.</p>
+     *
+     * @param address native memory address (from DirectByteBuffer or native allocator)
+     * @param length number of bytes to process
+     * @param replacement the replacement string (supports backreferences)
+     * @return string with first match replaced
+     * @throws IllegalStateException if pattern is closed
+     * @throws NullPointerException if replacement is null
+     * @since 1.2.0
+     */
+    public String replaceFirst(long address, int length, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        long startNanos = System.nanoTime();
+
+        String result = RE2NativeJNI.replaceFirstDirect(nativeHandle, address, length, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, durationNanos);
+
+        // Specific zero-copy replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_ZERO_COPY_LATENCY, durationNanos);
+
+        return result;
+    }
+
+    /**
+     * Replaces first match using ByteBuffer (zero-copy if direct, converted if heap).
+     *
+     * @param input ByteBuffer containing UTF-8 encoded text
+     * @param replacement the replacement string (supports backreferences)
+     * @return string with first match replaced
+     * @throws IllegalStateException if pattern is closed
+     * @throws NullPointerException if input or replacement is null
+     * @since 1.2.0
+     */
+    public String replaceFirst(java.nio.ByteBuffer input, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        if (input.isDirect()) {
+            // Zero-copy path
+            long address = ((DirectBuffer) input).address() + input.position();
+            int length = input.remaining();
+            return replaceFirst(address, length, replacement);
+        } else {
+            // Heap buffer - convert to String
+            byte[] bytes = new byte[input.remaining()];
+            input.duplicate().get(bytes);
+            String str = new String(bytes, StandardCharsets.UTF_8);
+            return replaceFirst(str, replacement);
+        }
+    }
+
+    /**
+     * Replaces all matches using zero-copy memory access (off-heap memory).
+     *
+     * @param address native memory address (from DirectByteBuffer or native allocator)
+     * @param length number of bytes to process
+     * @param replacement the replacement string (supports backreferences)
+     * @return string with all matches replaced
+     * @throws IllegalStateException if pattern is closed
+     * @throws NullPointerException if replacement is null
+     * @since 1.2.0
+     */
+    public String replaceAll(long address, int length, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        long startNanos = System.nanoTime();
+
+        String result = RE2NativeJNI.replaceAllDirect(nativeHandle, address, length, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, durationNanos);
+
+        // Specific zero-copy replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_ZERO_COPY_LATENCY, durationNanos);
+
+        return result;
+    }
+
+    /**
+     * Replaces all matches using ByteBuffer (zero-copy if direct, converted if heap).
+     *
+     * @param input ByteBuffer containing UTF-8 encoded text
+     * @param replacement the replacement string (supports backreferences)
+     * @return string with all matches replaced
+     * @throws IllegalStateException if pattern is closed
+     * @throws NullPointerException if input or replacement is null
+     * @since 1.2.0
+     */
+    public String replaceAll(java.nio.ByteBuffer input, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        if (input.isDirect()) {
+            // Zero-copy path
+            long address = ((DirectBuffer) input).address() + input.position();
+            int length = input.remaining();
+            return replaceAll(address, length, replacement);
+        } else {
+            // Heap buffer - convert to String
+            byte[] bytes = new byte[input.remaining()];
+            input.duplicate().get(bytes);
+            String str = new String(bytes, StandardCharsets.UTF_8);
+            return replaceAll(str, replacement);
+        }
+    }
+
+    /**
+     * Replaces all matches in multiple off-heap buffers (bulk zero-copy operation).
+     *
+     * @param addresses native memory addresses (from DirectByteBuffer or native allocator)
+     * @param lengths number of bytes for each address
+     * @param replacement the replacement string (supports backreferences)
+     * @return array of strings with all matches replaced (parallel to inputs)
+     * @throws IllegalStateException if pattern is closed
+     * @throws NullPointerException if addresses, lengths, or replacement is null
+     * @throws IllegalArgumentException if addresses and lengths have different lengths
+     * @since 1.2.0
+     */
+    public String[] replaceAll(long[] addresses, int[] lengths, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(addresses, "addresses cannot be null");
+        Objects.requireNonNull(lengths, "lengths cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        if (addresses.length != lengths.length) {
+            throw new IllegalArgumentException("addresses and lengths must have the same length");
+        }
+
+        if (addresses.length == 0) {
+            return new String[0];
+        }
+
+        long startNanos = System.nanoTime();
+
+        String[] results = RE2NativeJNI.replaceAllDirectBulk(nativeHandle, addresses, lengths, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+        long perItemNanos = durationNanos / addresses.length;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy Bulk)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics (per-item for comparability)
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS, addresses.length);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, perItemNanos);
+
+        // Specific zero-copy bulk replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_BULK_ZERO_COPY_OPERATIONS);
+        metrics.incrementCounter(MetricNames.REPLACE_BULK_ZERO_COPY_ITEMS, addresses.length);
+        metrics.recordTimer(MetricNames.REPLACE_BULK_ZERO_COPY_LATENCY, perItemNanos);
+
+        return results;
+    }
+
+    /**
+     * Replaces all matches in multiple ByteBuffers (bulk operation, zero-copy if direct).
+     *
+     * @param inputs array of ByteBuffers containing UTF-8 encoded text
+     * @param replacement the replacement string (supports backreferences)
+     * @return array of strings with all matches replaced (parallel to inputs)
+     * @throws IllegalStateException if pattern is closed
+     * @throws NullPointerException if inputs or replacement is null
+     * @since 1.2.0
+     */
+    public String[] replaceAll(java.nio.ByteBuffer[] inputs, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        if (inputs.length == 0) {
+            return new String[0];
+        }
+
+        // Check if all buffers are direct - if so, use zero-copy bulk path
+        boolean allDirect = true;
+        for (java.nio.ByteBuffer buffer : inputs) {
+            if (!buffer.isDirect()) {
+                allDirect = false;
+                break;
+            }
+        }
+
+        if (allDirect) {
+            // Zero-copy bulk path
+            long[] addresses = new long[inputs.length];
+            int[] lengths = new int[inputs.length];
+
+            for (int i = 0; i < inputs.length; i++) {
+                addresses[i] = ((DirectBuffer) inputs[i]).address() + inputs[i].position();
+                lengths[i] = inputs[i].remaining();
+            }
+
+            return replaceAll(addresses, lengths, replacement);
+        } else {
+            // Mixed or heap buffers - process individually
+            String[] results = new String[inputs.length];
+            for (int i = 0; i < inputs.length; i++) {
+                results[i] = replaceAll(inputs[i], replacement);
+            }
+            return results;
+        }
     }
 
     public String pattern() {
@@ -840,12 +1732,99 @@ public final class Pattern implements AutoCloseable {
         boolean[] results = RE2NativeJNI.fullMatchBulk(nativeHandle, inputs);
         long durationNanos = System.nanoTime() - startNanos;
 
-        // Track metrics (count as multiple operations)
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String Bulk)
         RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+        long perItemNanos = inputs.length > 0 ? durationNanos / inputs.length : 0;
+
+        // Global metrics (ALL matching operations) - use per-item latency for comparability
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS, inputs.length);
-        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos / inputs.length);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, perItemNanos);
+        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, perItemNanos);
+
+        // Specific String bulk metrics
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_OPERATIONS);
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ITEMS, inputs.length);
+        metrics.recordTimer(MetricNames.MATCHING_BULK_LATENCY, perItemNanos);
 
         return results != null ? results : new boolean[inputs.length];
+    }
+
+    /**
+     * Tests if pattern matches anywhere in multiple strings (partial match bulk).
+     *
+     * <p>This is the bulk variant of {@link Matcher#find()} - tests if the pattern
+     * matches anywhere within each input string (not necessarily the full string).</p>
+     *
+     * <p>Processes all inputs in a single JNI call for better performance.</p>
+     *
+     * <p><strong>Example - Find which strings contain pattern:</strong></p>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("[a-z]+@[a-z]+\\.[a-z]+");
+     * String[] texts = {
+     *     "user@example.com",           // contains email
+     *     "Contact: admin@test.org",    // contains email
+     *     "No email here"                // no email
+     * };
+     * boolean[] results = emailPattern.findAll(texts);
+     * // results = [true, true, false]
+     * }</pre>
+     *
+     * @param inputs array of strings to search
+     * @return boolean array (parallel to inputs) indicating if pattern found in each
+     * @throws NullPointerException if inputs is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #matchAll(String[]) for full match bulk variant
+     * @see Matcher#find() for single-string partial match
+     * @since 1.2.0
+     */
+    public boolean[] findAll(String[] inputs) {
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        checkNotClosed();
+
+        if (inputs.length == 0) {
+            return new boolean[0];
+        }
+
+        long startNanos = System.nanoTime();
+        boolean[] results = RE2NativeJNI.partialMatchBulk(nativeHandle, inputs);
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String Bulk)
+        RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+        long perItemNanos = inputs.length > 0 ? durationNanos / inputs.length : 0;
+
+        // Global metrics (ALL matching operations)
+        metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS, inputs.length);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, perItemNanos);
+        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, perItemNanos);
+
+        // Specific String bulk metrics
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_OPERATIONS);
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ITEMS, inputs.length);
+        metrics.recordTimer(MetricNames.MATCHING_BULK_LATENCY, perItemNanos);
+
+        return results != null ? results : new boolean[inputs.length];
+    }
+
+    /**
+     * Tests if pattern matches anywhere in multiple strings (partial match bulk, collection variant).
+     *
+     * <p>Convenience wrapper for {@link #findAll(String[])} accepting any Collection.</p>
+     *
+     * @param inputs collection of strings to search
+     * @return boolean array (parallel to inputs) indicating if pattern found in each
+     * @throws NullPointerException if inputs is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public boolean[] findAll(java.util.Collection<String> inputs) {
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        if (inputs.isEmpty()) {
+            return new boolean[0];
+        }
+
+        String[] array = inputs.toArray(new String[0]);
+        return findAll(array);
     }
 
     /**
@@ -904,10 +1883,19 @@ public final class Pattern implements AutoCloseable {
         boolean[] results = RE2NativeJNI.fullMatchDirectBulk(nativeHandle, addresses, lengths);
         long durationNanos = System.nanoTime() - startNanos;
 
-        // Track metrics
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Bulk Zero-Copy)
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+        long perItemNanos = addresses.length > 0 ? durationNanos / addresses.length : 0;
+
+        // Global metrics (ALL matching operations) - use per-item latency for comparability
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS, addresses.length);
-        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos / addresses.length);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, perItemNanos);
+        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, perItemNanos);
+
+        // Specific bulk zero-copy metrics
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ZERO_COPY_OPERATIONS);
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ITEMS, addresses.length);
+        metrics.recordTimer(MetricNames.MATCHING_BULK_ZERO_COPY_LATENCY, perItemNanos);
 
         return results != null ? results : new boolean[addresses.length];
     }
@@ -945,12 +1933,136 @@ public final class Pattern implements AutoCloseable {
         boolean[] results = RE2NativeJNI.partialMatchDirectBulk(nativeHandle, addresses, lengths);
         long durationNanos = System.nanoTime() - startNanos;
 
-        // Track metrics
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Bulk Zero-Copy)
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+        long perItemNanos = addresses.length > 0 ? durationNanos / addresses.length : 0;
+
+        // Global metrics (ALL matching operations) - use per-item latency for comparability
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS, addresses.length);
-        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos / addresses.length);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, perItemNanos);
+        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, perItemNanos);
+
+        // Specific bulk zero-copy metrics
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ZERO_COPY_OPERATIONS);
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ITEMS, addresses.length);
+        metrics.recordTimer(MetricNames.MATCHING_BULK_ZERO_COPY_LATENCY, perItemNanos);
 
         return results != null ? results : new boolean[addresses.length];
+    }
+
+    /**
+     * Matches multiple ByteBuffers in a single operation (bulk with auto-routing).
+     *
+     * <p>Automatically routes each buffer: DirectByteBuffer → zero-copy, heap → String.</p>
+     *
+     * <p><strong>Example - Bulk process Cassandra cells:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("valid_.*");
+     * ByteBuffer[] cells = getCellsFromCassandra();  // Array of DirectByteBuffers
+     *
+     * boolean[] results = pattern.matchAll(cells);
+     * // Each DirectByteBuffer uses zero-copy (46-99% faster)
+     * }</pre>
+     *
+     * @param buffers array of ByteBuffers to match
+     * @return boolean array (parallel to inputs) indicating matches
+     * @throws NullPointerException if buffers is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public boolean[] matchAll(ByteBuffer[] buffers) {
+        checkNotClosed();
+        Objects.requireNonNull(buffers, "buffers cannot be null");
+
+        if (buffers.length == 0) {
+            return new boolean[0];
+        }
+
+        // Check if all are direct - if so, use zero-copy bulk path
+        boolean allDirect = true;
+        for (ByteBuffer buf : buffers) {
+            if (buf != null && !buf.isDirect()) {
+                allDirect = false;
+                break;
+            }
+        }
+
+        if (allDirect) {
+            // Zero-copy path - extract addresses
+            long[] addresses = new long[buffers.length];
+            int[] lengths = new int[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                if (buffers[i] != null) {
+                    addresses[i] = ((DirectBuffer) buffers[i]).address() + buffers[i].position();
+                    lengths[i] = buffers[i].remaining();
+                }
+            }
+            return matchAll(addresses, lengths);
+        } else {
+            // Mixed or heap - convert to Strings
+            String[] strings = new String[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                if (buffers[i] != null) {
+                    byte[] bytes = new byte[buffers[i].remaining()];
+                    buffers[i].duplicate().get(bytes);
+                    strings[i] = new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+            return matchAll(strings);
+        }
+    }
+
+    /**
+     * Tests if pattern matches anywhere in multiple ByteBuffers (partial match bulk).
+     *
+     * <p>Bulk variant of partial matching with automatic routing.</p>
+     *
+     * @param buffers array of ByteBuffers to search
+     * @return boolean array indicating if pattern found in each
+     * @throws NullPointerException if buffers is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public boolean[] findAll(ByteBuffer[] buffers) {
+        checkNotClosed();
+        Objects.requireNonNull(buffers, "buffers cannot be null");
+
+        if (buffers.length == 0) {
+            return new boolean[0];
+        }
+
+        // Check if all are direct
+        boolean allDirect = true;
+        for (ByteBuffer buf : buffers) {
+            if (buf != null && !buf.isDirect()) {
+                allDirect = false;
+                break;
+            }
+        }
+
+        if (allDirect) {
+            // Zero-copy path
+            long[] addresses = new long[buffers.length];
+            int[] lengths = new int[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                if (buffers[i] != null) {
+                    addresses[i] = ((DirectBuffer) buffers[i]).address() + buffers[i].position();
+                    lengths[i] = buffers[i].remaining();
+                }
+            }
+            return findAll(addresses, lengths);
+        } else {
+            // Mixed or heap - convert to Strings
+            String[] strings = new String[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                if (buffers[i] != null) {
+                    byte[] bytes = new byte[buffers[i].remaining()];
+                    buffers[i].duplicate().get(bytes);
+                    strings[i] = new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+            return findAll(strings);
+        }
     }
 
     /**

@@ -227,6 +227,42 @@ public final class RE2NativeJNI {
      */
     public static native String[] replaceAllBulk(long handle, String[] texts, String replacement);
 
+    /**
+     * Replaces first match using zero-copy memory access (off-heap memory).
+     * Accesses memory directly via native address without UTF-8 conversion.
+     *
+     * @param handle compiled pattern handle
+     * @param textAddress native memory address (from DirectByteBuffer or native allocator)
+     * @param textLength number of bytes to process
+     * @param replacement replacement string (supports $1, $2 backreferences)
+     * @return text with first match replaced
+     */
+    public static native String replaceFirstDirect(long handle, long textAddress, int textLength, String replacement);
+
+    /**
+     * Replaces all matches using zero-copy memory access (off-heap memory).
+     * Accesses memory directly via native address without UTF-8 conversion.
+     *
+     * @param handle compiled pattern handle
+     * @param textAddress native memory address (from DirectByteBuffer or native allocator)
+     * @param textLength number of bytes to process
+     * @param replacement replacement string (supports $1, $2 backreferences)
+     * @return text with all matches replaced
+     */
+    public static native String replaceAllDirect(long handle, long textAddress, int textLength, String replacement);
+
+    /**
+     * Replaces all matches in multiple off-heap buffers (bulk zero-copy operation).
+     * Processes all buffers in a single JNI call for better performance.
+     *
+     * @param handle compiled pattern handle
+     * @param textAddresses native memory addresses (from DirectByteBuffer or native allocator)
+     * @param textLengths number of bytes for each address
+     * @param replacement replacement string (supports $1, $2 backreferences)
+     * @return array of strings with all matches replaced (parallel to inputs)
+     */
+    public static native String[] replaceAllDirectBulk(long handle, long[] textAddresses, int[] textLengths, String replacement);
+
     // ========== Utility Operations ==========
 
     /**
@@ -406,3 +442,4 @@ public final class RE2NativeJNI {
      */
     public static native String[][] findAllMatchesDirect(long handle, long textAddress, int textLength);
 }
+

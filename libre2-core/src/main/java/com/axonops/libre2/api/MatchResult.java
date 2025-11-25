@@ -19,6 +19,7 @@ package com.axonops.libre2.api;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Result of a regex match operation with capture group access.
@@ -26,39 +27,55 @@ import java.util.Objects;
  * <p>This class provides access to captured groups from a successful regex match.
  * It is immutable and thread-safe.</p>
  *
- * <h2>Usage Example</h2>
+ * <p><strong>IMPORTANT: Resource Management</strong></p>
+ * <p>MatchResult implements {@link AutoCloseable} for API consistency and safety.
+ * While MatchResult doesn't hold native resources directly, it follows the same
+ * lifecycle pattern as {@link Pattern} and {@link Matcher} to ensure consistent
+ * usage throughout the library.</p>
+ *
+ * <p><strong>Always use try-with-resources:</strong></p>
  * <pre>{@code
  * Pattern pattern = Pattern.compile("([a-z]+)@([a-z]+)\\.([a-z]+)");
- * MatchResult result = pattern.match("user@example.com");
  *
- * if (result.matched()) {
- *     String full = result.group();      // "user@example.com"
- *     String user = result.group(1);     // "user"
- *     String domain = result.group(2);   // "example"
- *     String tld = result.group(3);      // "com"
- * }
+ * try (MatchResult result = pattern.match("user@example.com")) {
+ *     if (result.matched()) {
+ *         String user = result.group(1);     // "user"
+ *         String domain = result.group(2);   // "example"
+ *         String tld = result.group(3);      // "com"
+ *     }
+ * }  // Auto-closes here
  * }</pre>
  *
  * <h2>Named Groups</h2>
  * <pre>{@code
  * Pattern pattern = Pattern.compile("(?P<year>\\d{4})-(?P<month>\\d{2})-(?P<day>\\d{2})");
- * MatchResult result = pattern.match("2025-11-24");
  *
- * if (result.matched()) {
- *     String year = result.group("year");   // "2025"
- *     String month = result.group("month"); // "11"
- *     String day = result.group("day");     // "24"
+ * try (MatchResult result = pattern.match("2025-11-24")) {
+ *     if (result.matched()) {
+ *         String year = result.group("year");   // "2025"
+ *         String month = result.group("month"); // "11"
+ *         String day = result.group("day");     // "24"
+ *     }
  * }
  * }</pre>
  *
+ * <p><strong>Why AutoCloseable?</strong></p>
+ * <ul>
+ *   <li>API Consistency - Pattern, Matcher, and MatchResult all use try-with-resources</li>
+ *   <li>Safety Culture - Uniform resource management pattern throughout library</li>
+ *   <li>Future-Proof - If cleanup logic needed later, structure already in place</li>
+ *   <li>Error Prevention - IDE warnings if try-with-resources not used</li>
+ * </ul>
+ *
  * @since 1.2.0
  */
-public final class MatchResult {
+public final class MatchResult implements AutoCloseable {
 
     private final boolean matched;
     private final String input;
     private final String[] groups;
     private final Map<String, Integer> namedGroups;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
      * Creates a MatchResult for a successful match.
@@ -90,8 +107,10 @@ public final class MatchResult {
      * Checks if the match was successful.
      *
      * @return true if a match was found, false otherwise
+     * @throws IllegalStateException if MatchResult is closed
      */
     public boolean matched() {
+        checkNotClosed();
         return matched;
     }
 
@@ -99,8 +118,10 @@ public final class MatchResult {
      * Gets the full matched text (same as {@code group(0)}).
      *
      * @return the full matched text, or null if no match
+     * @throws IllegalStateException if MatchResult is closed
      */
     public String group() {
+        checkNotClosed();
         return group(0);
     }
 
@@ -126,6 +147,7 @@ public final class MatchResult {
      * @throws IndexOutOfBoundsException if index is negative or &gt;= groupCount()
      */
     public String group(int index) {
+        checkNotClosed();
         if (!matched) {
             throw new IllegalStateException("No match found");
         }
@@ -156,6 +178,7 @@ public final class MatchResult {
      * @throws NullPointerException if name is null
      */
     public String group(String name) {
+        checkNotClosed();
         if (!matched) {
             throw new IllegalStateException("No match found");
         }
@@ -176,8 +199,10 @@ public final class MatchResult {
      * no capturing groups returns 0, but you can still access group(0).</p>
      *
      * @return number of capturing groups (excluding group 0)
+     * @throws IllegalStateException if MatchResult is closed
      */
     public int groupCount() {
+        checkNotClosed();
         return matched ? groups.length - 1 : 0;
     }
 
@@ -185,8 +210,10 @@ public final class MatchResult {
      * Gets the original input string.
      *
      * @return the input string that was matched against
+     * @throws IllegalStateException if MatchResult is closed
      */
     public String input() {
+        checkNotClosed();
         return input;
     }
 
@@ -196,8 +223,10 @@ public final class MatchResult {
      * <p>Array indices: [0] = full match, [1+] = capturing groups.</p>
      *
      * @return array of captured groups, or empty array if no match
+     * @throws IllegalStateException if MatchResult is closed
      */
     public String[] groups() {
+        checkNotClosed();
         return groups.clone();  // Defensive copy
     }
 
@@ -205,9 +234,37 @@ public final class MatchResult {
      * Gets the map of named groups to their indices.
      *
      * @return unmodifiable map of group names to indices, or empty map if no named groups
+     * @throws IllegalStateException if MatchResult is closed
      */
     public Map<String, Integer> namedGroups() {
+        checkNotClosed();
         return namedGroups;
+    }
+
+    /**
+     * Closes this MatchResult.
+     *
+     * <p>While MatchResult doesn't hold native resources, it implements the close
+     * pattern for API consistency with {@link Pattern} and {@link Matcher}.</p>
+     *
+     * <p>After closing, all accessor methods will throw {@link IllegalStateException}.</p>
+     *
+     * <p>This method is idempotent - calling close() multiple times is safe.</p>
+     */
+    @Override
+    public void close() {
+        closed.set(true);
+    }
+
+    /**
+     * Checks if this MatchResult is closed.
+     *
+     * @throws IllegalStateException if closed
+     */
+    private void checkNotClosed() {
+        if (closed.get()) {
+            throw new IllegalStateException("RE2: MatchResult is closed");
+        }
     }
 
     @Override

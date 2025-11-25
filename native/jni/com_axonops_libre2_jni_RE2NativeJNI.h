@@ -217,7 +217,32 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
 JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllMatchesDirect
   (JNIEnv *, jclass, jlong, jlong, jint);
 
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    replaceFirstDirect
+ * Signature: (JJILjava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceFirstDirect
+  (JNIEnv *, jclass, jlong, jlong, jint, jstring);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    replaceAllDirect
+ * Signature: (JJILjava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAllDirect
+  (JNIEnv *, jclass, jlong, jlong, jint, jstring);
+
+/*
+ * Class:     com_axonops_libre2_jni_RE2NativeJNI
+ * Method:    replaceAllDirectBulk
+ * Signature: (J[J[ILjava/lang/String;)[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAllDirectBulk
+  (JNIEnv *, jclass, jlong, jlongArray, jintArray, jstring);
+
 #ifdef __cplusplus
 }
 #endif
 #endif
+

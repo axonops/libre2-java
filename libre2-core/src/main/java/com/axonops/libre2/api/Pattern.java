@@ -593,6 +593,234 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
+     * Matches input and extracts capture groups (zero-copy).
+     *
+     * <p>Zero-copy variant using raw memory address.</p>
+     *
+     * @param address native memory address of UTF-8 encoded text
+     * @param length number of bytes to read
+     * @return MatchResult with captured groups, or failed match if no match
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult match(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+
+        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific zero-copy capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (groups == null) {
+            // Need input as String for MatchResult - this is a limitation
+            // User must pass String for failed matches
+            return new MatchResult("");  // Empty input for failed zero-copy match
+        }
+
+        // For zero-copy, we don't have the original String, so MatchResult.input() will be group[0]
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        return new MatchResult(groups[0], groups, namedGroupMap);
+    }
+
+    /**
+     * Matches ByteBuffer content and extracts capture groups (zero-copy).
+     *
+     * <p>Automatically routes to zero-copy (DirectByteBuffer) or String (heap).</p>
+     *
+     * @param buffer ByteBuffer containing UTF-8 text
+     * @return MatchResult with captured groups
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult match(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return match(address, length);
+        } else {
+            // Heap - convert to String and use String variant
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return match(text);
+        }
+    }
+
+    /**
+     * Finds first match and extracts groups (zero-copy).
+     *
+     * @param address native memory address of UTF-8 text
+     * @param length number of bytes
+     * @return MatchResult for first match
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult find(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+
+        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific zero-copy capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        if (groups == null) {
+            return new MatchResult("");
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+        return new MatchResult(groups[0], groups, namedGroupMap);
+    }
+
+    /**
+     * Finds first match and extracts groups (ByteBuffer zero-copy).
+     *
+     * @param buffer ByteBuffer containing UTF-8 text
+     * @return MatchResult for first match
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public MatchResult find(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return find(address, length);
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return find(text);
+        }
+    }
+
+    /**
+     * Finds all matches and extracts groups (zero-copy).
+     *
+     * @param address native memory address of UTF-8 text
+     * @param length number of bytes
+     * @return list of MatchResult objects
+     * @throws IllegalArgumentException if address is 0 or length is negative
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public java.util.List<MatchResult> findAll(long address, int length) {
+        checkNotClosed();
+        if (address == 0) {
+            throw new IllegalArgumentException("Address must not be 0");
+        }
+        if (length < 0) {
+            throw new IllegalArgumentException("Length must not be negative: " + length);
+        }
+
+        long startNanos = System.nanoTime();
+
+        String[][] allMatches = RE2NativeJNI.findAllMatchesDirect(nativeHandle, address, length);
+
+        long durationNanos = System.nanoTime() - startNanos;
+        int matchCount = (allMatches != null) ? allMatches.length : 0;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific zero-copy capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_ZERO_COPY_LATENCY, durationNanos);
+
+        // Track matches found
+        if (matchCount > 0) {
+            metrics.incrementCounter(MetricNames.CAPTURE_FINDALL_MATCHES, matchCount);
+        }
+
+        if (allMatches == null || allMatches.length == 0) {
+            return java.util.Collections.emptyList();
+        }
+
+        Map<String, Integer> namedGroupMap = getNamedGroupsMap();
+
+        java.util.List<MatchResult> results = new java.util.ArrayList<>(allMatches.length);
+        for (String[] groups : allMatches) {
+            // Use group[0] as input since we don't have original String
+            results.add(new MatchResult(groups[0], groups, namedGroupMap));
+        }
+
+        return results;
+    }
+
+    /**
+     * Finds all matches and extracts groups (ByteBuffer zero-copy).
+     *
+     * @param buffer ByteBuffer containing UTF-8 text
+     * @return list of MatchResult objects
+     * @throws NullPointerException if buffer is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public java.util.List<MatchResult> findAll(ByteBuffer buffer) {
+        checkNotClosed();
+        Objects.requireNonNull(buffer, "buffer cannot be null");
+
+        if (buffer.isDirect()) {
+            long address = ((DirectBuffer) buffer).address() + buffer.position();
+            int length = buffer.remaining();
+            return findAll(address, length);
+        } else {
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.duplicate().get(bytes);
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            return findAll(text);
+        }
+    }
+
+    /**
      * Helper: Get named groups map for this pattern (lazy-loaded and cached).
      */
     private Map<String, Integer> getNamedGroupsMap() {

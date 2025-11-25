@@ -435,14 +435,6 @@ public final class MetricNames {
      */
     public static final String MATCHING_BULK_ZERO_COPY_LATENCY = "matching.bulk.zero_copy.latency";
 
-    /**
-     * DirectByteBuffer operations (auto-routed to zero-copy or String).
-     * <p><b>Type:</b> Counter
-     * <p><b>Incremented:</b> For each ByteBuffer operation
-     * <p><b>Interpretation:</b> ByteBuffer API usage
-     */
-    public static final String MATCHING_DIRECT_BUFFER_OPERATIONS = "matching.direct_buffer.operations.total.count";
-
     // ========================================
     // Performance Metrics - Capture Groups
     // ========================================
@@ -542,14 +534,6 @@ public final class MetricNames {
      * <p><b>Interpretation:</b> Fastest capture path
      */
     public static final String CAPTURE_BULK_ZERO_COPY_LATENCY = "capture.bulk.zero_copy.latency";
-
-    /**
-     * DirectByteBuffer capture operations.
-     * <p><b>Type:</b> Counter
-     * <p><b>Incremented:</b> For each ByteBuffer capture operation
-     * <p><b>Interpretation:</b> ByteBuffer capture usage
-     */
-    public static final String CAPTURE_DIRECT_BUFFER_OPERATIONS = "capture.direct_buffer.operations.total.count";
 
     /**
      * Total matches found by findAll operations (ALL variants).
@@ -658,14 +642,6 @@ public final class MetricNames {
      * <p><b>Interpretation:</b> Fastest replace path
      */
     public static final String REPLACE_BULK_ZERO_COPY_LATENCY = "replace.bulk.zero_copy.latency";
-
-    /**
-     * DirectByteBuffer replace operations.
-     * <p><b>Type:</b> Counter
-     * <p><b>Incremented:</b> For each ByteBuffer replace operation
-     * <p><b>Interpretation:</b> ByteBuffer replace usage
-     */
-    public static final String REPLACE_DIRECT_BUFFER_OPERATIONS = "replace.direct_buffer.operations.total.count";
 
     // ========================================
     // Error Metrics (3)

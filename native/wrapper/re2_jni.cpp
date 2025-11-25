@@ -862,6 +862,7 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
 
         constexpr jsize STACK_THRESHOLD = 8192;
         std::vector<re2::StringPiece> groups(numGroups + 1);
+        std::vector<std::string> groupStrings(numGroups + 1);  // Store strings immediately
 
         jboolean matched = JNI_FALSE;
 
@@ -872,6 +873,15 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
             if (!env->ExceptionCheck()) {
                 re2::StringPiece input((const char*)stackBuf, length);
                 matched = re->Match(input.data(), 0, length, RE2::UNANCHORED, groups.data(), numGroups + 1);
+
+                // Convert StringPiece to std::string immediately (before stackBuf goes out of scope)
+                if (matched) {
+                    for (int i = 0; i <= numGroups; i++) {
+                        if (groups[i].data() != nullptr) {
+                            groupStrings[i] = std::string(groups[i].data(), groups[i].size());
+                        }
+                    }
+                }
             }
         } else {
             jbyte* heapBuf = new jbyte[length];
@@ -880,6 +890,15 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
             if (!env->ExceptionCheck()) {
                 re2::StringPiece input((const char*)heapBuf, length);
                 matched = re->Match(input.data(), 0, length, RE2::UNANCHORED, groups.data(), numGroups + 1);
+
+                // Convert StringPiece to std::string immediately (before heapBuf is freed)
+                if (matched) {
+                    for (int i = 0; i <= numGroups; i++) {
+                        if (groups[i].data() != nullptr) {
+                            groupStrings[i] = std::string(groups[i].data(), groups[i].size());
+                        }
+                    }
+                }
             }
             delete[] heapBuf;
         }
@@ -888,13 +907,13 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
             return nullptr;
         }
 
-        // Create Java string array
+        // Create Java string array using stored strings
         jclass stringClass = env->FindClass("java/lang/String");
         jobjectArray result = env->NewObjectArray(numGroups + 1, stringClass, nullptr);
 
         for (int i = 0; i <= numGroups; i++) {
-            if (groups[i].data() != nullptr) {
-                jstring jstr = env->NewStringUTF(std::string(groups[i].data(), groups[i].size()).c_str());
+            if (!groupStrings[i].empty()) {
+                jstring jstr = env->NewStringUTF(groupStrings[i].c_str());
                 env->SetObjectArrayElement(result, i, jstr);
                 env->DeleteLocalRef(jstr);
             }
@@ -942,6 +961,7 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
 
             jsize len = lengthsArray[i];
             std::vector<re2::StringPiece> groups(numGroups + 1);
+            std::vector<std::string> groupStrings(numGroups + 1);  // Store strings immediately
             jboolean matched = JNI_FALSE;
 
             if (len <= STACK_THRESHOLD) {
@@ -951,6 +971,15 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
                 if (!env->ExceptionCheck()) {
                     re2::StringPiece input((const char*)stackBuf, len);
                     matched = re->Match(input.data(), 0, len, RE2::UNANCHORED, groups.data(), numGroups + 1);
+
+                    // Convert StringPiece to std::string immediately (before stackBuf goes out of scope)
+                    if (matched) {
+                        for (int j = 0; j <= numGroups; j++) {
+                            if (groups[j].data() != nullptr) {
+                                groupStrings[j] = std::string(groups[j].data(), groups[j].size());
+                            }
+                        }
+                    }
                 }
             } else {
                 jbyte* heapBuf = new jbyte[len];
@@ -959,6 +988,15 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
                 if (!env->ExceptionCheck()) {
                     re2::StringPiece input((const char*)heapBuf, len);
                     matched = re->Match(input.data(), 0, len, RE2::UNANCHORED, groups.data(), numGroups + 1);
+
+                    // Convert StringPiece to std::string immediately (before heapBuf is freed)
+                    if (matched) {
+                        for (int j = 0; j <= numGroups; j++) {
+                            if (groups[j].data() != nullptr) {
+                                groupStrings[j] = std::string(groups[j].data(), groups[j].size());
+                            }
+                        }
+                    }
                 }
                 delete[] heapBuf;
             }
@@ -968,8 +1006,8 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_extractG
                 jobjectArray groupArray = env->NewObjectArray(numGroups + 1, stringClass, nullptr);
 
                 for (int j = 0; j <= numGroups; j++) {
-                    if (groups[j].data() != nullptr) {
-                        jstring groupStr = env->NewStringUTF(std::string(groups[j].data(), groups[j].size()).c_str());
+                    if (!groupStrings[j].empty()) {
+                        jstring groupStr = env->NewStringUTF(groupStrings[j].c_str());
                         env->SetObjectArrayElement(groupArray, j, groupStr);
                         env->DeleteLocalRef(groupStr);
                     }

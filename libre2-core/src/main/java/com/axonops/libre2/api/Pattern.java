@@ -272,9 +272,17 @@ public final class Pattern implements AutoCloseable {
         boolean result = RE2NativeJNI.fullMatchDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
-        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos);
+
+        // Global metrics (ALL matching operations)
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, durationNanos);
+        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos);
+
+        // Specific zero-copy metrics
+        metrics.incrementCounter(MetricNames.MATCHING_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.MATCHING_ZERO_COPY_LATENCY, durationNanos);
 
         return result;
     }
@@ -327,9 +335,17 @@ public final class Pattern implements AutoCloseable {
         boolean result = RE2NativeJNI.partialMatchDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
-        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos);
+
+        // Global metrics (ALL matching operations)
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, durationNanos);
+        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos);
+
+        // Specific zero-copy metrics
+        metrics.incrementCounter(MetricNames.MATCHING_ZERO_COPY_OPERATIONS);
+        metrics.recordTimer(MetricNames.MATCHING_ZERO_COPY_LATENCY, durationNanos);
 
         return result;
     }
@@ -996,10 +1012,19 @@ public final class Pattern implements AutoCloseable {
         boolean[] results = RE2NativeJNI.fullMatchBulk(nativeHandle, inputs);
         long durationNanos = System.nanoTime() - startNanos;
 
-        // Track metrics (count as multiple operations)
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String Bulk)
         RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+        long perItemNanos = inputs.length > 0 ? durationNanos / inputs.length : 0;
+
+        // Global metrics (ALL matching operations) - use per-item latency for comparability
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS, inputs.length);
-        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos / inputs.length);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, perItemNanos);
+        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, perItemNanos);
+
+        // Specific String bulk metrics
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_OPERATIONS);
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ITEMS, inputs.length);
+        metrics.recordTimer(MetricNames.MATCHING_BULK_LATENCY, perItemNanos);
 
         return results != null ? results : new boolean[inputs.length];
     }
@@ -1060,10 +1085,19 @@ public final class Pattern implements AutoCloseable {
         boolean[] results = RE2NativeJNI.fullMatchDirectBulk(nativeHandle, addresses, lengths);
         long durationNanos = System.nanoTime() - startNanos;
 
-        // Track metrics
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Bulk Zero-Copy)
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+        long perItemNanos = addresses.length > 0 ? durationNanos / addresses.length : 0;
+
+        // Global metrics (ALL matching operations) - use per-item latency for comparability
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS, addresses.length);
-        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos / addresses.length);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, perItemNanos);
+        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, perItemNanos);
+
+        // Specific bulk zero-copy metrics
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ZERO_COPY_OPERATIONS);
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ITEMS, addresses.length);
+        metrics.recordTimer(MetricNames.MATCHING_BULK_ZERO_COPY_LATENCY, perItemNanos);
 
         return results != null ? results : new boolean[addresses.length];
     }
@@ -1101,10 +1135,19 @@ public final class Pattern implements AutoCloseable {
         boolean[] results = RE2NativeJNI.partialMatchDirectBulk(nativeHandle, addresses, lengths);
         long durationNanos = System.nanoTime() - startNanos;
 
-        // Track metrics
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (Bulk Zero-Copy)
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+        long perItemNanos = addresses.length > 0 ? durationNanos / addresses.length : 0;
+
+        // Global metrics (ALL matching operations) - use per-item latency for comparability
         metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS, addresses.length);
-        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos / addresses.length);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, perItemNanos);
+        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, perItemNanos);
+
+        // Specific bulk zero-copy metrics
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ZERO_COPY_OPERATIONS);
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ITEMS, addresses.length);
+        metrics.recordTimer(MetricNames.MATCHING_BULK_ZERO_COPY_LATENCY, perItemNanos);
 
         return results != null ? results : new boolean[addresses.length];
     }

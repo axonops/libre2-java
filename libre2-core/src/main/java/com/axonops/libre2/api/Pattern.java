@@ -524,6 +524,162 @@ public final class Pattern implements AutoCloseable {
         return map;
     }
 
+    // ========== Replace Operations ==========
+
+    /**
+     * Replaces the first match of this pattern in the input with the replacement string.
+     *
+     * <p>If the pattern matches, the first occurrence is replaced. If no match is found,
+     * the original input is returned unchanged.</p>
+     *
+     * <p><strong>Backreferences:</strong> RE2 supports backreferences using {@code \\1}, {@code \\2}, etc.
+     * (note the double backslash for Java string escaping). Unlike java.util.regex which uses
+     * {@code $1}, {@code $2}, RE2 uses backslash notation.</p>
+     *
+     * <p><strong>Example - Simple replacement:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("\\d+");
+     * String result = pattern.replaceFirst("Item 123 costs $456", "XXX");
+     * // result = "Item XXX costs $456"
+     * }</pre>
+     *
+     * <p><strong>Example - Backreferences:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("(\\d{4})-(\\d{2})-(\\d{2})");
+     * String result = pattern.replaceFirst("Date: 2025-11-24", "\\2/\\3/\\1");
+     * // result = "Date: 11/24/2025" (reordered date components)
+     * }</pre>
+     *
+     * @param input the input string
+     * @param replacement the replacement string (supports {@code \\1}, {@code \\2}, etc. backreferences)
+     * @return the input with the first match replaced, or original input if no match
+     * @throws NullPointerException if input or replacement is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #replaceAll(String, String) to replace all matches
+     * @since 1.2.0
+     */
+    public String replaceFirst(String input, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        String result = RE2NativeJNI.replaceFirst(nativeHandle, input, replacement);
+        return result != null ? result : input;
+    }
+
+    /**
+     * Replaces all matches of this pattern in the input with the replacement string.
+     *
+     * <p>All non-overlapping matches are replaced. If no matches are found, the original
+     * input is returned unchanged.</p>
+     *
+     * <p><strong>Backreferences:</strong> Use {@code \\1}, {@code \\2}, etc. for captured groups.</p>
+     *
+     * <p><strong>Example - Replace all digits:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("\\d+");
+     * String result = pattern.replaceAll("Item 123 costs $456", "XXX");
+     * // result = "Item XXX costs $XXX"
+     * }</pre>
+     *
+     * <p><strong>Example - Redact emails:</strong></p>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}");
+     * String result = emailPattern.replaceAll("Contact user@example.com or admin@test.org", "[REDACTED]");
+     * // result = "Contact [REDACTED] or [REDACTED]"
+     * }</pre>
+     *
+     * <p><strong>Example - Backreferences for formatting:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("(\\d{3})-(\\d{4})");
+     * String result = pattern.replaceAll("Call 555-1234 or 555-5678", "(\\1) \\2");
+     * // result = "Call (555) 1234 or (555) 5678"
+     * }</pre>
+     *
+     * @param input the input string
+     * @param replacement the replacement string (supports {@code \\1}, {@code \\2}, etc. backreferences)
+     * @return the input with all matches replaced, or original input if no matches
+     * @throws NullPointerException if input or replacement is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #replaceFirst(String, String) to replace only the first match
+     * @since 1.2.0
+     */
+    public String replaceAll(String input, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(input, "input cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        String result = RE2NativeJNI.replaceAll(nativeHandle, input, replacement);
+        return result != null ? result : input;
+    }
+
+    /**
+     * Replaces all matches in multiple strings (bulk operation).
+     *
+     * <p>Processes all inputs in a single JNI call for better performance.</p>
+     *
+     * <p><strong>Example - Batch redaction:</strong></p>
+     * <pre>{@code
+     * Pattern ssnPattern = Pattern.compile("\\d{3}-\\d{2}-\\d{4}");
+     * String[] logs = {
+     *     "User 123-45-6789 logged in",
+     *     "No PII here",
+     *     "SSN: 987-65-4321"
+     * };
+     *
+     * String[] redacted = ssnPattern.replaceAll(logs, "[REDACTED]");
+     * // redacted = ["User [REDACTED] logged in", "No PII here", "SSN: [REDACTED]"]
+     * }</pre>
+     *
+     * @param inputs array of strings to process
+     * @param replacement the replacement string (supports backreferences)
+     * @return array of strings with matches replaced (parallel to inputs)
+     * @throws NullPointerException if inputs or replacement is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #replaceAll(String, String) single-string variant
+     * @since 1.2.0
+     */
+    public String[] replaceAll(String[] inputs, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        if (inputs.length == 0) {
+            return new String[0];
+        }
+
+        String[] results = RE2NativeJNI.replaceAllBulk(nativeHandle, inputs, replacement);
+        return results != null ? results : inputs;
+    }
+
+    /**
+     * Replaces all matches in a collection (bulk operation).
+     *
+     * <p>Processes all inputs in a single JNI call for better performance.</p>
+     *
+     * @param inputs collection of strings to process
+     * @param replacement the replacement string (supports backreferences)
+     * @return list of strings with matches replaced (same order as inputs)
+     * @throws NullPointerException if inputs or replacement is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #replaceAll(String, String) single-string variant
+     * @since 1.2.0
+     */
+    public java.util.List<String> replaceAll(java.util.Collection<String> inputs, String replacement) {
+        checkNotClosed();
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        Objects.requireNonNull(replacement, "replacement cannot be null");
+
+        if (inputs.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+
+        String[] array = inputs.toArray(new String[0]);
+        String[] results = replaceAll(array, replacement);
+
+        return java.util.Arrays.asList(results);
+    }
+
     public String pattern() {
         return patternString;
     }

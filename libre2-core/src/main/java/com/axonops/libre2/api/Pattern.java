@@ -1381,6 +1381,84 @@ public final class Pattern implements AutoCloseable {
     }
 
     /**
+     * Tests if pattern matches anywhere in multiple strings (partial match bulk).
+     *
+     * <p>This is the bulk variant of {@link Matcher#find()} - tests if the pattern
+     * matches anywhere within each input string (not necessarily the full string).</p>
+     *
+     * <p>Processes all inputs in a single JNI call for better performance.</p>
+     *
+     * <p><strong>Example - Find which strings contain pattern:</strong></p>
+     * <pre>{@code
+     * Pattern emailPattern = Pattern.compile("[a-z]+@[a-z]+\\.[a-z]+");
+     * String[] texts = {
+     *     "user@example.com",           // contains email
+     *     "Contact: admin@test.org",    // contains email
+     *     "No email here"                // no email
+     * };
+     * boolean[] results = emailPattern.findAll(texts);
+     * // results = [true, true, false]
+     * }</pre>
+     *
+     * @param inputs array of strings to search
+     * @return boolean array (parallel to inputs) indicating if pattern found in each
+     * @throws NullPointerException if inputs is null
+     * @throws IllegalStateException if pattern is closed
+     * @see #matchAll(String[]) for full match bulk variant
+     * @see Matcher#find() for single-string partial match
+     * @since 1.2.0
+     */
+    public boolean[] findAll(String[] inputs) {
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        checkNotClosed();
+
+        if (inputs.length == 0) {
+            return new boolean[0];
+        }
+
+        long startNanos = System.nanoTime();
+        boolean[] results = RE2NativeJNI.partialMatchBulk(nativeHandle, inputs);
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String Bulk)
+        RE2MetricsRegistry metrics = Pattern.getGlobalCache().getConfig().metricsRegistry();
+        long perItemNanos = inputs.length > 0 ? durationNanos / inputs.length : 0;
+
+        // Global metrics (ALL matching operations)
+        metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS, inputs.length);
+        metrics.recordTimer(MetricNames.MATCHING_LATENCY, perItemNanos);
+        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, perItemNanos);
+
+        // Specific String bulk metrics
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_OPERATIONS);
+        metrics.incrementCounter(MetricNames.MATCHING_BULK_ITEMS, inputs.length);
+        metrics.recordTimer(MetricNames.MATCHING_BULK_LATENCY, perItemNanos);
+
+        return results != null ? results : new boolean[inputs.length];
+    }
+
+    /**
+     * Tests if pattern matches anywhere in multiple strings (partial match bulk, collection variant).
+     *
+     * <p>Convenience wrapper for {@link #findAll(String[])} accepting any Collection.</p>
+     *
+     * @param inputs collection of strings to search
+     * @return boolean array (parallel to inputs) indicating if pattern found in each
+     * @throws NullPointerException if inputs is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public boolean[] findAll(java.util.Collection<String> inputs) {
+        Objects.requireNonNull(inputs, "inputs cannot be null");
+        if (inputs.isEmpty()) {
+            return new boolean[0];
+        }
+
+        String[] array = inputs.toArray(new String[0]);
+        return findAll(array);
+    }
+
+    /**
      * Matches multiple memory regions in a single JNI call (zero-copy bulk).
      *
      * <p>This method accepts arrays of memory addresses and lengths, enabling efficient
@@ -1501,6 +1579,121 @@ public final class Pattern implements AutoCloseable {
         metrics.recordTimer(MetricNames.MATCHING_BULK_ZERO_COPY_LATENCY, perItemNanos);
 
         return results != null ? results : new boolean[addresses.length];
+    }
+
+    /**
+     * Matches multiple ByteBuffers in a single operation (bulk with auto-routing).
+     *
+     * <p>Automatically routes each buffer: DirectByteBuffer → zero-copy, heap → String.</p>
+     *
+     * <p><strong>Example - Bulk process Cassandra cells:</strong></p>
+     * <pre>{@code
+     * Pattern pattern = Pattern.compile("valid_.*");
+     * ByteBuffer[] cells = getCellsFromCassandra();  // Array of DirectByteBuffers
+     *
+     * boolean[] results = pattern.matchAll(cells);
+     * // Each DirectByteBuffer uses zero-copy (46-99% faster)
+     * }</pre>
+     *
+     * @param buffers array of ByteBuffers to match
+     * @return boolean array (parallel to inputs) indicating matches
+     * @throws NullPointerException if buffers is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public boolean[] matchAll(ByteBuffer[] buffers) {
+        checkNotClosed();
+        Objects.requireNonNull(buffers, "buffers cannot be null");
+
+        if (buffers.length == 0) {
+            return new boolean[0];
+        }
+
+        // Check if all are direct - if so, use zero-copy bulk path
+        boolean allDirect = true;
+        for (ByteBuffer buf : buffers) {
+            if (buf != null && !buf.isDirect()) {
+                allDirect = false;
+                break;
+            }
+        }
+
+        if (allDirect) {
+            // Zero-copy path - extract addresses
+            long[] addresses = new long[buffers.length];
+            int[] lengths = new int[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                if (buffers[i] != null) {
+                    addresses[i] = ((DirectBuffer) buffers[i]).address() + buffers[i].position();
+                    lengths[i] = buffers[i].remaining();
+                }
+            }
+            return matchAll(addresses, lengths);
+        } else {
+            // Mixed or heap - convert to Strings
+            String[] strings = new String[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                if (buffers[i] != null) {
+                    byte[] bytes = new byte[buffers[i].remaining()];
+                    buffers[i].duplicate().get(bytes);
+                    strings[i] = new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+            return matchAll(strings);
+        }
+    }
+
+    /**
+     * Tests if pattern matches anywhere in multiple ByteBuffers (partial match bulk).
+     *
+     * <p>Bulk variant of partial matching with automatic routing.</p>
+     *
+     * @param buffers array of ByteBuffers to search
+     * @return boolean array indicating if pattern found in each
+     * @throws NullPointerException if buffers is null
+     * @throws IllegalStateException if pattern is closed
+     * @since 1.2.0
+     */
+    public boolean[] findAll(ByteBuffer[] buffers) {
+        checkNotClosed();
+        Objects.requireNonNull(buffers, "buffers cannot be null");
+
+        if (buffers.length == 0) {
+            return new boolean[0];
+        }
+
+        // Check if all are direct
+        boolean allDirect = true;
+        for (ByteBuffer buf : buffers) {
+            if (buf != null && !buf.isDirect()) {
+                allDirect = false;
+                break;
+            }
+        }
+
+        if (allDirect) {
+            // Zero-copy path
+            long[] addresses = new long[buffers.length];
+            int[] lengths = new int[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                if (buffers[i] != null) {
+                    addresses[i] = ((DirectBuffer) buffers[i]).address() + buffers[i].position();
+                    lengths[i] = buffers[i].remaining();
+                }
+            }
+            return findAll(addresses, lengths);
+        } else {
+            // Mixed or heap - convert to Strings
+            String[] strings = new String[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                if (buffers[i] != null) {
+                    byte[] bytes = new byte[buffers[i].remaining()];
+                    buffers[i].duplicate().get(bytes);
+                    strings[i] = new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+            return findAll(strings);
+        }
     }
 
     /**

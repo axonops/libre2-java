@@ -396,10 +396,23 @@ public final class Pattern implements AutoCloseable {
         checkNotClosed();
         Objects.requireNonNull(input, "input cannot be null");
 
+        long startNanos = System.nanoTime();
+
         String[] groups = RE2NativeJNI.extractGroups(nativeHandle, input);
 
         if (groups == null) {
-            // No match
+            // No match - still track metrics (operation was attempted)
+            long durationNanos = System.nanoTime() - startNanos;
+            RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+            // Global capture metrics
+            metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+            metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+            // Specific String capture metrics
+            metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+            metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
+
             return new MatchResult(input);
         }
 
@@ -407,8 +420,32 @@ public final class Pattern implements AutoCloseable {
         // extractGroups uses UNANCHORED, so we need to check manually
         if (!groups[0].equals(input)) {
             // Match found but doesn't cover entire input - this is a partial match
+            long durationNanos = System.nanoTime() - startNanos;
+            RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+            // Global capture metrics
+            metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+            metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+            // Specific String capture metrics
+            metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+            metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
+
             return new MatchResult(input);
         }
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics (ALL capture operations)
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific String capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
 
         // Lazy-load named groups only if needed
         Map<String, Integer> namedGroupMap = getNamedGroupsMap();
@@ -447,8 +484,23 @@ public final class Pattern implements AutoCloseable {
         checkNotClosed();
         Objects.requireNonNull(input, "input cannot be null");
 
+        long startNanos = System.nanoTime();
+
         // RE2 extractGroups does UNANCHORED match, so it finds first occurrence
         String[] groups = RE2NativeJNI.extractGroups(nativeHandle, input);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics (ALL capture operations)
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific String capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
 
         if (groups == null) {
             return new MatchResult(input);
@@ -502,7 +554,28 @@ public final class Pattern implements AutoCloseable {
         checkNotClosed();
         Objects.requireNonNull(input, "input cannot be null");
 
+        long startNanos = System.nanoTime();
+
         String[][] allMatches = RE2NativeJNI.findAllMatches(nativeHandle, input);
+
+        long durationNanos = System.nanoTime() - startNanos;
+        int matchCount = (allMatches != null) ? allMatches.length : 0;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global capture metrics (ALL capture operations)
+        metrics.incrementCounter(MetricNames.CAPTURE_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_LATENCY, durationNanos);
+
+        // Specific String capture metrics
+        metrics.incrementCounter(MetricNames.CAPTURE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.CAPTURE_STRING_LATENCY, durationNanos);
+
+        // Track number of matches found
+        if (matchCount > 0) {
+            metrics.incrementCounter(MetricNames.CAPTURE_FINDALL_MATCHES, matchCount);
+        }
 
         if (allMatches == null || allMatches.length == 0) {
             return java.util.Collections.emptyList();
@@ -579,7 +652,23 @@ public final class Pattern implements AutoCloseable {
         Objects.requireNonNull(input, "input cannot be null");
         Objects.requireNonNull(replacement, "replacement cannot be null");
 
+        long startNanos = System.nanoTime();
+
         String result = RE2NativeJNI.replaceFirst(nativeHandle, input, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics (ALL replace operations)
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, durationNanos);
+
+        // Specific String replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_STRING_LATENCY, durationNanos);
+
         return result != null ? result : input;
     }
 
@@ -625,7 +714,23 @@ public final class Pattern implements AutoCloseable {
         Objects.requireNonNull(input, "input cannot be null");
         Objects.requireNonNull(replacement, "replacement cannot be null");
 
+        long startNanos = System.nanoTime();
+
         String result = RE2NativeJNI.replaceAll(nativeHandle, input, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics (ALL replace operations)
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, durationNanos);
+
+        // Specific String replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_STRING_OPERATIONS);
+        metrics.recordTimer(MetricNames.REPLACE_STRING_LATENCY, durationNanos);
+
         return result != null ? result : input;
     }
 
@@ -664,7 +769,25 @@ public final class Pattern implements AutoCloseable {
             return new String[0];
         }
 
+        long startNanos = System.nanoTime();
+
         String[] results = RE2NativeJNI.replaceAllBulk(nativeHandle, inputs, replacement);
+
+        long durationNanos = System.nanoTime() - startNanos;
+        long perItemNanos = durationNanos / inputs.length;
+
+        // Track metrics - GLOBAL (ALL) + SPECIFIC (String Bulk)
+        RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
+
+        // Global replace metrics (ALL replace operations) - use per-item for comparability
+        metrics.incrementCounter(MetricNames.REPLACE_OPERATIONS, inputs.length);
+        metrics.recordTimer(MetricNames.REPLACE_LATENCY, perItemNanos);
+
+        // Specific String bulk replace metrics
+        metrics.incrementCounter(MetricNames.REPLACE_BULK_OPERATIONS);
+        metrics.incrementCounter(MetricNames.REPLACE_BULK_ITEMS, inputs.length);
+        metrics.recordTimer(MetricNames.REPLACE_BULK_LATENCY, perItemNanos);
+
         return results != null ? results : inputs;
     }
 

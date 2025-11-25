@@ -246,9 +246,18 @@ if (bulk) {
 
 ## Still Blocked - Native Build Status 🚫
 
-**Build Status:** Still running or needs PR merge
-**Run ID:** 19659456967
-**Awaiting:** User confirmation that native build is complete and merged
+**Build Status:** Running (re-triggered after workflow fix)
+**Run ID:** 19659878221 (previous 19659456967 failed on Linux ARM64)
+**Issue:** Linux ARM64 platform check expected 26 instead of 29 - FIXED
+**Monitor:** `gh run watch 19659878221`
+**ETA:** ~10-15 minutes
+
+**What was wrong:**
+- First build: Only Linux ARM64 verification said 26 (other 3 platforms said 29)
+- The previous `replace_all=true` edit didn't catch Linux ARM64 comment variation
+- Fixed: All 4 platforms now expect 29 functions
+
+**Awaiting:** Build completion + PR merge
 
 ---
 

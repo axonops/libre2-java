@@ -1007,7 +1007,8 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllM
         int numGroups = re->NumberOfCapturingGroups();
 
         constexpr jsize STACK_THRESHOLD = 8192;
-        std::vector<std::vector<re2::StringPiece>> allMatches;
+        // Use std::string to preserve data beyond buffer lifetime
+        std::vector<std::vector<std::string>> allMatches;
 
         if (length <= STACK_THRESHOLD) {
             jbyte stackBuf[STACK_THRESHOLD];
@@ -1022,7 +1023,15 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllM
                     if (!re->Match(searchText.data(), 0, searchText.size(), RE2::UNANCHORED, groups.data(), numGroups + 1)) {
                         break;
                     }
-                    allMatches.push_back(groups);
+
+                    // Convert StringPiece to std::string immediately to preserve data
+                    std::vector<std::string> groupStrings(numGroups + 1);
+                    for (int j = 0; j <= numGroups; j++) {
+                        if (groups[j].data() != nullptr) {
+                            groupStrings[j] = std::string(groups[j].data(), groups[j].size());
+                        }
+                    }
+                    allMatches.push_back(groupStrings);
 
                     // Move past this match
                     size_t matchEnd = groups[0].data() + groups[0].size() - searchText.data();
@@ -1043,7 +1052,15 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllM
                     if (!re->Match(searchText.data(), 0, searchText.size(), RE2::UNANCHORED, groups.data(), numGroups + 1)) {
                         break;
                     }
-                    allMatches.push_back(groups);
+
+                    // Convert StringPiece to std::string immediately
+                    std::vector<std::string> groupStrings(numGroups + 1);
+                    for (int j = 0; j <= numGroups; j++) {
+                        if (groups[j].data() != nullptr) {
+                            groupStrings[j] = std::string(groups[j].data(), groups[j].size());
+                        }
+                    }
+                    allMatches.push_back(groupStrings);
 
                     size_t matchEnd = groups[0].data() + groups[0].size() - searchText.data();
                     if (matchEnd >= searchText.size()) break;
@@ -1066,8 +1083,8 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllM
             jobjectArray groupArray = env->NewObjectArray(numGroups + 1, stringClass, nullptr);
 
             for (int j = 0; j <= numGroups; j++) {
-                if (allMatches[i][j].data() != nullptr) {
-                    jstring groupStr = env->NewStringUTF(std::string(allMatches[i][j].data(), allMatches[i][j].size()).c_str());
+                if (!allMatches[i][j].empty()) {
+                    jstring groupStr = env->NewStringUTF(allMatches[i][j].c_str());
                     env->SetObjectArrayElement(groupArray, j, groupStr);
                     env->DeleteLocalRef(groupStr);
                 }

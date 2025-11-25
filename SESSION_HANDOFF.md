@@ -14,6 +14,20 @@ Systematically fixed metrics instrumentation across Phases 1/2/3 and added zero-
 
 ---
 
+## Session Progress Update
+
+**Token Usage:** 98k / 1M (10%) - **902k remaining**
+**Tests:** All **427 tests passing** ✅
+**Last Update:** 2025-11-25 10:06 UTC
+
+### Recent Work (This Session):
+1. ✅ Fixed all 35 CaptureGroupsTest failures (try-with-resources for MatchResult)
+2. ✅ All tests passing (427/427)
+3. ✅ Committed MatchResult AutoCloseable + test fixes
+4. ⚠️ Discovered Phase 3 zero-copy requires native build (cannot do in this session)
+
+---
+
 ## What's DONE ✅
 
 ### 1. Metrics Architecture (COMPLETE)
@@ -57,13 +71,15 @@ metrics.recordTimer(SPECIFIC_LATENCY);
 
 **Naming:** *WithGroups suffix avoids Java overloading conflicts (can't overload by return type)
 
-### 5. Phase 3 Zero-Copy (READY - Not Committed)
-**6 methods ready to add:**
+### 5. Phase 3 Zero-Copy (BLOCKED - Requires Native Build)
+**6 methods planned:**
 - `replaceFirst(long, int, String)` / `replaceFirst(ByteBuffer, String)`
 - `replaceAll(long, int, String)` / `replaceAll(ByteBuffer, String)`
 - `replaceAll(long[], int[], String)` / `replaceAll(ByteBuffer[], String)`
 
-**Code exists**, just need to insert into Pattern.java
+**Status:** ⚠️ BLOCKED - Requires 3 new JNI functions + C++ implementation + native builds
+- Cannot implement in this session (needs GitHub Actions for native builds)
+- Should be deferred until user can trigger native build workflow
 
 ### 6. MatchResult AutoCloseable (COMPLETE)
 **Added full safety pattern:**
@@ -81,11 +97,12 @@ metrics.recordTimer(SPECIFIC_LATENCY);
 
 ---
 
-## What's BROKEN ❌
+## What's FIXED ✅ (Was Broken)
 
-**Tests: 35 failures in CaptureGroupsTest**
+**Tests: All 427 passing** ✅
 
-**Cause:** MatchResult now requires try-with-resources:
+**Was broken:** 35 failures in CaptureGroupsTest due to MatchResult AutoCloseable
+**Fixed by:** Adding try-with-resources to all MatchResult usages:
 ```java
 // OLD (broken):
 MatchResult result = pattern.match("text");
@@ -110,15 +127,15 @@ try (MatchResult result = pattern.match("text")) {
 
 | Task | Tokens | Priority | Status |
 |------|--------|----------|--------|
-| Fix MatchResult tests | 20k | CRITICAL | Needed |
-| Add Phase 3 zero-copy (have code) | 10k | HIGH | Ready |
-| Add bulk capture ops | 40k | HIGH | Not started |
-| Populate RE2.java (~25 methods) | 60k | HIGH | Not started |
-| Complete metrics test | 80k | CRITICAL | Partial |
+| ✅ Fix MatchResult tests | 20k | CRITICAL | **DONE** |
+| ⚠️ Add Phase 3 zero-copy | 10k+ | HIGH | **BLOCKED** (needs native build) |
+| Add bulk capture ops | 40k | HIGH | Next |
+| Populate RE2.java (~25 methods) | 60k | HIGH | Pending |
+| Complete metrics test | 80k | CRITICAL | Pending |
 | Test gap remediation | 50k | MEDIUM | Deferred |
 
-**Total:** 260k tokens
-**Available:** 388k ✅
+**Total Remaining (doable now):** ~180k tokens
+**Available:** 900k ✅ **Plenty of capacity**
 
 ---
 
@@ -166,4 +183,32 @@ try (MatchResult result = pattern.match("text")) {
 
 **Recommend: Option A** - Fix tests and complete critical path.
 
-**What would you like me to do?**
+---
+
+## Next Session Priorities (Updated)
+
+**Immediate Next Steps (no native build required):**
+
+1. **Populate RE2.java** (~60k tokens)
+   - Add ~25 static convenience methods
+   - Mirror Pattern API for common operations
+   - Makes library easier to use for simple cases
+
+2. **Add Bulk Capture Operations** (~40k tokens)
+   - `MatchResult[] matchAll(String[])`
+   - `MatchResult[] matchAll(Collection<String>)`
+   - `List<List<MatchResult>> findAllInEach(String[])`
+   - With full metrics
+
+3. **Complete Comprehensive Metrics Test** (~80k tokens)
+   - Verify EVERY method records metrics
+   - Test global = sum of specifics for ALL operations
+   - Test bulk items counted correctly
+
+**Blocked (requires user to trigger native builds):**
+- Phase 3 zero-copy replace (needs 3 new JNI functions + C++ + native builds)
+
+**Ready to Continue:**
+- All 427 tests passing ✅
+- 900k tokens available
+- Can complete all non-native tasks in this session

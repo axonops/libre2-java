@@ -81,10 +81,10 @@ jobs:
           echo "Exported JNI functions:"
           nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 26 JNI functions exist (20 original + 6 zero-copy direct methods)
+          # Verify all 29 JNI functions exist (20 original + 6 zero-copy matching + 3 zero-copy replace)
           FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
-          if [ "$FUNC_COUNT" -ne 26 ]; then
-            echo "ERROR: Expected 26 exported JNI functions, found $FUNC_COUNT"
+          if [ "$FUNC_COUNT" -ne 29 ]; then
+            echo "ERROR: Expected 29 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -148,10 +148,10 @@ jobs:
           echo "Exported JNI functions:"
           nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 26 JNI functions exist (20 original + 6 zero-copy direct methods)
+          # Verify all 29 JNI functions exist (20 original + 6 zero-copy matching + 3 zero-copy replace)
           FUNC_COUNT=$(nm -g libre2.dylib | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
-          if [ "$FUNC_COUNT" -ne 26 ]; then
-            echo "ERROR: Expected 26 exported JNI functions, found $FUNC_COUNT"
+          if [ "$FUNC_COUNT" -ne 29 ]; then
+            echo "ERROR: Expected 29 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -226,10 +226,10 @@ jobs:
           echo "Exported JNI functions:"
           docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI'
 
-          # Verify all 26 JNI functions exist (20 original + 6 zero-copy direct methods)
+          # Verify all 29 JNI functions exist (20 original + 6 zero-copy matching + 3 zero-copy replace)
           FUNC_COUNT=$(docker run --rm -v "$(pwd):/output" re2-builder nm -D /output/libre2.so | grep ' T ' | grep 'Java_com_axonops_libre2_jni_RE2NativeJNI' | wc -l)
-          if [ "$FUNC_COUNT" -ne 26 ]; then
-            echo "ERROR: Expected 26 exported JNI functions, found $FUNC_COUNT"
+          if [ "$FUNC_COUNT" -ne 29 ]; then
+            echo "ERROR: Expected 29 exported JNI functions, found $FUNC_COUNT"
             exit 1
           fi
 
@@ -417,7 +417,7 @@ jobs:
           - Abseil: 20250814.1
 
           ### Verification
-          All libraries export 26 JNI functions and are self-contained with only system dependencies.
+          All libraries export 29 JNI functions and are self-contained with only system dependencies.
 
           ### Next Steps
           1. Review library sizes and dependencies

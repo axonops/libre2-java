@@ -1038,4 +1038,150 @@ JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_findAllM
     }
 }
 
+// ========== Zero-Copy Replace Operations ==========
+//
+// Replace operations with zero-copy INPUT reading.
+// Note: Output must still be allocated as a new String since replace creates new content.
+// The zero-copy benefit is from reading the input without copying.
+
+/**
+ * Replace first match using direct memory for input (zero-copy input read).
+ * Replacement is still a Java String (small overhead acceptable).
+ */
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceFirstDirect(
+    JNIEnv *env, jclass cls, jlong handle, jlong textAddress, jint textLength, jstring replacement) {
+
+    if (handle == 0 || textAddress == 0 || replacement == nullptr) {
+        return nullptr;  // Cannot return original since we don't have jstring
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        JStringGuard replGuard(env, replacement);
+
+        if (!replGuard.valid()) {
+            return nullptr;
+        }
+
+        // Zero-copy: wrap input address in StringPiece
+        const char* text = reinterpret_cast<const char*>(textAddress);
+        re2::StringPiece input(text, static_cast<size_t>(textLength));
+
+        // Must copy to std::string since Replace modifies in place
+        std::string result(input.data(), input.size());
+        RE2::Replace(&result, *re, replGuard.get());
+
+        return env->NewStringUTF(result.c_str());
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct replace first exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+/**
+ * Replace all matches using direct memory for input (zero-copy input read).
+ */
+JNIEXPORT jstring JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAllDirect(
+    JNIEnv *env, jclass cls, jlong handle, jlong textAddress, jint textLength, jstring replacement) {
+
+    if (handle == 0 || textAddress == 0 || replacement == nullptr) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        JStringGuard replGuard(env, replacement);
+
+        if (!replGuard.valid()) {
+            return nullptr;
+        }
+
+        // Zero-copy: wrap input address in StringPiece
+        const char* text = reinterpret_cast<const char*>(textAddress);
+        re2::StringPiece input(text, static_cast<size_t>(textLength));
+
+        // Must copy to std::string since GlobalReplace modifies in place
+        std::string result(input.data(), input.size());
+        RE2::GlobalReplace(&result, *re, replGuard.get());
+
+        return env->NewStringUTF(result.c_str());
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct replace all exception: ") + e.what();
+        return nullptr;
+    }
+}
+
+/**
+ * Bulk replace all using direct memory for inputs (zero-copy input reads).
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_axonops_libre2_jni_RE2NativeJNI_replaceAllDirectBulk(
+    JNIEnv *env, jclass cls, jlong handle, jlongArray textAddresses, jintArray textLengths, jstring replacement) {
+
+    if (handle == 0 || textAddresses == nullptr || textLengths == nullptr || replacement == nullptr) {
+        return nullptr;
+    }
+
+    try {
+        RE2* re = reinterpret_cast<RE2*>(handle);
+        JStringGuard replGuard(env, replacement);
+        if (!replGuard.valid()) {
+            return nullptr;
+        }
+
+        jsize addressCount = env->GetArrayLength(textAddresses);
+        jsize lengthCount = env->GetArrayLength(textLengths);
+
+        if (addressCount != lengthCount) {
+            last_error = "Address and length arrays must have same size";
+            return nullptr;
+        }
+
+        jclass stringClass = env->FindClass("java/lang/String");
+        jobjectArray result = env->NewObjectArray(addressCount, stringClass, nullptr);
+
+        // Get array elements
+        jlong* addresses = env->GetLongArrayElements(textAddresses, nullptr);
+        jint* lengths = env->GetIntArrayElements(textLengths, nullptr);
+
+        if (addresses == nullptr || lengths == nullptr) {
+            if (addresses != nullptr) env->ReleaseLongArrayElements(textAddresses, addresses, JNI_ABORT);
+            if (lengths != nullptr) env->ReleaseIntArrayElements(textLengths, lengths, JNI_ABORT);
+            last_error = "Failed to get array elements";
+            return nullptr;
+        }
+
+        // Process each input with zero-copy read
+        for (jsize i = 0; i < addressCount; i++) {
+            if (addresses[i] == 0 || lengths[i] < 0) {
+                // Skip invalid entries
+                continue;
+            }
+
+            // Zero-copy: wrap address in StringPiece
+            const char* text = reinterpret_cast<const char*>(addresses[i]);
+            re2::StringPiece input(text, static_cast<size_t>(lengths[i]));
+
+            // Copy to std::string for Replace to modify
+            std::string replaced(input.data(), input.size());
+            RE2::GlobalReplace(&replaced, *re, replGuard.get());
+
+            jstring resultStr = env->NewStringUTF(replaced.c_str());
+            env->SetObjectArrayElement(result, i, resultStr);
+            env->DeleteLocalRef(resultStr);
+        }
+
+        // Release arrays
+        env->ReleaseLongArrayElements(textAddresses, addresses, JNI_ABORT);
+        env->ReleaseIntArrayElements(textLengths, lengths, JNI_ABORT);
+
+        return result;
+
+    } catch (const std::exception& e) {
+        last_error = std::string("Direct bulk replace all exception: ") + e.what();
+        return nullptr;
+    }
+}
+
 } // extern "C"

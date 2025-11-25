@@ -405,4 +405,58 @@ public final class RE2NativeJNI {
      * @since 1.1.0
      */
     public static native String[][] findAllMatchesDirect(long handle, long textAddress, int textLength);
+
+    /**
+     * Replaces first match using direct memory for input (zero-copy input read).
+     *
+     * <p>The input is read via zero-copy from the memory address. The output is a new
+     * Java String since replace operations create modified content.</p>
+     *
+     * <p><strong>Memory Safety:</strong> The memory at {@code textAddress} must remain
+     * valid for the duration of this call.</p>
+     *
+     * @param handle compiled pattern handle
+     * @param textAddress native memory address of UTF-8 encoded text
+     * @param textLength number of bytes to read
+     * @param replacement replacement string (supports \\1, \\2 backreferences)
+     * @return new string with first match replaced, or null on error
+     * @since 1.2.0
+     */
+    public static native String replaceFirstDirect(long handle, long textAddress, int textLength, String replacement);
+
+    /**
+     * Replaces all matches using direct memory for input (zero-copy input read).
+     *
+     * <p>The input is read via zero-copy from the memory address. The output is a new
+     * Java String since replace operations create modified content.</p>
+     *
+     * <p><strong>Memory Safety:</strong> The memory at {@code textAddress} must remain
+     * valid for the duration of this call.</p>
+     *
+     * @param handle compiled pattern handle
+     * @param textAddress native memory address of UTF-8 encoded text
+     * @param textLength number of bytes to read
+     * @param replacement replacement string (supports \\1, \\2 backreferences)
+     * @return new string with all matches replaced, or null on error
+     * @since 1.2.0
+     */
+    public static native String replaceAllDirect(long handle, long textAddress, int textLength, String replacement);
+
+    /**
+     * Bulk replace all using direct memory for inputs (zero-copy input reads).
+     *
+     * <p>Processes multiple memory regions in a single JNI call with zero-copy input reading.</p>
+     *
+     * <p><strong>Memory Safety:</strong> All memory regions must remain valid
+     * for the duration of this call.</p>
+     *
+     * @param handle compiled pattern handle
+     * @param textAddresses array of native memory addresses
+     * @param textLengths array of byte lengths (must match textAddresses length)
+     * @param replacement replacement string (supports backreferences)
+     * @return array of replaced strings (parallel to inputs), or null on error
+     * @since 1.2.0
+     */
+    public static native String[] replaceAllDirectBulk(long handle, long[] textAddresses, int[] textLengths, String replacement);
 }
+

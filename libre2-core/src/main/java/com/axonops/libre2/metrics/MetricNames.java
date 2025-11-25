@@ -636,6 +636,14 @@ public final class MetricNames {
     public static final String REPLACE_BULK_ZERO_COPY_OPERATIONS = "replace.bulk.zero_copy.operations.total.count";
 
     /**
+     * Number of items processed in zero-copy bulk replace operations.
+     * <p><b>Type:</b> Counter (items)
+     * <p><b>Recorded:</b> Count of individual buffers/addresses processed in bulk zero-copy replace
+     * <p><b>Interpretation:</b> Total items in all REPLACE_BULK_ZERO_COPY_OPERATIONS calls
+     */
+    public static final String REPLACE_BULK_ZERO_COPY_ITEMS = "replace.bulk.zero_copy.items.total.count";
+
+    /**
      * Zero-copy bulk replace latency (per item).
      * <p><b>Type:</b> Timer (nanoseconds per item)
      * <p><b>Recorded:</b> Per-item latency for zero-copy bulk replace

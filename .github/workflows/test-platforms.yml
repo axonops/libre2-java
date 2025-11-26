@@ -15,10 +15,10 @@ on:
       - development
     paths:
       - 'libre2-core/src/**'
-      - 'libre2-dropwizard/src/**'
+      - 'perf-test/src/**'
       - 'pom.xml'
       - 'libre2-core/pom.xml'
-      - 'libre2-dropwizard/pom.xml'
+      - 'perf-test/pom.xml'
       - '.github/workflows/test-platforms.yml'
 
   # Manual trigger
@@ -30,10 +30,10 @@ on:
       - development
     paths:
       - 'libre2-core/src/**'
-      - 'libre2-dropwizard/src/**'
+      - 'perf-test/src/**'
       - 'pom.xml'
       - 'libre2-core/pom.xml'
-      - 'libre2-dropwizard/pom.xml'
+      - 'perf-test/pom.xml'
 
 jobs:
   # ============================================================================

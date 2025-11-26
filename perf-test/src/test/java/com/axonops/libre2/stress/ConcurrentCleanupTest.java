@@ -1,6 +1,7 @@
-package com.axonops.libre2.cache;
+package com.axonops.libre2.stress;
 
 import com.axonops.libre2.api.Pattern;
+import com.axonops.libre2.cache.CacheStatistics;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

@@ -15,6 +15,7 @@
 
     <modules>
         <module>libre2-core</module>
+        <module>perf-test</module>
     </modules>
 
     <licenses>

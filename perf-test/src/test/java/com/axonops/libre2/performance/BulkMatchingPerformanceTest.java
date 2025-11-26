@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.axonops.libre2.api;
+package com.axonops.libre2.performance;
 
+import com.axonops.libre2.api.Pattern;
 import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;

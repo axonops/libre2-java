@@ -16,8 +16,6 @@
 
 package com.axonops.libre2.api;
 
-import com.axonops.libre2.jni.RE2NativeJNI;
-
 /**
  * Main entry point for RE2 regex operations.
  *

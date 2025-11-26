@@ -22,8 +22,16 @@ package com.axonops.libre2.jni;
  * <p>Maps directly to the C functions in re2_jni.cpp.
  * All methods are native calls executing off-heap.</p>
  *
- * <p>This class uses JNI for maximum performance, avoiding the overhead
- * of JNA marshalling on every call.</p>
+ * <p><b>PACKAGE-PRIVATE DESIGN:</b> All methods are package-private to enforce
+ * abstraction. External code must use Pattern/Matcher/RE2 API. Direct JNI access
+ * is only available to DirectJniAdapter within this package.</p>
+ *
+ * <p>This design enables:
+ * <ul>
+ *   <li>Mockability - DirectJniAdapter implements JniAdapter interface</li>
+ *   <li>Encapsulation - No direct JNI calls from API classes</li>
+ *   <li>Testability - Tests can inject mock JniAdapter</li>
+ * </ul>
  *
  * <h2>Zero-Copy Direct Memory API</h2>
  * <p>This class provides two categories of methods:</p>
@@ -32,23 +40,18 @@ package com.axonops.libre2.jni;
  *   <li><strong>Direct methods (*Direct suffix)</strong> - Accept memory addresses for zero-copy operation</li>
  * </ul>
  *
- * <p>The Direct methods are designed for use with Chronicle Bytes or other off-heap memory
- * systems that can provide stable native memory addresses via {@code addressForRead()}.</p>
- *
  * <h2>CRITICAL SAFETY</h2>
  * <ul>
  *   <li>All long handles MUST be freed via {@link #freePattern(long)}</li>
  *   <li>Never call methods with 0 handles (will return error/false)</li>
  *   <li>All strings are UTF-8 encoded</li>
  *   <li>For Direct methods: The memory at the provided address MUST remain valid
- *       for the duration of the call. Do NOT release the backing memory (e.g.,
- *       Chronicle Bytes) until the method returns.</li>
+ *       for the duration of the call.</li>
  * </ul>
  *
  * @since 1.0.0
- * @see com.axonops.libre2.jni.RE2DirectMemory
  */
-public final class RE2NativeJNI {
+final class RE2NativeJNI {
 
     private RE2NativeJNI() {
         // Utility class - prevent instantiation
@@ -61,7 +64,7 @@ public final class RE2NativeJNI {
      * @param caseSensitive true for case-sensitive, false for case-insensitive
      * @return native handle to compiled pattern, or 0 on error (MUST be freed)
      */
-    public static native long compile(String pattern, boolean caseSensitive);
+    static native long compile(String pattern, boolean caseSensitive);
 
     /**
      * Frees a compiled pattern.
@@ -69,7 +72,7 @@ public final class RE2NativeJNI {
      *
      * @param handle native handle from compile()
      */
-    public static native void freePattern(long handle);
+    static native void freePattern(long handle);
 
     /**
      * Tests if text fully matches the pattern.
@@ -78,7 +81,7 @@ public final class RE2NativeJNI {
      * @param text text to match (UTF-8)
      * @return true if matches, false if no match or error
      */
-    public static native boolean fullMatch(long handle, String text);
+    static native boolean fullMatch(long handle, String text);
 
     /**
      * Tests if pattern matches anywhere in text.
@@ -87,14 +90,14 @@ public final class RE2NativeJNI {
      * @param text text to search (UTF-8)
      * @return true if matches, false if no match or error
      */
-    public static native boolean partialMatch(long handle, String text);
+    static native boolean partialMatch(long handle, String text);
 
     /**
      * Gets the last error message.
      *
      * @return error message, or null if no error
      */
-    public static native String getError();
+    static native String getError();
 
     /**
      * Gets the pattern string from a compiled pattern.
@@ -102,7 +105,7 @@ public final class RE2NativeJNI {
      * @param handle compiled pattern handle
      * @return pattern string, or null if invalid
      */
-    public static native String getPattern(long handle);
+    static native String getPattern(long handle);
 
     /**
      * Gets the number of capturing groups.
@@ -110,7 +113,7 @@ public final class RE2NativeJNI {
      * @param handle compiled pattern handle
      * @return number of capturing groups, or -1 on error
      */
-    public static native int numCapturingGroups(long handle);
+    static native int numCapturingGroups(long handle);
 
     /**
      * Checks if pattern is valid.
@@ -118,7 +121,7 @@ public final class RE2NativeJNI {
      * @param handle compiled pattern handle
      * @return true if valid, false if invalid/null
      */
-    public static native boolean patternOk(long handle);
+    static native boolean patternOk(long handle);
 
     /**
      * Gets the native memory size of a compiled pattern.
@@ -129,7 +132,7 @@ public final class RE2NativeJNI {
      * @param handle compiled pattern handle
      * @return size in bytes, or 0 if handle is 0
      */
-    public static native long patternMemory(long handle);
+    static native long patternMemory(long handle);
 
     // ========== Bulk Matching Operations ==========
 
@@ -141,7 +144,7 @@ public final class RE2NativeJNI {
      * @param texts array of strings to match
      * @return boolean array (parallel to texts) indicating matches, or null on error
      */
-    public static native boolean[] fullMatchBulk(long handle, String[] texts);
+    static native boolean[] fullMatchBulk(long handle, String[] texts);
 
     /**
      * Performs partial match on multiple strings in single JNI call.
@@ -151,7 +154,7 @@ public final class RE2NativeJNI {
      * @param texts array of strings to match
      * @return boolean array (parallel to texts) indicating matches, or null on error
      */
-    public static native boolean[] partialMatchBulk(long handle, String[] texts);
+    static native boolean[] partialMatchBulk(long handle, String[] texts);
 
     // ========== Capture Group Operations ==========
 
@@ -163,7 +166,7 @@ public final class RE2NativeJNI {
      * @param text text to match
      * @return string array of groups, or null if no match
      */
-    public static native String[] extractGroups(long handle, String text);
+    static native String[] extractGroups(long handle, String text);
 
     /**
      * Extracts capture groups from multiple strings in single JNI call.
@@ -172,7 +175,7 @@ public final class RE2NativeJNI {
      * @param texts array of strings to match
      * @return array of string arrays (groups per input), or null on error
      */
-    public static native String[][] extractGroupsBulk(long handle, String[] texts);
+    static native String[][] extractGroupsBulk(long handle, String[] texts);
 
     /**
      * Finds all non-overlapping matches in text with capture groups.
@@ -182,7 +185,7 @@ public final class RE2NativeJNI {
      * @param text text to search
      * @return array of match data (flattened: [match1_groups..., match2_groups...]), or null on error
      */
-    public static native String[][] findAllMatches(long handle, String text);
+    static native String[][] findAllMatches(long handle, String text);
 
     /**
      * Gets map of named capturing groups to their indices.
@@ -191,7 +194,7 @@ public final class RE2NativeJNI {
      * @param handle compiled pattern handle
      * @return flattened name-index pairs, or null if no named groups
      */
-    public static native String[] getNamedGroups(long handle);
+    static native String[] getNamedGroups(long handle);
 
     // ========== Replace Operations ==========
 
@@ -204,7 +207,7 @@ public final class RE2NativeJNI {
      * @param replacement replacement string (supports $1, $2 backreferences)
      * @return text with first match replaced, or original text if no match
      */
-    public static native String replaceFirst(long handle, String text, String replacement);
+    static native String replaceFirst(long handle, String text, String replacement);
 
     /**
      * Replaces all non-overlapping matches with replacement string.
@@ -215,7 +218,7 @@ public final class RE2NativeJNI {
      * @param replacement replacement string (supports $1, $2 backreferences)
      * @return text with all matches replaced, or original text if no matches
      */
-    public static native String replaceAll(long handle, String text, String replacement);
+    static native String replaceAll(long handle, String text, String replacement);
 
     /**
      * Replaces all matches in multiple strings in single JNI call.
@@ -225,7 +228,7 @@ public final class RE2NativeJNI {
      * @param replacement replacement string (supports $1, $2 backreferences)
      * @return array of replaced strings (parallel to texts), or null on error
      */
-    public static native String[] replaceAllBulk(long handle, String[] texts, String replacement);
+    static native String[] replaceAllBulk(long handle, String[] texts, String replacement);
 
     /**
      * Replaces first match using zero-copy memory access (off-heap memory).
@@ -237,7 +240,7 @@ public final class RE2NativeJNI {
      * @param replacement replacement string (supports $1, $2 backreferences)
      * @return text with first match replaced
      */
-    public static native String replaceFirstDirect(long handle, long textAddress, int textLength, String replacement);
+    static native String replaceFirstDirect(long handle, long textAddress, int textLength, String replacement);
 
     /**
      * Replaces all matches using zero-copy memory access (off-heap memory).
@@ -249,7 +252,7 @@ public final class RE2NativeJNI {
      * @param replacement replacement string (supports $1, $2 backreferences)
      * @return text with all matches replaced
      */
-    public static native String replaceAllDirect(long handle, long textAddress, int textLength, String replacement);
+    static native String replaceAllDirect(long handle, long textAddress, int textLength, String replacement);
 
     /**
      * Replaces all matches in multiple off-heap buffers (bulk zero-copy operation).
@@ -261,7 +264,7 @@ public final class RE2NativeJNI {
      * @param replacement replacement string (supports $1, $2 backreferences)
      * @return array of strings with all matches replaced (parallel to inputs)
      */
-    public static native String[] replaceAllDirectBulk(long handle, long[] textAddresses, int[] textLengths, String replacement);
+    static native String[] replaceAllDirectBulk(long handle, long[] textAddresses, int[] textLengths, String replacement);
 
     // ========== Utility Operations ==========
 
@@ -272,7 +275,7 @@ public final class RE2NativeJNI {
      * @param text text to escape
      * @return escaped text safe for use in regex patterns
      */
-    public static native String quoteMeta(String text);
+    static native String quoteMeta(String text);
 
     /**
      * Gets pattern complexity histogram (DFA branching factor).
@@ -281,7 +284,7 @@ public final class RE2NativeJNI {
      * @param handle compiled pattern handle
      * @return histogram array, or null on error
      */
-    public static native int[] programFanout(long handle);
+    static native int[] programFanout(long handle);
 
     // ========== Zero-Copy Direct Memory Operations ==========
     //
@@ -325,7 +328,7 @@ public final class RE2NativeJNI {
      * @throws IllegalArgumentException if handle is 0 or textAddress is 0
      * @since 1.1.0
      */
-    public static native boolean fullMatchDirect(long handle, long textAddress, int textLength);
+    static native boolean fullMatchDirect(long handle, long textAddress, int textLength);
 
     /**
      * Tests if pattern matches anywhere in text using direct memory access (zero-copy).
@@ -356,7 +359,7 @@ public final class RE2NativeJNI {
      * @throws IllegalArgumentException if handle is 0 or textAddress is 0
      * @since 1.1.0
      */
-    public static native boolean partialMatchDirect(long handle, long textAddress, int textLength);
+    static native boolean partialMatchDirect(long handle, long textAddress, int textLength);
 
     /**
      * Performs full match on multiple memory regions in a single JNI call (zero-copy bulk).
@@ -380,7 +383,7 @@ public final class RE2NativeJNI {
      * @throws IllegalArgumentException if arrays are null or have different lengths
      * @since 1.1.0
      */
-    public static native boolean[] fullMatchDirectBulk(long handle, long[] textAddresses, int[] textLengths);
+    static native boolean[] fullMatchDirectBulk(long handle, long[] textAddresses, int[] textLengths);
 
     /**
      * Performs partial match on multiple memory regions in a single JNI call (zero-copy bulk).
@@ -404,7 +407,7 @@ public final class RE2NativeJNI {
      * @throws IllegalArgumentException if arrays are null or have different lengths
      * @since 1.1.0
      */
-    public static native boolean[] partialMatchDirectBulk(long handle, long[] textAddresses, int[] textLengths);
+    static native boolean[] partialMatchDirectBulk(long handle, long[] textAddresses, int[] textLengths);
 
     /**
      * Extracts capture groups from text using direct memory access (zero-copy).
@@ -422,7 +425,7 @@ public final class RE2NativeJNI {
      * @return String array where [0] = full match, [1+] = capturing groups, or null if no match
      * @since 1.1.0
      */
-    public static native String[] extractGroupsDirect(long handle, long textAddress, int textLength);
+    static native String[] extractGroupsDirect(long handle, long textAddress, int textLength);
 
     /**
      * Finds all non-overlapping matches in text using direct memory access (zero-copy).
@@ -440,6 +443,6 @@ public final class RE2NativeJNI {
      * @return array of match results with capture groups, or null if no matches
      * @since 1.1.0
      */
-    public static native String[][] findAllMatchesDirect(long handle, long textAddress, int textLength);
+    static native String[][] findAllMatchesDirect(long handle, long textAddress, int textLength);
 }
 

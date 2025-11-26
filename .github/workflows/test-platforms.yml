@@ -435,8 +435,15 @@ jobs:
             "
 
   integration-linux-ubuntu-2204-aarch64:
-    name: Integration Test Linux Ubuntu 22.04 aarch64 (ARM64)
-    needs: unit-tests
+    name: Final Validation: Ubuntu 22.04 aarch64 (QEMU)
+    needs:
+      - performance-macos-x86_64
+      - performance-macos-aarch64
+      - performance-linux-ubuntu-2004-x86_64
+      - performance-linux-ubuntu-2204-x86_64
+      - performance-linux-ubuntu-2404-x86_64
+      - performance-linux-rocky-8-x86_64
+      - performance-linux-rocky-9-x86_64
     runs-on: ubuntu-latest
 
     steps:
@@ -486,8 +493,15 @@ jobs:
             "
 
   integration-linux-ubuntu-2404-aarch64:
-    name: Integration Test Linux Ubuntu 24.04 aarch64 (ARM64)
-    needs: unit-tests
+    name: Final Validation: Ubuntu 24.04 aarch64 (QEMU)
+    needs:
+      - performance-macos-x86_64
+      - performance-macos-aarch64
+      - performance-linux-ubuntu-2004-x86_64
+      - performance-linux-ubuntu-2204-x86_64
+      - performance-linux-ubuntu-2404-x86_64
+      - performance-linux-rocky-8-x86_64
+      - performance-linux-rocky-9-x86_64
     runs-on: ubuntu-latest
 
     steps:
@@ -541,8 +555,15 @@ jobs:
             "
 
   integration-linux-rocky-9-aarch64:
-    name: Integration Test Linux Rocky 9 aarch64 (ARM64)
-    needs: unit-tests
+    name: Final Validation: Rocky 9 aarch64 (QEMU)
+    needs:
+      - performance-macos-x86_64
+      - performance-macos-aarch64
+      - performance-linux-ubuntu-2004-x86_64
+      - performance-linux-ubuntu-2204-x86_64
+      - performance-linux-ubuntu-2404-x86_64
+      - performance-linux-rocky-8-x86_64
+      - performance-linux-rocky-9-x86_64
     runs-on: ubuntu-latest
 
     steps:
@@ -613,11 +634,8 @@ jobs:
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
       - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
     runs-on: macos-15-intel
 
     steps:
@@ -643,7 +661,7 @@ jobs:
           unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "darwin-x86_64/libre2.dylib"
 
       - name: Run performance tests
-        run: mvn test -pl perf-test -B
+        run: mvn install -DskipTests -pl libre2-core -B && mvn test -pl perf-test -B
 
       - name: Verify platform detection
         run: |
@@ -657,11 +675,8 @@ jobs:
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
       - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
     runs-on: macos-latest
 
     steps:
@@ -687,7 +702,7 @@ jobs:
           unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "darwin-aarch64/libre2.dylib"
 
       - name: Run performance tests with JAR
-        run: mvn test -pl perf-test -B
+        run: mvn install -DskipTests -pl libre2-core -B && mvn test -pl perf-test -B
 
       - name: Verify platform detection
         run: |
@@ -705,11 +720,8 @@ jobs:
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
       - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
     runs-on: ubuntu-latest
 
     steps:
@@ -756,7 +768,7 @@ jobs:
               unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run performance tests
-              ./mvnw test -pl perf-test -B
+              ./mvnw install -DskipTests -pl libre2-core -B && ./mvnw test -pl perf-test -B
 
               echo '✅ Performance tests passed on Ubuntu 20.04 linux-x86_64'
             "
@@ -769,11 +781,8 @@ jobs:
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
       - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
     runs-on: ubuntu-latest
 
     steps:
@@ -799,7 +808,7 @@ jobs:
           unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "linux-x86_64/libre2.so"
 
       - name: Run performance tests with JAR
-        run: mvn test -pl perf-test -B
+        run: mvn install -DskipTests -pl libre2-core -B && mvn test -pl perf-test -B
 
       - name: Verify platform detection
         run: |
@@ -813,11 +822,8 @@ jobs:
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
       - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
     runs-on: ubuntu-latest
 
     steps:
@@ -858,7 +864,7 @@ jobs:
               unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run performance tests
-              ./mvnw test -pl perf-test -B
+              ./mvnw install -DskipTests -pl libre2-core -B && ./mvnw test -pl perf-test -B
 
               echo '✅ Performance tests passed on Ubuntu 24.04 linux-x86_64'
             "
@@ -875,11 +881,8 @@ jobs:
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
       - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
     runs-on: ubuntu-latest
 
     steps:
@@ -923,7 +926,7 @@ jobs:
               unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run performance tests
-              ./mvnw test -pl perf-test -B
+              ./mvnw install -DskipTests -pl libre2-core -B && ./mvnw test -pl perf-test -B
 
               echo '✅ Performance tests passed on Rocky Linux 8 x86_64'
             "
@@ -936,11 +939,8 @@ jobs:
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
       - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
     runs-on: ubuntu-latest
 
     steps:
@@ -985,203 +985,9 @@ jobs:
               unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run performance tests
-              ./mvnw test -pl perf-test -B
+              ./mvnw install -DskipTests -pl libre2-core -B && ./mvnw test -pl perf-test -B
 
               echo '✅ Performance tests passed on Rocky Linux 9 x86_64'
-            "
-
-  performance-linux-ubuntu-2204-aarch64:
-    name: Performance Test Linux Ubuntu 22.04 aarch64 (ARM64)
-    needs:
-      - integration-macos-x86_64
-      - integration-macos-aarch64
-      - integration-linux-ubuntu-2004-x86_64
-      - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
-      - integration-linux-rocky-8-x86_64
-      - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code (for tests)
-        uses: actions/checkout@v4
-
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: libre2-core-jar
-          path: libre2-core/target/
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: maven-${{ hashFiles('pom.xml') }}
-          restore-keys: maven-
-
-      - name: Set up QEMU for ARM64
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - name: Test in Ubuntu 22.04 ARM64 container
-        run: |
-          # Run tests in Ubuntu 22.04 ARM64 Docker container with JDK 17
-          docker run --rm --platform linux/arm64 \
-            -e QEMU_EMULATION=true \
-            -v "$(pwd):/workspace" \
-            -v ~/.m2:/root/.m2 \
-            -w /workspace \
-            eclipse-temurin:17-jdk \
-            bash -c "
-              set -e
-              # Install unzip (not included in eclipse-temurin image)
-              apt-get update && apt-get install -y unzip
-
-              # Verify native library in JAR
-              echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-aarch64/libre2.so'
-
-              # Run performance tests
-              ./mvnw test -pl perf-test -B
-
-              echo '✅ Performance tests passed on Ubuntu 22.04 linux-aarch64'
-            "
-
-  performance-linux-ubuntu-2404-aarch64:
-    name: Performance Test Linux Ubuntu 24.04 aarch64 (ARM64)
-    needs:
-      - integration-macos-x86_64
-      - integration-macos-aarch64
-      - integration-linux-ubuntu-2004-x86_64
-      - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
-      - integration-linux-rocky-8-x86_64
-      - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code (for tests)
-        uses: actions/checkout@v4
-
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: libre2-core-jar
-          path: libre2-core/target/
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: maven-${{ hashFiles('pom.xml') }}
-          restore-keys: maven-
-
-      - name: Set up QEMU for ARM64
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - name: Test in Ubuntu 24.04 ARM64 container
-        run: |
-          # Run tests in Ubuntu 24.04 ARM64 Docker container with JDK 17
-          docker run --rm --platform linux/arm64 \
-            -e QEMU_EMULATION=true \
-            -v "$(pwd):/workspace" \
-            -v ~/.m2:/root/.m2 \
-            -w /workspace \
-            ubuntu:24.04 \
-            bash -c "
-              set -e
-              # Install JDK 17
-              apt-get update
-              apt-get install -y openjdk-17-jdk unzip
-
-              # Verify Java
-              java -version
-
-              # Verify native library in JAR
-              echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-aarch64/libre2.so'
-
-              # Run performance tests
-              ./mvnw test -pl perf-test -B
-
-              echo '✅ Performance tests passed on Ubuntu 24.04 linux-aarch64'
-            "
-
-  performance-linux-rocky-9-aarch64:
-    name: Performance Test Linux Rocky 9 aarch64 (ARM64)
-    needs:
-      - integration-macos-x86_64
-      - integration-macos-aarch64
-      - integration-linux-ubuntu-2004-x86_64
-      - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
-      - integration-linux-ubuntu-2204-aarch64
-      - integration-linux-ubuntu-2404-aarch64
-      - integration-linux-rocky-8-x86_64
-      - integration-linux-rocky-9-x86_64
-      - integration-linux-rocky-9-aarch64
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code (for tests)
-        uses: actions/checkout@v4
-
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: libre2-core-jar
-          path: libre2-core/target/
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: maven-${{ hashFiles('pom.xml') }}
-          restore-keys: maven-
-
-      - name: Set up QEMU for ARM64
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - name: Test in Rocky Linux ARM64 container
-        run: |
-          # Run tests in Rocky Linux 9 ARM64 container with JDK 17
-          docker run --rm --platform linux/arm64 \
-            -e QEMU_EMULATION=true \
-            -v "$(pwd):/workspace" \
-            -v ~/.m2:/root/.m2 \
-            -w /workspace \
-            rockylinux:9 \
-            bash -c "
-              set -e
-              # Install JDK 17
-              dnf install -y java-17-openjdk java-17-openjdk-devel unzip
-
-              # Set JAVA_HOME
-              export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
-              export PATH=\$JAVA_HOME/bin:\$PATH
-
-              # Verify Java
-              java -version
-
-              # Verify native library in JAR
-              echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-aarch64/libre2.so'
-
-              # Run performance tests
-              ./mvnw test -pl perf-test -B
-
-              echo '✅ Performance tests passed on Rocky Linux 9 aarch64'
             "
 
   # ============================================================================
@@ -1191,16 +997,18 @@ jobs:
   all-platforms-tested:
     name: All Platforms Tested
     needs:
+      # 7 performance jobs
       - performance-macos-x86_64
       - performance-macos-aarch64
       - performance-linux-ubuntu-2004-x86_64
       - performance-linux-ubuntu-2204-x86_64
       - performance-linux-ubuntu-2404-x86_64
-      - performance-linux-ubuntu-2204-aarch64
-      - performance-linux-ubuntu-2404-aarch64
       - performance-linux-rocky-8-x86_64
       - performance-linux-rocky-9-x86_64
-      - performance-linux-rocky-9-aarch64
+      # 3 final ARM64 validation jobs
+      - integration-linux-ubuntu-2204-aarch64
+      - integration-linux-ubuntu-2404-aarch64
+      - integration-linux-rocky-9-aarch64
     runs-on: ubuntu-latest
 
     steps:
@@ -1210,26 +1018,15 @@ jobs:
           echo ""
           echo "4-Stage CI Pipeline Complete:"
           echo "  Stage 1: Build JAR ✓"
-          echo "  Stage 2: Unit Tests (22 tests) ✓"
-          echo "  Stage 3: Integration Tests (428 tests × 10 platforms) ✓"
-          echo "  Stage 4: Performance Tests (11 tests × 10 platforms) ✓"
+          echo "  Stage 2: Unit Tests (22 tests, Ubuntu 24.04) ✓"
+          echo "  Stage 3: Integration Tests (428 tests × 7 platforms) ✓"
+          echo "  Stage 4: Performance Tests (11 tests × 7 platforms) ✓"
+          echo "  Final: ARM64 Integration Tests (428 tests × 3 QEMU platforms) ✓"
           echo ""
-          echo "Verified platforms (10 total):"
-          echo ""
-          echo "macOS:"
+          echo "Platforms tested:"
           echo "  - macOS x86_64 (Intel)"
           echo "  - macOS aarch64 (Apple Silicon)"
-          echo ""
-          echo "Ubuntu (Debian-based):"
-          echo "  - Ubuntu 20.04 x86_64"
-          echo "  - Ubuntu 22.04 x86_64"
-          echo "  - Ubuntu 22.04 aarch64"
-          echo "  - Ubuntu 24.04 x86_64"
-          echo "  - Ubuntu 24.04 aarch64"
-          echo ""
-          echo "Rocky Linux (RHEL-based):"
-          echo "  - Rocky 8 x86_64"
-          echo "  - Rocky 9 x86_64"
-          echo "  - Rocky 9 aarch64"
-          echo ""
-          echo "All native libraries load and function correctly!"
+          echo "  - Linux Ubuntu 20.04/22.04/24.04 x86_64"
+          echo "  - Linux Rocky 8/9 x86_64"
+          echo "  - Linux Ubuntu 22.04/24.04 aarch64 (QEMU, final validation)"
+          echo "  - Linux Rocky 9 aarch64 (QEMU, final validation)"

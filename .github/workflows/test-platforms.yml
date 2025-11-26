@@ -435,7 +435,7 @@ jobs:
             "
 
   integration-linux-ubuntu-2204-aarch64:
-    name: Final Validation: Ubuntu 22.04 aarch64 (QEMU)
+    name: "Final Validation: Ubuntu 22.04 aarch64 (QEMU)"
     needs:
       - performance-macos-x86_64
       - performance-macos-aarch64
@@ -493,7 +493,7 @@ jobs:
             "
 
   integration-linux-ubuntu-2404-aarch64:
-    name: Final Validation: Ubuntu 24.04 aarch64 (QEMU)
+    name: "Final Validation: Ubuntu 24.04 aarch64 (QEMU)"
     needs:
       - performance-macos-x86_64
       - performance-macos-aarch64
@@ -555,7 +555,7 @@ jobs:
             "
 
   integration-linux-rocky-9-aarch64:
-    name: Final Validation: Rocky 9 aarch64 (QEMU)
+    name: "Final Validation: Rocky 9 aarch64 (QEMU)"
     needs:
       - performance-macos-x86_64
       - performance-macos-aarch64

@@ -10,26 +10,28 @@
         <version>1.0.0</version>
     </parent>
 
-    <artifactId>libre2-dropwizard</artifactId>
+    <artifactId>perf-test</artifactId>
     <packaging>jar</packaging>
 
-    <name>libre2-dropwizard</name>
-    <description>Dropwizard Metrics integration with automatic JMX - usable with any framework (Cassandra, Spring Boot, etc.)</description>
-
-    <!-- Version inherited from parent: 0.9.1 -->
+    <name>perf-test</name>
+    <description>Performance and stress tests for libre2-java</description>
 
     <dependencies>
-        <!-- Core library -->
+        <!-- Core library to test -->
         <dependency>
             <groupId>com.axonops</groupId>
             <artifactId>libre2-core</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
 
-        <!-- Dropwizard Metrics JMX (for automatic JMX registration) -->
+        <!-- Core test utilities (TestUtils, etc.) -->
         <dependency>
-            <groupId>io.dropwizard.metrics</groupId>
-            <artifactId>metrics-jmx</artifactId>
+            <groupId>com.axonops</groupId>
+            <artifactId>libre2-core</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
         </dependency>
 
         <!-- Test dependencies -->
@@ -62,6 +64,14 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Performance tests may take longer -->
+                    <forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
+                    <!-- JVM arguments for DirectBuffer access -->
+                    <argLine>
+                        --add-exports=java.base/sun.nio.ch=ALL-UNNAMED
+                    </argLine>
+                </configuration>
             </plugin>
         </plugins>
     </build>

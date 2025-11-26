@@ -1,4 +1,4 @@
-package com.axonops.libre2.cache;
+package com.axonops.libre2.stress;
 
 import com.axonops.libre2.api.Matcher;
 import com.axonops.libre2.api.Pattern;

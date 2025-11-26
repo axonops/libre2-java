@@ -15,10 +15,10 @@ on:
       - development
     paths:
       - 'libre2-core/src/**'
-      - 'libre2-dropwizard/src/**'
+      - 'perf-test/src/**'
       - 'pom.xml'
       - 'libre2-core/pom.xml'
-      - 'libre2-dropwizard/pom.xml'
+      - 'perf-test/pom.xml'
       - '.github/workflows/test-platforms.yml'
 
   # Manual trigger
@@ -30,10 +30,10 @@ on:
       - development
     paths:
       - 'libre2-core/src/**'
-      - 'libre2-dropwizard/src/**'
+      - 'perf-test/src/**'
       - 'pom.xml'
       - 'libre2-core/pom.xml'
-      - 'libre2-dropwizard/pom.xml'
+      - 'perf-test/pom.xml'
 
 jobs:
   # ============================================================================
@@ -60,26 +60,24 @@ jobs:
 
       - name: Verify JAR contents
         run: |
-          echo "Core JAR size:"
+          echo "Core JARs:"
           ls -lh libre2-core/target/libre2-core-*.jar
 
           echo ""
-          echo "Cassandra JAR size:"
-          ls -lh libre2-dropwizard/target/libre2-dropwizard-*.jar || echo "(empty skeleton - OK)"
-
-          echo ""
-          echo "Native libraries in core JAR:"
-          unzip -l libre2-core/target/libre2-core-*.jar | grep -E "libre2\.(dylib|so)"
+          echo "Native libraries in main JAR:"
+          unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep -E "libre2\.(dylib|so)"
 
           echo ""
           echo "Verify JNA NOT included (should show nothing):"
-          unzip -l libre2-core/target/libre2-core-*.jar | grep "com/sun/jna" || echo "✅ JNA not included (provided scope working)"
+          unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "com/sun/jna" || echo "✅ JNA not included (provided scope working)"
 
       - name: Upload core JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: libre2-core-jar
-          path: libre2-core/target/libre2-core-*.jar
+          path: |
+            libre2-core/target/libre2-core-1.0.0.jar
+            libre2-core/target/libre2-core-1.0.0-tests.jar
           retention-days: 7
 
   # ============================================================================
@@ -114,7 +112,7 @@ jobs:
       - name: Verify native library in JAR
         run: |
           echo "Checking darwin-x86_64 library in JAR:"
-          unzip -l libre2-core/target/libre2-core-*.jar | grep "darwin-x86_64/libre2.dylib"
+          unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "darwin-x86_64/libre2.dylib"
 
       - name: Run tests (multi-module)
         run: mvn test -B
@@ -149,7 +147,7 @@ jobs:
       - name: Verify native library in JAR
         run: |
           echo "Checking darwin-aarch64 library in JAR:"
-          unzip -l libre2-core/target/libre2-core-*.jar | grep "darwin-aarch64/libre2.dylib"
+          unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "darwin-aarch64/libre2.dylib"
 
       - name: Run tests with JAR
         run: mvn test -B
@@ -208,7 +206,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-x86_64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -241,7 +239,7 @@ jobs:
       - name: Verify native library in JAR
         run: |
           echo "Checking linux-x86_64 library in JAR:"
-          unzip -l libre2-core/target/libre2-core-*.jar | grep "linux-x86_64/libre2.so"
+          unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "linux-x86_64/libre2.so"
 
       - name: Run tests with JAR
         run: mvn test -B
@@ -290,7 +288,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-x86_64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -345,7 +343,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-x86_64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -397,7 +395,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-x86_64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -448,7 +446,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-aarch64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-aarch64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -503,7 +501,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-aarch64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-aarch64/libre2.so'
 
               # Run tests
               ./mvnw test -B
@@ -561,7 +559,7 @@ jobs:
 
               # Verify native library in JAR
               echo 'Checking linux-aarch64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-*.jar | grep 'linux-aarch64/libre2.so'
+              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-aarch64/libre2.so'
 
               # Run tests
               ./mvnw test -B

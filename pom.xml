@@ -15,7 +15,7 @@
 
     <modules>
         <module>libre2-core</module>
-        <module>libre2-dropwizard</module>
+        <module>perf-test</module>
     </modules>
 
     <licenses>

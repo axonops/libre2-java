@@ -64,10 +64,6 @@ jobs:
           ls -lh libre2-core/target/libre2-core-*.jar
 
           echo ""
-          echo "Cassandra JAR size:"
-          ls -lh libre2-dropwizard/target/libre2-dropwizard-*.jar || echo "(empty skeleton - OK)"
-
-          echo ""
           echo "Native libraries in core JAR:"
           unzip -l libre2-core/target/libre2-core-*.jar | grep -E "libre2\.(dylib|so)"
 

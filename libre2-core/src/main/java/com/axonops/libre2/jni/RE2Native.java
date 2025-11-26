@@ -25,15 +25,15 @@ package com.axonops.libre2.jni;
  * <p><b>Internal API:</b> Not part of public API contract. Accessed via Pattern injection.
  * Public visibility required for cross-package access from api package.</p>
  */
-public final class DirectJniAdapter implements JniAdapter {
+public final class RE2Native implements IRE2Native {
 
     /**
      * Singleton instance - used in production.
      * Public so Pattern can access it from api package.
      */
-    public static final DirectJniAdapter INSTANCE = new DirectJniAdapter();
+    public static final RE2Native INSTANCE = new RE2Native();
 
-    private DirectJniAdapter() {
+    private RE2Native() {
     }
 
     @Override

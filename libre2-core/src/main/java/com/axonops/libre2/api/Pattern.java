@@ -18,8 +18,8 @@ package com.axonops.libre2.api;
 
 import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.cache.RE2Config;
-import com.axonops.libre2.jni.DirectJniAdapter;
-import com.axonops.libre2.jni.JniAdapter;
+import com.axonops.libre2.jni.RE2Native;
+import com.axonops.libre2.jni.IRE2Native;
 import com.axonops.libre2.jni.RE2LibraryLoader;
 import com.axonops.libre2.metrics.MetricNames;
 import com.axonops.libre2.metrics.RE2MetricsRegistry;
@@ -79,13 +79,13 @@ public final class Pattern implements AutoCloseable {
     private final long nativeMemoryBytes;
 
     // JniAdapter for all JNI calls - allows mocking in tests
-    final JniAdapter jni;
+    final IRE2Native jni;
 
     Pattern(String patternString, boolean caseSensitive, long nativeHandle) {
-        this(patternString, caseSensitive, nativeHandle, false, DirectJniAdapter.INSTANCE);
+        this(patternString, caseSensitive, nativeHandle, false, RE2Native.INSTANCE);
     }
 
-    Pattern(String patternString, boolean caseSensitive, long nativeHandle, boolean fromCache, JniAdapter jni) {
+    Pattern(String patternString, boolean caseSensitive, long nativeHandle, boolean fromCache, IRE2Native jni) {
         this.patternString = Objects.requireNonNull(patternString);
         this.caseSensitive = caseSensitive;
         this.nativeHandle = nativeHandle;
@@ -133,7 +133,7 @@ public final class Pattern implements AutoCloseable {
      */
     public static Pattern compileWithoutCache(String pattern, boolean caseSensitive) {
         // Compile with fromCache=false so it can actually be closed
-        return doCompile(pattern, caseSensitive, false, DirectJniAdapter.INSTANCE);
+        return doCompile(pattern, caseSensitive, false, RE2Native.INSTANCE);
     }
 
     /**
@@ -141,21 +141,21 @@ public final class Pattern implements AutoCloseable {
      */
     private static Pattern compileUncached(String pattern, boolean caseSensitive) {
         // Compile with fromCache=true so users can't close it (cache manages it)
-        return doCompile(pattern, caseSensitive, true, DirectJniAdapter.INSTANCE);
+        return doCompile(pattern, caseSensitive, true, RE2Native.INSTANCE);
     }
 
     /**
      * Package-private compile method for test injection of mock JniAdapter.
      * Bypasses cache for full control in unit tests.
      */
-    static Pattern compileForTesting(String pattern, boolean caseSensitive, JniAdapter jni) {
+    static Pattern compileForTesting(String pattern, boolean caseSensitive, IRE2Native jni) {
         return doCompile(pattern, caseSensitive, false, jni);
     }
 
     /**
      * Actual compilation logic.
      */
-    private static Pattern doCompile(String pattern, boolean caseSensitive, boolean fromCache, JniAdapter jni) {
+    private static Pattern doCompile(String pattern, boolean caseSensitive, boolean fromCache, IRE2Native jni) {
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
         String hash = PatternHasher.hash(pattern);
 
@@ -1488,7 +1488,7 @@ public final class Pattern implements AutoCloseable {
      * @since 1.2.0
      */
     public static String quoteMeta(String text) {
-        return DirectJniAdapter.INSTANCE.quoteMeta(text);
+        return RE2Native.INSTANCE.quoteMeta(text);
     }
 
     long getNativeHandle() {

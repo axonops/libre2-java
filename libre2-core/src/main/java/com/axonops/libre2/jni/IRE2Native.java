@@ -26,7 +26,7 @@ package com.axonops.libre2.jni;
  * <p><b>Internal API:</b> Not part of public API contract. Used internally by Pattern/Matcher/RE2.
  * Public visibility required for cross-package access from api package.</p>
  */
-public interface JniAdapter {
+public interface IRE2Native {
 
     // Pattern lifecycle
     long compile(String pattern, boolean caseSensitive);

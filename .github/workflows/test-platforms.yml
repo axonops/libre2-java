@@ -661,7 +661,7 @@ jobs:
           unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "darwin-x86_64/libre2.dylib"
 
       - name: Run performance tests
-        run: mvn install -DskipTests -pl libre2-core -B && mvn test -pl perf-test -B
+        run: mvn install -DskipTests -B && mvn test -pl perf-test -B
 
       - name: Verify platform detection
         run: |
@@ -702,7 +702,7 @@ jobs:
           unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "darwin-aarch64/libre2.dylib"
 
       - name: Run performance tests with JAR
-        run: mvn install -DskipTests -pl libre2-core -B && mvn test -pl perf-test -B
+        run: mvn install -DskipTests -B && mvn test -pl perf-test -B
 
       - name: Verify platform detection
         run: |
@@ -768,7 +768,7 @@ jobs:
               unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run performance tests
-              ./mvnw install -DskipTests -pl libre2-core -B && ./mvnw test -pl perf-test -B
+              ./mvnw install -DskipTests -B && ./mvnw test -pl perf-test -B
 
               echo '✅ Performance tests passed on Ubuntu 20.04 linux-x86_64'
             "
@@ -808,7 +808,7 @@ jobs:
           unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep "linux-x86_64/libre2.so"
 
       - name: Run performance tests with JAR
-        run: mvn install -DskipTests -pl libre2-core -B && mvn test -pl perf-test -B
+        run: mvn install -DskipTests -B && mvn test -pl perf-test -B
 
       - name: Verify platform detection
         run: |
@@ -864,7 +864,7 @@ jobs:
               unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run performance tests
-              ./mvnw install -DskipTests -pl libre2-core -B && ./mvnw test -pl perf-test -B
+              ./mvnw install -DskipTests -B && ./mvnw test -pl perf-test -B
 
               echo '✅ Performance tests passed on Ubuntu 24.04 linux-x86_64'
             "
@@ -926,7 +926,7 @@ jobs:
               unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run performance tests
-              ./mvnw install -DskipTests -pl libre2-core -B && ./mvnw test -pl perf-test -B
+              ./mvnw install -DskipTests -B && ./mvnw test -pl perf-test -B
 
               echo '✅ Performance tests passed on Rocky Linux 8 x86_64'
             "
@@ -985,7 +985,7 @@ jobs:
               unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
 
               # Run performance tests
-              ./mvnw install -DskipTests -pl libre2-core -B && ./mvnw test -pl perf-test -B
+              ./mvnw install -DskipTests -B && ./mvnw test -pl perf-test -B
 
               echo '✅ Performance tests passed on Rocky Linux 9 x86_64'
             "

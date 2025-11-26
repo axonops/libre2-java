@@ -18,8 +18,9 @@ package com.axonops.libre2.api;
 
 import com.axonops.libre2.cache.PatternCache;
 import com.axonops.libre2.cache.RE2Config;
+import com.axonops.libre2.jni.DirectJniAdapter;
+import com.axonops.libre2.jni.JniAdapter;
 import com.axonops.libre2.jni.RE2LibraryLoader;
-import com.axonops.libre2.jni.RE2NativeJNI;
 import com.axonops.libre2.metrics.MetricNames;
 import com.axonops.libre2.metrics.RE2MetricsRegistry;
 import com.axonops.libre2.util.PatternHasher;
@@ -77,18 +78,22 @@ public final class Pattern implements AutoCloseable {
     private static final int maxMatchersPerPattern = RE2Config.DEFAULT.maxMatchersPerPattern();
     private final long nativeMemoryBytes;
 
+    // JniAdapter for all JNI calls - allows mocking in tests
+    final JniAdapter jni;
+
     Pattern(String patternString, boolean caseSensitive, long nativeHandle) {
-        this(patternString, caseSensitive, nativeHandle, false);
+        this(patternString, caseSensitive, nativeHandle, false, DirectJniAdapter.INSTANCE);
     }
 
-    Pattern(String patternString, boolean caseSensitive, long nativeHandle, boolean fromCache) {
+    Pattern(String patternString, boolean caseSensitive, long nativeHandle, boolean fromCache, JniAdapter jni) {
         this.patternString = Objects.requireNonNull(patternString);
         this.caseSensitive = caseSensitive;
         this.nativeHandle = nativeHandle;
         this.fromCache = fromCache;
+        this.jni = jni;
 
-        // Query native memory size
-        this.nativeMemoryBytes = RE2NativeJNI.patternMemory(nativeHandle);
+        // Query native memory size using adapter
+        this.nativeMemoryBytes = jni.patternMemory(nativeHandle);
 
         logger.trace("RE2: Pattern created - length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}",
             patternString.length(), caseSensitive, fromCache, nativeMemoryBytes);
@@ -128,7 +133,7 @@ public final class Pattern implements AutoCloseable {
      */
     public static Pattern compileWithoutCache(String pattern, boolean caseSensitive) {
         // Compile with fromCache=false so it can actually be closed
-        return doCompile(pattern, caseSensitive, false);
+        return doCompile(pattern, caseSensitive, false, DirectJniAdapter.INSTANCE);
     }
 
     /**
@@ -136,13 +141,21 @@ public final class Pattern implements AutoCloseable {
      */
     private static Pattern compileUncached(String pattern, boolean caseSensitive) {
         // Compile with fromCache=true so users can't close it (cache manages it)
-        return doCompile(pattern, caseSensitive, true);
+        return doCompile(pattern, caseSensitive, true, DirectJniAdapter.INSTANCE);
+    }
+
+    /**
+     * Package-private compile method for test injection of mock JniAdapter.
+     * Bypasses cache for full control in unit tests.
+     */
+    static Pattern compileForTesting(String pattern, boolean caseSensitive, JniAdapter jni) {
+        return doCompile(pattern, caseSensitive, false, jni);
     }
 
     /**
      * Actual compilation logic.
      */
-    private static Pattern doCompile(String pattern, boolean caseSensitive, boolean fromCache) {
+    private static Pattern doCompile(String pattern, boolean caseSensitive, boolean fromCache, JniAdapter jni) {
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
         String hash = PatternHasher.hash(pattern);
 
@@ -160,10 +173,10 @@ public final class Pattern implements AutoCloseable {
         boolean compilationSuccessful = false;
 
         try {
-            handle = RE2NativeJNI.compile(pattern, caseSensitive);
+            handle = jni.compile(pattern, caseSensitive);
 
-            if (handle == 0 || !RE2NativeJNI.patternOk(handle)) {
-                String error = RE2NativeJNI.getError();
+            if (handle == 0 || !jni.patternOk(handle)) {
+                String error = jni.getError();
 
                 // Compilation failed - record error
                 metrics.incrementCounter(MetricNames.ERRORS_COMPILATION_FAILED);
@@ -177,7 +190,7 @@ public final class Pattern implements AutoCloseable {
             metrics.recordTimer(MetricNames.PATTERNS_COMPILATION_LATENCY, durationNanos);
             metrics.incrementCounter(MetricNames.PATTERNS_COMPILED);
 
-            Pattern compiled = new Pattern(pattern, caseSensitive, handle, fromCache);
+            Pattern compiled = new Pattern(pattern, caseSensitive, handle, fromCache, jni);
             logger.trace("RE2: Pattern compiled - hash: {}, length: {}, caseSensitive: {}, fromCache: {}, nativeBytes: {}, timeNs: {}",
                 hash, pattern.length(), caseSensitive, fromCache, compiled.nativeMemoryBytes, durationNanos);
 
@@ -194,7 +207,7 @@ public final class Pattern implements AutoCloseable {
                 // Free handle if allocated
                 if (handle != 0) {
                     try {
-                        RE2NativeJNI.freePattern(handle);
+                        jni.freePattern(handle);
                     } catch (Exception e) {
                         // Silently ignore - best effort cleanup
                     }
@@ -269,7 +282,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        boolean result = RE2NativeJNI.fullMatchDirect(nativeHandle, address, length);
+        boolean result = jni.fullMatchDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
         // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
@@ -332,7 +345,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        boolean result = RE2NativeJNI.partialMatchDirect(nativeHandle, address, length);
+        boolean result = jni.partialMatchDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
         // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
@@ -398,7 +411,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String[] groups = RE2NativeJNI.extractGroups(nativeHandle, input);
+        String[] groups = jni.extractGroups(nativeHandle, input);
 
         if (groups == null) {
             // No match - still track metrics (operation was attempted)
@@ -487,7 +500,7 @@ public final class Pattern implements AutoCloseable {
         long startNanos = System.nanoTime();
 
         // RE2 extractGroups does UNANCHORED match, so it finds first occurrence
-        String[] groups = RE2NativeJNI.extractGroups(nativeHandle, input);
+        String[] groups = jni.extractGroups(nativeHandle, input);
 
         long durationNanos = System.nanoTime() - startNanos;
 
@@ -556,7 +569,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String[][] allMatches = RE2NativeJNI.findAllMatches(nativeHandle, input);
+        String[][] allMatches = jni.findAllMatches(nativeHandle, input);
 
         long durationNanos = System.nanoTime() - startNanos;
         int matchCount = (allMatches != null) ? allMatches.length : 0;
@@ -633,7 +646,7 @@ public final class Pattern implements AutoCloseable {
         MatchResult[] results = new MatchResult[inputs.length];
 
         for (int i = 0; i < inputs.length; i++) {
-            String[] groups = RE2NativeJNI.extractGroups(nativeHandle, inputs[i]);
+            String[] groups = jni.extractGroups(nativeHandle, inputs[i]);
             if (groups != null && groups.length > 0) {
                 results[i] = new MatchResult(inputs[i], groups, namedGroupMap);
             } else {
@@ -699,7 +712,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+        String[] groups = jni.extractGroupsDirect(nativeHandle, address, length);
 
         long durationNanos = System.nanoTime() - startNanos;
 
@@ -758,7 +771,7 @@ public final class Pattern implements AutoCloseable {
      * Helper: Get named groups map for this pattern (lazy-loaded and cached).
      */
     private Map<String, Integer> getNamedGroupsMap() {
-        String[] namedGroupsArray = RE2NativeJNI.getNamedGroups(nativeHandle);
+        String[] namedGroupsArray = jni.getNamedGroups(nativeHandle);
 
         if (namedGroupsArray == null || namedGroupsArray.length == 0) {
             return Collections.emptyMap();
@@ -798,7 +811,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+        String[] groups = jni.extractGroupsDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
         // Track metrics - GLOBAL (ALL) + SPECIFIC (Zero-Copy)
@@ -862,7 +875,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        String[] groups = RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+        String[] groups = jni.extractGroupsDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
         RE2MetricsRegistry metrics = cache.getConfig().metricsRegistry();
@@ -925,7 +938,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        String[][] allMatches = RE2NativeJNI.findAllMatchesDirect(nativeHandle, address, length);
+        String[][] allMatches = jni.findAllMatchesDirect(nativeHandle, address, length);
         long durationNanos = System.nanoTime() - startNanos;
 
         int matchCount = (allMatches != null) ? allMatches.length : 0;
@@ -1021,7 +1034,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String result = RE2NativeJNI.replaceFirst(nativeHandle, input, replacement);
+        String result = jni.replaceFirst(nativeHandle, input, replacement);
 
         long durationNanos = System.nanoTime() - startNanos;
 
@@ -1083,7 +1096,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String result = RE2NativeJNI.replaceAll(nativeHandle, input, replacement);
+        String result = jni.replaceAll(nativeHandle, input, replacement);
 
         long durationNanos = System.nanoTime() - startNanos;
 
@@ -1138,7 +1151,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String[] results = RE2NativeJNI.replaceAllBulk(nativeHandle, inputs, replacement);
+        String[] results = jni.replaceAllBulk(nativeHandle, inputs, replacement);
 
         long durationNanos = System.nanoTime() - startNanos;
         long perItemNanos = durationNanos / inputs.length;
@@ -1208,7 +1221,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String result = RE2NativeJNI.replaceFirstDirect(nativeHandle, address, length, replacement);
+        String result = jni.replaceFirstDirect(nativeHandle, address, length, replacement);
 
         long durationNanos = System.nanoTime() - startNanos;
 
@@ -1272,7 +1285,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String result = RE2NativeJNI.replaceAllDirect(nativeHandle, address, length, replacement);
+        String result = jni.replaceAllDirect(nativeHandle, address, length, replacement);
 
         long durationNanos = System.nanoTime() - startNanos;
 
@@ -1347,7 +1360,7 @@ public final class Pattern implements AutoCloseable {
 
         long startNanos = System.nanoTime();
 
-        String[] results = RE2NativeJNI.replaceAllDirectBulk(nativeHandle, addresses, lengths, replacement);
+        String[] results = jni.replaceAllDirectBulk(nativeHandle, addresses, lengths, replacement);
 
         long durationNanos = System.nanoTime() - startNanos;
         long perItemNanos = durationNanos / addresses.length;
@@ -1450,7 +1463,7 @@ public final class Pattern implements AutoCloseable {
      */
     public int[] getProgramFanout() {
         checkNotClosed();
-        return RE2NativeJNI.programFanout(nativeHandle);
+        return jni.programFanout(nativeHandle);
     }
 
     /**
@@ -1475,7 +1488,7 @@ public final class Pattern implements AutoCloseable {
      * @since 1.2.0
      */
     public static String quoteMeta(String text) {
-        return RE2NativeJNI.quoteMeta(text);
+        return DirectJniAdapter.INSTANCE.quoteMeta(text);
     }
 
     long getNativeHandle() {
@@ -1532,7 +1545,7 @@ public final class Pattern implements AutoCloseable {
             return false;
         }
         try {
-            return RE2NativeJNI.patternOk(nativeHandle);
+            return jni.patternOk(nativeHandle);
         } catch (Exception e) {
             logger.warn("RE2: Exception while validating pattern", e);
             return false;
@@ -1606,7 +1619,7 @@ public final class Pattern implements AutoCloseable {
 
             // CRITICAL: Always track freed, even if freePattern throws
             try {
-                RE2NativeJNI.freePattern(nativeHandle);
+                jni.freePattern(nativeHandle);
             } catch (Exception e) {
                 logger.error("RE2: Error freeing pattern native handle", e);
             } finally {
@@ -1771,7 +1784,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        boolean[] results = RE2NativeJNI.fullMatchBulk(nativeHandle, inputs);
+        boolean[] results = jni.fullMatchBulk(nativeHandle, inputs);
         long durationNanos = System.nanoTime() - startNanos;
 
         // Track metrics - GLOBAL (ALL) + SPECIFIC (String Bulk)
@@ -1828,7 +1841,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        boolean[] results = RE2NativeJNI.partialMatchBulk(nativeHandle, inputs);
+        boolean[] results = jni.partialMatchBulk(nativeHandle, inputs);
         long durationNanos = System.nanoTime() - startNanos;
 
         // Track metrics - GLOBAL (ALL) + SPECIFIC (String Bulk)
@@ -1922,7 +1935,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        boolean[] results = RE2NativeJNI.fullMatchDirectBulk(nativeHandle, addresses, lengths);
+        boolean[] results = jni.fullMatchDirectBulk(nativeHandle, addresses, lengths);
         long durationNanos = System.nanoTime() - startNanos;
 
         // Track metrics - GLOBAL (ALL) + SPECIFIC (Bulk Zero-Copy)
@@ -1972,7 +1985,7 @@ public final class Pattern implements AutoCloseable {
         }
 
         long startNanos = System.nanoTime();
-        boolean[] results = RE2NativeJNI.partialMatchDirectBulk(nativeHandle, addresses, lengths);
+        boolean[] results = jni.partialMatchDirectBulk(nativeHandle, addresses, lengths);
         long durationNanos = System.nanoTime() - startNanos;
 
         // Track metrics - GLOBAL (ALL) + SPECIFIC (Bulk Zero-Copy)
@@ -2129,7 +2142,7 @@ public final class Pattern implements AutoCloseable {
             throw new IllegalArgumentException("Length must not be negative: " + length);
         }
 
-        return RE2NativeJNI.extractGroupsDirect(nativeHandle, address, length);
+        return jni.extractGroupsDirect(nativeHandle, address, length);
     }
 
     /**
@@ -2154,7 +2167,7 @@ public final class Pattern implements AutoCloseable {
             throw new IllegalArgumentException("Length must not be negative: " + length);
         }
 
-        return RE2NativeJNI.findAllMatchesDirect(nativeHandle, address, length);
+        return jni.findAllMatchesDirect(nativeHandle, address, length);
     }
 
     // ========== ByteBuffer API (Automatic Zero-Copy Routing) ==========
@@ -2322,7 +2335,7 @@ public final class Pattern implements AutoCloseable {
         byte[] bytes = new byte[buffer.remaining()];
         buffer.duplicate().get(bytes);
         String text = new String(bytes, StandardCharsets.UTF_8);
-        return RE2NativeJNI.extractGroups(nativeHandle, text);
+        return jni.extractGroups(nativeHandle, text);
     }
 
     /**
@@ -2332,7 +2345,7 @@ public final class Pattern implements AutoCloseable {
         byte[] bytes = new byte[buffer.remaining()];
         buffer.duplicate().get(bytes);
         String text = new String(bytes, StandardCharsets.UTF_8);
-        return RE2NativeJNI.findAllMatches(nativeHandle, text);
+        return jni.findAllMatches(nativeHandle, text);
     }
 
     /**

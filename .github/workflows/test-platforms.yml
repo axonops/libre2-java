@@ -24,16 +24,18 @@ on:
   # Manual trigger
   workflow_dispatch:
 
-  # Run on pushes to development
+  # Run on pushes to development and feature branches
   push:
     branches:
       - development
+      - 'feature/**'
     paths:
       - 'libre2-core/src/**'
       - 'perf-test/src/**'
       - 'pom.xml'
       - 'libre2-core/pom.xml'
       - 'perf-test/pom.xml'
+      - '.github/workflows/test-platforms.yml'
 
 jobs:
   # ============================================================================

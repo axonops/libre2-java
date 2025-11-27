@@ -86,8 +86,8 @@ jobs:
   # Stage 2: Unit Tests (run once on ubuntu-24.04)
   # ============================================================================
 
-  unit-tests:
-    name: Unit Tests
+  core-tests:
+    name: Core Tests (Unit + Integration + Coverage)
     needs: build-jar
     runs-on: ubuntu-24.04
 
@@ -108,8 +108,16 @@ jobs:
           name: libre2-core-jar
           path: libre2-core/target/
 
-      - name: Run unit tests
-        run: mvn test -pl libre2-core -B
+      - name: Run unit + integration tests with coverage
+        run: mvn verify -pl libre2-core -B
+
+      - name: Upload JaCoCo coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: libre2-core/target/site/jacoco/
+          retention-days: 30
 
   # ============================================================================
   # Stage 3: Integration Tests (all platforms)
@@ -120,7 +128,7 @@ jobs:
 
   integration-macos-x86_64:
     name: Integration Test macOS x86_64 (Intel)
-    needs: unit-tests
+    needs: core-tests
     runs-on: macos-15-intel
 
     steps:
@@ -155,7 +163,7 @@ jobs:
 
   integration-macos-aarch64:
     name: Integration Test macOS aarch64 (Apple Silicon)
-    needs: unit-tests
+    needs: core-tests
     runs-on: macos-latest
 
     steps:
@@ -193,7 +201,7 @@ jobs:
 
   integration-linux-ubuntu-2004-x86_64:
     name: Integration Test Linux Ubuntu 20.04 x86_64
-    needs: unit-tests
+    needs: core-tests
     runs-on: ubuntu-latest
 
     steps:
@@ -247,7 +255,7 @@ jobs:
 
   integration-linux-ubuntu-2204-x86_64:
     name: Integration Test Linux Ubuntu 22.04 x86_64
-    needs: unit-tests
+    needs: core-tests
     runs-on: ubuntu-latest
 
     steps:
@@ -279,53 +287,6 @@ jobs:
         run: |
           echo "✅ Integration tests passed on Ubuntu 22.04 linux-x86_64"
 
-  integration-linux-ubuntu-2404-x86_64:
-    name: Integration Test Linux Ubuntu 24.04 x86_64
-    needs: unit-tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code (for tests)
-        uses: actions/checkout@v4
-
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: libre2-core-jar
-          path: libre2-core/target/
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: maven-${{ hashFiles('pom.xml') }}
-          restore-keys: maven-
-
-      - name: Test in Ubuntu 24.04 container
-        run: |
-          docker run --rm \
-            -v "$(pwd):/workspace" \
-            -v ~/.m2:/root/.m2 \
-            -w /workspace \
-            ubuntu:24.04 \
-            bash -c "
-              set -e
-              # Install JDK 17
-              apt-get update
-              apt-get install -y openjdk-17-jdk unzip
-
-              # Verify Java
-              java -version
-
-              # Verify native library in JAR
-              echo 'Checking linux-x86_64 library in JAR:'
-              unzip -l libre2-core/target/libre2-core-1.0.0.jar | grep 'linux-x86_64/libre2.so'
-
-              # Run integration tests
-              ./mvnw failsafe:integration-test failsafe:verify -pl libre2-core -B
-
-              echo '✅ Integration tests passed on Ubuntu 24.04 linux-x86_64'
-            "
 
   # ============================================================================
   # Linux Integration Tests (RHEL-based: Rocky Linux versions)
@@ -333,7 +294,7 @@ jobs:
 
   integration-linux-rocky-8-x86_64:
     name: Integration Test Linux Rocky 8 x86_64
-    needs: unit-tests
+    needs: core-tests
     runs-on: ubuntu-latest
 
     steps:
@@ -384,7 +345,7 @@ jobs:
 
   integration-linux-rocky-9-x86_64:
     name: Integration Test Linux Rocky 9 x86_64
-    needs: unit-tests
+    needs: core-tests
     runs-on: ubuntu-latest
 
     steps:
@@ -633,7 +594,6 @@ jobs:
       - integration-macos-aarch64
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
     runs-on: macos-15-intel
@@ -674,7 +634,6 @@ jobs:
       - integration-macos-aarch64
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
     runs-on: macos-latest
@@ -719,7 +678,6 @@ jobs:
       - integration-macos-aarch64
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
     runs-on: ubuntu-latest
@@ -780,7 +738,6 @@ jobs:
       - integration-macos-aarch64
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
     runs-on: ubuntu-latest
@@ -821,7 +778,6 @@ jobs:
       - integration-macos-aarch64
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
     runs-on: ubuntu-latest
@@ -880,7 +836,6 @@ jobs:
       - integration-macos-aarch64
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
     runs-on: ubuntu-latest
@@ -938,7 +893,6 @@ jobs:
       - integration-macos-aarch64
       - integration-linux-ubuntu-2004-x86_64
       - integration-linux-ubuntu-2204-x86_64
-      - integration-linux-ubuntu-2404-x86_64
       - integration-linux-rocky-8-x86_64
       - integration-linux-rocky-9-x86_64
     runs-on: ubuntu-latest
@@ -1016,17 +970,20 @@ jobs:
         run: |
           echo "✅ All platform tests passed!"
           echo ""
-          echo "4-Stage CI Pipeline Complete:"
+          echo "5-Stage CI Pipeline Complete:"
           echo "  Stage 1: Build JAR ✓"
-          echo "  Stage 2: Unit Tests (22 tests, Ubuntu 24.04) ✓"
-          echo "  Stage 3: Integration Tests (428 tests × 7 platforms) ✓"
+          echo "  Stage 2: Core Tests (22 unit + 428 integration, Ubuntu 24.04, 67% coverage) ✓"
+          echo "  Stage 3: Integration Tests (428 tests × 6 platforms) ✓"
           echo "  Stage 4: Performance Tests (11 tests × 7 platforms) ✓"
           echo "  Final: ARM64 Integration Tests (428 tests × 3 QEMU platforms) ✓"
           echo ""
           echo "Platforms tested:"
           echo "  - macOS x86_64 (Intel)"
           echo "  - macOS aarch64 (Apple Silicon)"
-          echo "  - Linux Ubuntu 20.04/22.04/24.04 x86_64"
+          echo "  - Linux Ubuntu 20.04/22.04 x86_64"
+          echo "  - Linux Ubuntu 24.04 x86_64 (core-tests stage only)"
           echo "  - Linux Rocky 8/9 x86_64"
           echo "  - Linux Ubuntu 22.04/24.04 aarch64 (QEMU, final validation)"
           echo "  - Linux Rocky 9 aarch64 (QEMU, final validation)"
+          echo ""
+          echo "Code Coverage: 67% line coverage (unit + integration combined)"

@@ -57,6 +57,9 @@ jobs:
           java-version: '17'
           cache: 'maven'
 
+      - name: Run Checkstyle
+        run: mvn checkstyle:check -B
+
       - name: Build JARs (multi-module)
         run: mvn clean package -DskipTests -B
 

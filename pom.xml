@@ -55,6 +55,9 @@
         <junit.version>5.10.0</junit.version>
         <assertj.version>3.24.2</assertj.version>
         <logback.version>1.4.11</logback.version>
+
+        <!-- Plugin versions -->
+        <jacoco.version>0.8.11</jacoco.version>
     </properties>
 
     <dependencyManagement>

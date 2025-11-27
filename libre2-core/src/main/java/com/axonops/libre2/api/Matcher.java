@@ -16,22 +16,22 @@
 
 package com.axonops.libre2.api;
 
-import com.axonops.libre2.metrics.RE2MetricsRegistry;
 import com.axonops.libre2.metrics.MetricNames;
-
+import com.axonops.libre2.metrics.RE2MetricsRegistry;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Performs regex matching operations.
  *
- * NOT Thread-Safe: Each Matcher instance must be confined to a single thread.
- * Do NOT share Matcher instances between threads.
+ * <p>NOT Thread-Safe: Each Matcher instance must be confined to a single thread. Do NOT share
+ * Matcher instances between threads.
  *
- * Safe Pattern: Create separate Matcher per thread from shared Pattern.
- * The underlying Pattern CAN be safely shared - only the Matcher cannot.
+ * <p>Safe Pattern: Create separate Matcher per thread from shared Pattern. The underlying Pattern
+ * CAN be safely shared - only the Matcher cannot.
  *
- * Example:
+ * <p>Example:
+ *
  * <pre>
  * Pattern sharedPattern = RE2.compile("\\d+");  // Thread-safe, can share
  *
@@ -50,73 +50,83 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class Matcher implements AutoCloseable {
 
-    private final Pattern pattern;
-    private final String input;
-    private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final RE2MetricsRegistry metrics; // Cached to avoid repeated getGlobalCache() calls
+  private final Pattern pattern;
+  private final String input;
+  private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final RE2MetricsRegistry metrics; // Cached to avoid repeated getGlobalCache() calls
 
-    Matcher(Pattern pattern, String input) {
-        this.pattern = Objects.requireNonNull(pattern);
-        this.input = Objects.requireNonNull(input);
-        this.metrics = Pattern.getGlobalCache().getConfig().metricsRegistry(); // Cache once
+  Matcher(Pattern pattern, String input) {
+    this.pattern = Objects.requireNonNull(pattern);
+    this.input = Objects.requireNonNull(input);
+    this.metrics = Pattern.getGlobalCache().getConfig().metricsRegistry(); // Cache once
 
-        // Increment reference count to prevent pattern being freed while in use
-        pattern.incrementRefCount();
+    // Increment reference count to prevent pattern being freed while in use
+    pattern.incrementRefCount();
 
-        // Track matcher allocation
-        Pattern.getGlobalCache().getResourceTracker().trackMatcherAllocated();
+    // Track matcher allocation
+    Pattern.getGlobalCache().getResourceTracker().trackMatcherAllocated();
+  }
+
+  /**
+   * Tests if the entire input matches the pattern.
+   *
+   * @return true if the entire input matches
+   */
+  public boolean matches() {
+    checkNotClosed();
+
+    long startNanos = System.nanoTime();
+
+    boolean result = pattern.jni.fullMatch(pattern.getNativeHandle(), input);
+
+    long durationNanos = System.nanoTime() - startNanos;
+    metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos);
+    metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
+
+    return result;
+  }
+
+  /**
+   * Finds the next occurrence of the pattern in the input.
+   *
+   * @return true if a match was found
+   */
+  public boolean find() {
+    checkNotClosed();
+
+    long startNanos = System.nanoTime();
+
+    boolean result = pattern.jni.partialMatch(pattern.getNativeHandle(), input);
+
+    long durationNanos = System.nanoTime() - startNanos;
+    metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos);
+    metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
+
+    return result;
+  }
+
+  public Pattern pattern() {
+    return pattern;
+  }
+
+  public String input() {
+    return input;
+  }
+
+  @Override
+  public void close() {
+    if (closed.compareAndSet(false, true)) {
+      // Decrement reference count - pattern can now be freed if evicted
+      pattern.decrementRefCount();
+
+      // Track matcher freed (use cached metrics)
+      Pattern.getGlobalCache().getResourceTracker().trackMatcherFreed(metrics);
     }
+  }
 
-    public boolean matches() {
-        checkNotClosed();
-
-        long startNanos = System.nanoTime();
-
-        boolean result = pattern.jni.fullMatch(pattern.getNativeHandle(), input);
-
-        long durationNanos = System.nanoTime() - startNanos;
-        metrics.recordTimer(MetricNames.MATCHING_FULL_MATCH_LATENCY, durationNanos);
-        metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
-
-        return result;
+  private void checkNotClosed() {
+    if (closed.get()) {
+      throw new IllegalStateException("RE2: Matcher is closed");
     }
-
-    public boolean find() {
-        checkNotClosed();
-
-        long startNanos = System.nanoTime();
-
-        boolean result = pattern.jni.partialMatch(pattern.getNativeHandle(), input);
-
-        long durationNanos = System.nanoTime() - startNanos;
-        metrics.recordTimer(MetricNames.MATCHING_PARTIAL_MATCH_LATENCY, durationNanos);
-        metrics.incrementCounter(MetricNames.MATCHING_OPERATIONS);
-
-        return result;
-    }
-
-    public Pattern pattern() {
-        return pattern;
-    }
-
-    public String input() {
-        return input;
-    }
-
-    @Override
-    public void close() {
-        if (closed.compareAndSet(false, true)) {
-            // Decrement reference count - pattern can now be freed if evicted
-            pattern.decrementRefCount();
-
-            // Track matcher freed (use cached metrics)
-            Pattern.getGlobalCache().getResourceTracker().trackMatcherFreed(metrics);
-        }
-    }
-
-    private void checkNotClosed() {
-        if (closed.get()) {
-            throw new IllegalStateException("RE2: Matcher is closed");
-        }
-    }
+  }
 }

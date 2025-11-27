@@ -21,8 +21,8 @@ import java.util.function.Supplier;
 /**
  * No-op metrics registry implementation.
  *
- * <p>Used when metrics are disabled (default). All methods are empty
- * and will be inlined by the JIT compiler, resulting in zero overhead.
+ * <p>Used when metrics are disabled (default). All methods are empty and will be inlined by the JIT
+ * compiler, resulting in zero overhead.
  *
  * <p>This is the default implementation in {@link com.axonops.libre2.cache.RE2Config#DEFAULT}.
  *
@@ -30,37 +30,35 @@ import java.util.function.Supplier;
  */
 public final class NoOpMetricsRegistry implements RE2MetricsRegistry {
 
-    /**
-     * Singleton instance - use this instead of creating new instances.
-     */
-    public static final NoOpMetricsRegistry INSTANCE = new NoOpMetricsRegistry();
+  /** Singleton instance - use this instead of creating new instances. */
+  public static final NoOpMetricsRegistry INSTANCE = new NoOpMetricsRegistry();
 
-    private NoOpMetricsRegistry() {
-        // Singleton - use INSTANCE
-    }
+  private NoOpMetricsRegistry() {
+    // Singleton - use INSTANCE
+  }
 
-    @Override
-    public void incrementCounter(String name) {
-        // No-op
-    }
+  @Override
+  public void incrementCounter(String name) {
+    // No-op
+  }
 
-    @Override
-    public void incrementCounter(String name, long delta) {
-        // No-op
-    }
+  @Override
+  public void incrementCounter(String name, long delta) {
+    // No-op
+  }
 
-    @Override
-    public void recordTimer(String name, long durationNanos) {
-        // No-op
-    }
+  @Override
+  public void recordTimer(String name, long durationNanos) {
+    // No-op
+  }
 
-    @Override
-    public void registerGauge(String name, Supplier<Number> valueSupplier) {
-        // No-op
-    }
+  @Override
+  public void registerGauge(String name, Supplier<Number> valueSupplier) {
+    // No-op
+  }
 
-    @Override
-    public void removeGauge(String name) {
-        // No-op
-    }
+  @Override
+  public void removeGauge(String name) {
+    // No-op
+  }
 }

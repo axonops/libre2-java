@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+  <!-- Suppress AbbreviationAsWordInName for RE2/LRU class names -->
+  <suppress checks="AbbreviationAsWordInName"/>
+
+  <!-- Suppress OverloadMethodsDeclarationOrder - complex pattern matching API with many method variants -->
+  <suppress checks="OverloadMethodsDeclarationOrder" files="Pattern\.java|RE2\.java"/>
+
+  <!-- Suppress VariableDeclarationUsageDistance - false positives from metrics/logging calls -->
+  <suppress checks="VariableDeclarationUsageDistance"/>
+
+  <!-- Suppress switch indentation - google-java-format conflicts with Google Checkstyle on switch -->
+  <suppress checks="Indentation" files="RE2LibraryLoader\.java"/>
+
+  <!-- Suppress MissingSwitchDefault - exhaustive pattern matching -->
+  <suppress checks="MissingSwitchDefault" files="RE2LibraryLoader\.java"/>
+
+  <!-- Suppress LineLength for specific files with long method signatures or log messages -->
+  <suppress checks="LineLength" files="DropwizardMetricsAdapter\.java|IdleEvictionTask\.java|PatternCache\.java|RE2Config\.java|Pattern\.java|RE2MetricsConfig\.java"/>
+
+  <!-- Suppress Javadoc summary period check -->
+  <suppress checks="SummaryJavadoc" files="DropwizardMetricsAdapter\.java"/>
+
+  <!-- Suppress test violations - tests have different style requirements -->
+  <suppress checks="AvoidStarImport" files=".*IT\.java|.*Test\.java"/>
+  <suppress checks="NeedBraces" files=".*IT\.java|.*Test\.java"/>
+  <suppress checks="MagicNumber" files=".*IT\.java|.*Test\.java"/>
+</suppressions>

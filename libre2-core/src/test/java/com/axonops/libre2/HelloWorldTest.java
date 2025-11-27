@@ -16,25 +16,23 @@
 
 package com.axonops.libre2;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.*;
-
-/**
- * Simple unit test demonstrating pure Java testing without native library.
- */
+/** Simple unit test demonstrating pure Java testing without native library. */
 class HelloWorldTest {
 
-    @Test
-    void testHelloWorld() {
-        String message = "Hello, libre2-java!";
-        assertThat(message).isNotNull();
-        assertThat(message).contains("libre2");
-    }
+  @Test
+  void testHelloWorld() {
+    String message = "Hello, libre2-java!";
+    assertThat(message).isNotNull();
+    assertThat(message).contains("libre2");
+  }
 
-    @Test
-    void testBasicJavaLogic() {
-        int sum = 1 + 1;
-        assertThat(sum).isEqualTo(2);
-    }
+  @Test
+  void testBasicJavaLogic() {
+    int sum = 1 + 1;
+    assertThat(sum).isEqualTo(2);
+  }
 }

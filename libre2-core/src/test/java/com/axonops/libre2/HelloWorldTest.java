@@ -26,7 +26,7 @@ class HelloWorldTest {
   @Test
   void testHelloWorld() {
     String message = "Hello, libre2-java!";
-        assertThat(message).isNotNull();  // Intentional bad indentation to test Checkstyle
+    assertThat(message).isNotNull();
     assertThat(message).contains("libre2");
   }
 

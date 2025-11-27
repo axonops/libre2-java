@@ -23,14 +23,14 @@ package com.axonops.libre2.api;
  */
 public final class RE2TimeoutException extends RE2Exception {
 
-    private final long timeoutMillis;
+  private final long timeoutMillis;
 
-    public RE2TimeoutException(long timeoutMillis) {
-        super("RE2: Operation timed out after " + timeoutMillis + " ms");
-        this.timeoutMillis = timeoutMillis;
-    }
+  public RE2TimeoutException(long timeoutMillis) {
+    super("RE2: Operation timed out after " + timeoutMillis + " ms");
+    this.timeoutMillis = timeoutMillis;
+  }
 
-    public long getTimeoutMillis() {
-        return timeoutMillis;
-    }
+  public long getTimeoutMillis() {
+    return timeoutMillis;
+  }
 }

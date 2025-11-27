@@ -1,136 +1,135 @@
 package com.axonops.libre2.cache;
 
+import static org.assertj.core.api.Assertions.*;
+
 import com.axonops.libre2.api.Matcher;
 import com.axonops.libre2.api.Pattern;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
-import static org.assertj.core.api.Assertions.*;
-
 /**
  * Tests for frequent deferred cleanup timing (every 5 seconds).
  *
- * Verifies deferred patterns freed quickly, not waiting for 60s idle scan.
+ * <p>Verifies deferred patterns freed quickly, not waiting for 60s idle scan.
  */
 class DeferredCleanupTimingIT {
 
-    @BeforeEach
-    void setUp() {
-        Pattern.resetCache();
+  @BeforeEach
+  void setUp() {
+    Pattern.resetCache();
+  }
+
+  @AfterEach
+  void tearDown() {
+    Pattern.resetCache();
+  }
+
+  @Test
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
+  void testDeferredCleanupRunsFrequently() throws InterruptedException {
+    // Create patterns with active matchers
+    List<Matcher> matchers = new ArrayList<>();
+
+    for (int i = 0; i < 10; i++) {
+      Pattern p = Pattern.compile("pattern" + i);
+      Matcher m = p.matcher("test");
+      matchers.add(m);
     }
 
-    @AfterEach
-    void tearDown() {
-        Pattern.resetCache();
+    // Trigger evictions (compile more patterns)
+    for (int i = 10; i < 100; i++) {
+      Pattern.compile("trigger" + i);
     }
 
-    @Test
-    @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void testDeferredCleanupRunsFrequently() throws InterruptedException {
-        // Create patterns with active matchers
-        List<Matcher> matchers = new ArrayList<>();
+    // Check if any patterns in deferred cleanup
+    CacheStatistics beforeClose = Pattern.getCacheStatistics();
+    int deferredBefore = beforeClose.deferredCleanupPending();
 
-        for (int i = 0; i < 10; i++) {
-            Pattern p = Pattern.compile("pattern" + i);
-            Matcher m = p.matcher("test");
-            matchers.add(m);
-        }
+    if (deferredBefore > 0) {
+      // We have deferred patterns - close matchers to make them freeable
+      for (Matcher m : matchers) {
+        m.close();
+      }
 
-        // Trigger evictions (compile more patterns)
-        for (int i = 10; i < 100; i++) {
-            Pattern.compile("trigger" + i);
-        }
+      // Wait 6 seconds (cleanup runs every 5s, so should happen within 6s)
+      Thread.sleep(6000);
 
-        // Check if any patterns in deferred cleanup
-        CacheStatistics beforeClose = Pattern.getCacheStatistics();
-        int deferredBefore = beforeClose.deferredCleanupPending();
+      // Check if deferred list was cleaned
+      CacheStatistics afterWait = Pattern.getCacheStatistics();
+      int deferredAfter = afterWait.deferredCleanupPending();
 
-        if (deferredBefore > 0) {
-            // We have deferred patterns - close matchers to make them freeable
-            for (Matcher m : matchers) {
-                m.close();
-            }
+      // Deferred list should be smaller (patterns freed)
+      assertThat(deferredAfter).isLessThanOrEqualTo(deferredBefore);
 
-            // Wait 6 seconds (cleanup runs every 5s, so should happen within 6s)
-            Thread.sleep(6000);
+      // If we had deferred patterns and waited 6s, they should be cleaned
+      // (This verifies cleanup runs every 5s, not every 60s)
+    }
+  }
 
-            // Check if deferred list was cleaned
-            CacheStatistics afterWait = Pattern.getCacheStatistics();
-            int deferredAfter = afterWait.deferredCleanupPending();
+  @Test
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
+  void testDeferredCleanupFasterThanIdleEviction() throws InterruptedException {
+    // Create pattern with matcher
+    Pattern p = Pattern.compile("test_pattern");
+    Matcher m = p.matcher("test");
 
-            // Deferred list should be smaller (patterns freed)
-            assertThat(deferredAfter).isLessThanOrEqualTo(deferredBefore);
-
-            // If we had deferred patterns and waited 6s, they should be cleaned
-            // (This verifies cleanup runs every 5s, not every 60s)
-        }
+    // Trigger eviction
+    for (int i = 0; i < 200; i++) {
+      Pattern.compile("evict_trigger_" + i);
     }
 
-    @Test
-    @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void testDeferredCleanupFasterThanIdleEviction() throws InterruptedException {
-        // Create pattern with matcher
-        Pattern p = Pattern.compile("test_pattern");
-        Matcher m = p.matcher("test");
+    CacheStatistics stats = Pattern.getCacheStatistics();
+    int deferredCount = stats.deferredCleanupPending();
 
-        // Trigger eviction
-        for (int i = 0; i < 200; i++) {
-            Pattern.compile("evict_trigger_" + i);
+    if (deferredCount > 0) {
+      // We have deferred patterns
+      // Close matcher (makes pattern freeable)
+      m.close();
+
+      long start = System.currentTimeMillis();
+
+      // Wait for cleanup (should happen within 5-6 seconds)
+      for (int i = 0; i < 12; i++) { // Wait up to 12 seconds
+        Thread.sleep(500);
+
+        CacheStatistics current = Pattern.getCacheStatistics();
+        if (current.deferredCleanupPending() < deferredCount) {
+          // Cleanup happened!
+          long duration = System.currentTimeMillis() - start;
+
+          // Should happen in < 10 seconds (not 60 seconds)
+          assertThat(duration).isLessThan(10000);
+          return;
         }
+      }
 
-        CacheStatistics stats = Pattern.getCacheStatistics();
-        int deferredCount = stats.deferredCleanupPending();
+      // If we get here, cleanup didn't happen in 12s (acceptable - depends on timing)
+    }
+  }
 
-        if (deferredCount > 0) {
-            // We have deferred patterns
-            // Close matcher (makes pattern freeable)
-            m.close();
+  @Test
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
+  void testIdleEvictionStillRunsPeriodically() throws InterruptedException {
+    // This test verifies idle eviction hasn't broken
+    // (Still runs every 60s as configured)
 
-            long start = System.currentTimeMillis();
-
-            // Wait for cleanup (should happen within 5-6 seconds)
-            for (int i = 0; i < 12; i++) { // Wait up to 12 seconds
-                Thread.sleep(500);
-
-                CacheStatistics current = Pattern.getCacheStatistics();
-                if (current.deferredCleanupPending() < deferredCount) {
-                    // Cleanup happened!
-                    long duration = System.currentTimeMillis() - start;
-
-                    // Should happen in < 10 seconds (not 60 seconds)
-                    assertThat(duration).isLessThan(10000);
-                    return;
-                }
-            }
-
-            // If we get here, cleanup didn't happen in 12s (acceptable - depends on timing)
-        }
+    // Compile patterns (no matchers - can be idle-evicted)
+    for (int i = 0; i < 10; i++) {
+      Pattern.compile("idle_test_" + i);
     }
 
-    @Test
-    @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void testIdleEvictionStillRunsPeriodically() throws InterruptedException {
-        // This test verifies idle eviction hasn't broken
-        // (Still runs every 60s as configured)
+    // With default 300s idle timeout, patterns won't be evicted in this test
+    // But we verify the background thread is running
+    Thread.sleep(100); // Brief wait
 
-        // Compile patterns (no matchers - can be idle-evicted)
-        for (int i = 0; i < 10; i++) {
-            Pattern.compile("idle_test_" + i);
-        }
-
-        // With default 300s idle timeout, patterns won't be evicted in this test
-        // But we verify the background thread is running
-        Thread.sleep(100); // Brief wait
-
-        // Background thread should be running
-        // (We can't easily test 60s cycle in unit test)
-        // This test just verifies we didn't break idle eviction
-        assertThat(Pattern.getCacheStatistics().currentSize()).isGreaterThan(0);
-    }
+    // Background thread should be running
+    // (We can't easily test 60s cycle in unit test)
+    // This test just verifies we didn't break idle eviction
+    assertThat(Pattern.getCacheStatistics().currentSize()).isGreaterThan(0);
+  }
 }

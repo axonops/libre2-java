@@ -1,9 +1,15 @@
 package com.axonops.libre2.performance;
 
+import static org.assertj.core.api.Assertions.*;
+
 import com.axonops.libre2.api.Matcher;
 import com.axonops.libre2.api.Pattern;
 import com.axonops.libre2.cache.CacheStatistics;
 import com.axonops.libre2.cache.RE2Config;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,317 +17,321 @@ import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
-import static org.assertj.core.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
-
 /**
  * Performance benchmark tests for the optimized PatternCache.
  *
- * These tests demonstrate the lock-free, non-blocking behavior
- * of the ConcurrentHashMap-based cache implementation.
+ * <p>These tests demonstrate the lock-free, non-blocking behavior of the ConcurrentHashMap-based
+ * cache implementation.
  */
 class CachePerformanceTest {
-    private static final Logger logger = LoggerFactory.getLogger(CachePerformanceTest.class);
+  private static final Logger logger = LoggerFactory.getLogger(CachePerformanceTest.class);
 
-    /**
-     * Detects if running under QEMU emulation (set by CI workflow).
-     * Performance tests are skipped under QEMU as results are not representative.
-     */
-    private static boolean isQemuEmulation() {
-        return "true".equals(System.getenv("QEMU_EMULATION"));
+  /**
+   * Detects if running under QEMU emulation (set by CI workflow). Performance tests are skipped
+   * under QEMU as results are not representative.
+   */
+  private static boolean isQemuEmulation() {
+    return "true".equals(System.getenv("QEMU_EMULATION"));
+  }
+
+  @BeforeEach
+  void setUp() {
+    Pattern.resetCache();
+  }
+
+  @AfterEach
+  void tearDown() {
+    // Restore default configuration for other tests
+    Pattern.configureCache(RE2Config.DEFAULT);
+    Pattern.resetCache();
+  }
+
+  @Test
+  @Timeout(value = 120, unit = TimeUnit.SECONDS)
+  void testHighConcurrencyThroughput() throws InterruptedException {
+    // Configure higher limit for this test
+    // 100 threads × 10,000 ops × 10% new = 100,000 unique patterns + 1,000 pre-warmed
+    RE2Config testConfig =
+        RE2Config.builder().maxCacheSize(150000).maxSimultaneousCompiledPatterns(200000).build();
+    Pattern.configureCache(testConfig);
+
+    // Pre-warm cache with patterns
+    for (int i = 0; i < 1000; i++) {
+      Pattern.compile("pattern" + i);
     }
 
-    @BeforeEach
-    void setUp() {
-        Pattern.resetCache();
-    }
+    int threadCount = 100;
+    int operationsPerThread = 10000;
+    CountDownLatch start = new CountDownLatch(1);
+    CountDownLatch done = new CountDownLatch(threadCount);
+    AtomicLong totalOps = new AtomicLong(0);
+    AtomicInteger errors = new AtomicInteger(0);
 
-    @AfterEach
-    void tearDown() {
-        // Restore default configuration for other tests
-        Pattern.configureCache(RE2Config.DEFAULT);
-        Pattern.resetCache();
-    }
+    long startTime = System.nanoTime();
 
-    @Test
-    @Timeout(value = 120, unit = TimeUnit.SECONDS)
-    void testHighConcurrencyThroughput() throws InterruptedException {
-        // Configure higher limit for this test
-        // 100 threads × 10,000 ops × 10% new = 100,000 unique patterns + 1,000 pre-warmed
-        RE2Config testConfig = RE2Config.builder()
-            .maxCacheSize(150000)
-            .maxSimultaneousCompiledPatterns(200000)
-            .build();
-        Pattern.configureCache(testConfig);
-
-        // Pre-warm cache with patterns
-        for (int i = 0; i < 1000; i++) {
-            Pattern.compile("pattern" + i);
-        }
-
-        int threadCount = 100;
-        int operationsPerThread = 10000;
-        CountDownLatch start = new CountDownLatch(1);
-        CountDownLatch done = new CountDownLatch(threadCount);
-        AtomicLong totalOps = new AtomicLong(0);
-        AtomicInteger errors = new AtomicInteger(0);
-
-        long startTime = System.nanoTime();
-
-        for (int i = 0; i < threadCount; i++) {
-            int threadId = i;
-            new Thread(() -> {
+    for (int i = 0; i < threadCount; i++) {
+      int threadId = i;
+      new Thread(
+              () -> {
                 try {
-                    start.await();
-                    for (int j = 0; j < operationsPerThread; j++) {
-                        // 90% cache hits, 10% misses
-                        String pattern = (j % 10 == 0)
+                  start.await();
+                  for (int j = 0; j < operationsPerThread; j++) {
+                    // 90% cache hits, 10% misses
+                    String pattern =
+                        (j % 10 == 0)
                             ? "new_pattern_" + threadId + "_" + j
                             : "pattern" + (j % 1000);
-                        Pattern p = Pattern.compile(pattern);
-                        try (Matcher m = p.matcher("test")) {
-                            m.matches();
-                        }
-                        totalOps.incrementAndGet();
+                    Pattern p = Pattern.compile(pattern);
+                    try (Matcher m = p.matcher("test")) {
+                      m.matches();
                     }
+                    totalOps.incrementAndGet();
+                  }
                 } catch (Exception e) {
-                    errors.incrementAndGet();
-                    logger.error("Thread error", e);
+                  errors.incrementAndGet();
+                  logger.error("Thread error", e);
                 } finally {
-                    done.countDown();
+                  done.countDown();
                 }
-            }).start();
-        }
-
-        start.countDown();
-        done.await();
-
-        long endTime = System.nanoTime();
-        double durationMs = (endTime - startTime) / 1_000_000.0;
-        double opsPerSecond = (totalOps.get() / durationMs) * 1000;
-
-        CacheStatistics stats = Pattern.getCacheStatistics();
-
-        logger.info("=== High Concurrency Throughput Test ===");
-        logger.info("Threads: {}", threadCount);
-        logger.info("Operations per thread: {}", operationsPerThread);
-        logger.info("Total operations: {}", totalOps.get());
-        logger.info("Duration: {} ms", String.format("%.2f", durationMs));
-        logger.info("Throughput: {} ops/sec", String.format("%.0f", opsPerSecond));
-        logger.info("Cache hits: {}", stats.hits());
-        logger.info("Cache misses: {}", stats.misses());
-        logger.info("Hit rate: {}%", String.format("%.1f", stats.hitRate() * 100));
-        logger.info("========================================");
-
-        // Verify ALL operations completed without errors
-        assertThat(errors.get()).isEqualTo(0);
-        long expected = (long) threadCount * operationsPerThread;
-        assertThat(totalOps.get()).isEqualTo(expected);
-        // With lock-free implementation, should achieve high throughput
-        assertThat(opsPerSecond).isGreaterThan(50000); // At least 50K ops/sec
+              })
+          .start();
     }
 
-    @Test
-    @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void testCacheHitLatency() throws InterruptedException {
-        // Pre-warm cache
-        Pattern testPattern = Pattern.compile("test_pattern");
+    start.countDown();
+    done.await();
 
-        int iterations = 100000;
-        long[] latencies = new long[iterations];
+    long endTime = System.nanoTime();
+    double durationMs = (endTime - startTime) / 1_000_000.0;
+    double opsPerSecond = (totalOps.get() / durationMs) * 1000;
 
-        for (int i = 0; i < iterations; i++) {
-            long start = System.nanoTime();
-            Pattern p = Pattern.compile("test_pattern");
-            latencies[i] = System.nanoTime() - start;
-        }
+    CacheStatistics stats = Pattern.getCacheStatistics();
 
-        // Calculate statistics
-        java.util.Arrays.sort(latencies);
-        long p50 = latencies[iterations / 2];
-        long p99 = latencies[(int) (iterations * 0.99)];
-        long p999 = latencies[(int) (iterations * 0.999)];
+    logger.info("=== High Concurrency Throughput Test ===");
+    logger.info("Threads: {}", threadCount);
+    logger.info("Operations per thread: {}", operationsPerThread);
+    logger.info("Total operations: {}", totalOps.get());
+    logger.info("Duration: {} ms", String.format("%.2f", durationMs));
+    logger.info("Throughput: {} ops/sec", String.format("%.0f", opsPerSecond));
+    logger.info("Cache hits: {}", stats.hits());
+    logger.info("Cache misses: {}", stats.misses());
+    logger.info("Hit rate: {}%", String.format("%.1f", stats.hitRate() * 100));
+    logger.info("========================================");
 
-        double avgNs = java.util.Arrays.stream(latencies).average().orElse(0);
+    // Verify ALL operations completed without errors
+    assertThat(errors.get()).isEqualTo(0);
+    long expected = (long) threadCount * operationsPerThread;
+    assertThat(totalOps.get()).isEqualTo(expected);
+    // With lock-free implementation, should achieve high throughput
+    assertThat(opsPerSecond).isGreaterThan(50000); // At least 50K ops/sec
+  }
 
-        logger.info("=== Cache Hit Latency Test ===");
-        logger.info("Iterations: {}", iterations);
-        logger.info("Average latency: {} ns ({} μs)", String.format("%.0f", avgNs), String.format("%.2f", avgNs / 1000));
-        logger.info("P50 latency: {} ns ({} μs)", p50, p50 / 1000.0);
-        logger.info("P99 latency: {} ns ({} μs)", p99, p99 / 1000.0);
-        logger.info("P99.9 latency: {} ns ({} μs)", p999, p999 / 1000.0);
-        logger.info("==============================");
+  @Test
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
+  void testCacheHitLatency() throws InterruptedException {
+    // Pre-warm cache
+    Pattern testPattern = Pattern.compile("test_pattern");
 
-        // With lock-free implementation, cache hits should be very fast
-        assertThat(p50).isLessThan(10000); // < 10μs P50
-        assertThat(p99).isLessThan(100000); // < 100μs P99
+    int iterations = 100000;
+    long[] latencies = new long[iterations];
+
+    for (int i = 0; i < iterations; i++) {
+      long start = System.nanoTime();
+      Pattern p = Pattern.compile("test_pattern");
+      latencies[i] = System.nanoTime() - start;
     }
 
-    @Test
-    @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void testEvictionDoesNotBlockAccess() throws InterruptedException {
-        // This test verifies that cache operations complete without errors during
-        // heavy concurrent eviction. The old synchronized implementation would
-        // have thread contention causing failures or extreme latency.
-        //
-        // We don't assert on latency because:
-        // 1. GC pauses from many objects can cause spikes (150-200ms)
-        // 2. CI environments have variable performance
-        // 3. The key invariant is: operations complete without errors
+    // Calculate statistics
+    java.util.Arrays.sort(latencies);
+    long p50 = latencies[iterations / 2];
+    long p99 = latencies[(int) (iterations * 0.99)];
+    long p999 = latencies[(int) (iterations * 0.999)];
 
-        // Pre-compile patterns for cache hits
-        String[] hitPatterns = new String[100];
-        for (int i = 0; i < 100; i++) {
-            hitPatterns[i] = "hit_pattern_" + i;
-            Pattern.compile(hitPatterns[i]);
-        }
+    double avgNs = java.util.Arrays.stream(latencies).average().orElse(0);
 
-        // Fill cache to trigger eviction (use smaller count to reduce GC)
-        for (int i = 0; i < 10000; i++) {
-            Pattern.compile("fill_" + i);
-        }
+    logger.info("=== Cache Hit Latency Test ===");
+    logger.info("Iterations: {}", iterations);
+    logger.info(
+        "Average latency: {} ns ({} μs)",
+        String.format("%.0f", avgNs),
+        String.format("%.2f", avgNs / 1000));
+    logger.info("P50 latency: {} ns ({} μs)", p50, p50 / 1000.0);
+    logger.info("P99 latency: {} ns ({} μs)", p99, p99 / 1000.0);
+    logger.info("P99.9 latency: {} ns ({} μs)", p999, p999 / 1000.0);
+    logger.info("==============================");
 
-        int threadCount = 50;
-        int operationsPerThread = 500;
-        CountDownLatch start = new CountDownLatch(1);
-        CountDownLatch done = new CountDownLatch(threadCount);
-        AtomicLong totalHitOps = new AtomicLong(0);
-        AtomicLong totalEvictOps = new AtomicLong(0);
-        AtomicInteger errors = new AtomicInteger(0);
+    // With lock-free implementation, cache hits should be very fast
+    assertThat(p50).isLessThan(10000); // < 10μs P50
+    assertThat(p99).isLessThan(100000); // < 100μs P99
+  }
 
-        // Half threads do cache hits, half trigger evictions
-        for (int i = 0; i < threadCount; i++) {
-            int threadId = i;
-            boolean doHits = (i % 2 == 0);
+  @Test
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
+  void testEvictionDoesNotBlockAccess() throws InterruptedException {
+    // This test verifies that cache operations complete without errors during
+    // heavy concurrent eviction. The old synchronized implementation would
+    // have thread contention causing failures or extreme latency.
+    //
+    // We don't assert on latency because:
+    // 1. GC pauses from many objects can cause spikes (150-200ms)
+    // 2. CI environments have variable performance
+    // 3. The key invariant is: operations complete without errors
 
-            new Thread(() -> {
+    // Pre-compile patterns for cache hits
+    String[] hitPatterns = new String[100];
+    for (int i = 0; i < 100; i++) {
+      hitPatterns[i] = "hit_pattern_" + i;
+      Pattern.compile(hitPatterns[i]);
+    }
+
+    // Fill cache to trigger eviction (use smaller count to reduce GC)
+    for (int i = 0; i < 10000; i++) {
+      Pattern.compile("fill_" + i);
+    }
+
+    int threadCount = 50;
+    int operationsPerThread = 500;
+    CountDownLatch start = new CountDownLatch(1);
+    CountDownLatch done = new CountDownLatch(threadCount);
+    AtomicLong totalHitOps = new AtomicLong(0);
+    AtomicLong totalEvictOps = new AtomicLong(0);
+    AtomicInteger errors = new AtomicInteger(0);
+
+    // Half threads do cache hits, half trigger evictions
+    for (int i = 0; i < threadCount; i++) {
+      int threadId = i;
+      boolean doHits = (i % 2 == 0);
+
+      new Thread(
+              () -> {
                 try {
+                  start.await();
+                  for (int j = 0; j < operationsPerThread; j++) {
+                    if (doHits) {
+                      Pattern p = Pattern.compile(hitPatterns[j % 100]);
+                      try (Matcher m = p.matcher("test")) {
+                        m.matches();
+                      }
+                      totalHitOps.incrementAndGet();
+                    } else {
+                      Pattern p = Pattern.compile("new_" + threadId + "_" + j);
+                      try (Matcher m = p.matcher("test")) {
+                        m.matches();
+                      }
+                      totalEvictOps.incrementAndGet();
+                    }
+                  }
+                } catch (Exception e) {
+                  errors.incrementAndGet();
+                  logger.error("Thread error", e);
+                } finally {
+                  done.countDown();
+                }
+              })
+          .start();
+    }
+
+    long startTime = System.nanoTime();
+    start.countDown();
+    done.await();
+    long durationMs = (System.nanoTime() - startTime) / 1_000_000;
+
+    logger.info("=== Eviction Non-Blocking Test ===");
+    logger.info(
+        "Threads: {} ({} doing hits, {} triggering eviction)",
+        threadCount,
+        threadCount / 2,
+        threadCount / 2);
+    logger.info("Total hit operations: {}", totalHitOps.get());
+    logger.info("Total eviction operations: {}", totalEvictOps.get());
+    logger.info("Duration: {} ms", durationMs);
+    logger.info("Errors: {}", errors.get());
+    logger.info("==================================");
+
+    // Key assertions:
+    // 1. All operations completed (no deadlocks, no blocking)
+    int expectedHitOps = (threadCount / 2) * operationsPerThread;
+    int expectedEvictOps = (threadCount / 2) * operationsPerThread;
+    assertThat(totalHitOps.get()).isEqualTo(expectedHitOps);
+    assertThat(totalEvictOps.get()).isEqualTo(expectedEvictOps);
+
+    // 2. No errors occurred
+    assertThat(errors.get()).isEqualTo(0);
+
+    // 3. Test completed in reasonable time (not blocked for seconds)
+    // Old synchronized code could take 10+ seconds; lock-free should complete in <5s
+    assertThat(durationMs).isLessThan(5000);
+  }
+
+  @Test
+  @Timeout(value = 60, unit = TimeUnit.SECONDS)
+  void testConcurrentCompilationScalability() throws InterruptedException {
+    // Test that throughput stays high with concurrent threads
+    // (old synchronized code would collapse to near-zero with many threads)
+    int[] threadCounts = {1, 10, 50, 100};
+    int operationsPerThread = 5000;
+
+    logger.info("=== Scalability Test ===");
+
+    // Pre-warm: ensure native library loaded and JIT warmed up
+    Pattern.compile("warmup");
+
+    double previousThroughput = 0;
+
+    for (int threadCount : threadCounts) {
+      Pattern.resetCache();
+
+      CountDownLatch start = new CountDownLatch(1);
+      CountDownLatch done = new CountDownLatch(threadCount);
+      AtomicLong totalOps = new AtomicLong(0);
+
+      for (int i = 0; i < threadCount; i++) {
+        int threadId = i;
+        new Thread(
+                () -> {
+                  try {
                     start.await();
                     for (int j = 0; j < operationsPerThread; j++) {
-                        if (doHits) {
-                            Pattern p = Pattern.compile(hitPatterns[j % 100]);
-                            try (Matcher m = p.matcher("test")) {
-                                m.matches();
-                            }
-                            totalHitOps.incrementAndGet();
-                        } else {
-                            Pattern p = Pattern.compile("new_" + threadId + "_" + j);
-                            try (Matcher m = p.matcher("test")) {
-                                m.matches();
-                            }
-                            totalEvictOps.incrementAndGet();
-                        }
+                      Pattern.compile("pattern" + threadId + "_" + (j % 100));
+                      totalOps.incrementAndGet();
                     }
-                } catch (Exception e) {
-                    errors.incrementAndGet();
+                  } catch (Exception e) {
                     logger.error("Thread error", e);
-                } finally {
+                  } finally {
                     done.countDown();
-                }
-            }).start();
+                  }
+                })
+            .start();
+      }
+
+      long startTime = System.nanoTime();
+      start.countDown();
+      done.await();
+      long endTime = System.nanoTime();
+
+      double durationMs = (endTime - startTime) / 1_000_000.0;
+      double throughput = (totalOps.get() / durationMs) * 1000;
+
+      logger.info("{} threads: {} ops/sec", threadCount, String.format("%.0f", throughput));
+
+      // Key test: throughput should NOT collapse with more threads
+      // Old synchronized implementation would collapse to near-zero
+      // With lock-free implementation, throughput scales with thread count
+      // Skip throughput assertions under QEMU and CI (too slow/variable for strict thresholds)
+      boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
+      if (!isQemuEmulation() && !isCI) {
+        if (threadCount == 1) {
+          // Single thread does cold compilation - expect at least 50K ops/sec
+          assertThat(throughput).isGreaterThan(50000);
+        } else {
+          // Multi-threaded should scale - at least 100K ops/sec
+          // (each thread compiles its own unique patterns, no contention)
+          assertThat(throughput).isGreaterThan(100000);
         }
+      }
 
-        long startTime = System.nanoTime();
-        start.countDown();
-        done.await();
-        long durationMs = (System.nanoTime() - startTime) / 1_000_000;
-
-        logger.info("=== Eviction Non-Blocking Test ===");
-        logger.info("Threads: {} ({} doing hits, {} triggering eviction)", threadCount, threadCount/2, threadCount/2);
-        logger.info("Total hit operations: {}", totalHitOps.get());
-        logger.info("Total eviction operations: {}", totalEvictOps.get());
-        logger.info("Duration: {} ms", durationMs);
-        logger.info("Errors: {}", errors.get());
-        logger.info("==================================");
-
-        // Key assertions:
-        // 1. All operations completed (no deadlocks, no blocking)
-        int expectedHitOps = (threadCount / 2) * operationsPerThread;
-        int expectedEvictOps = (threadCount / 2) * operationsPerThread;
-        assertThat(totalHitOps.get()).isEqualTo(expectedHitOps);
-        assertThat(totalEvictOps.get()).isEqualTo(expectedEvictOps);
-
-        // 2. No errors occurred
-        assertThat(errors.get()).isEqualTo(0);
-
-        // 3. Test completed in reasonable time (not blocked for seconds)
-        // Old synchronized code could take 10+ seconds; lock-free should complete in <5s
-        assertThat(durationMs).isLessThan(5000);
+      previousThroughput = throughput;
     }
 
-    @Test
-    @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void testConcurrentCompilationScalability() throws InterruptedException {
-        // Test that throughput stays high with concurrent threads
-        // (old synchronized code would collapse to near-zero with many threads)
-        int[] threadCounts = {1, 10, 50, 100};
-        int operationsPerThread = 5000;
-
-        logger.info("=== Scalability Test ===");
-
-        // Pre-warm: ensure native library loaded and JIT warmed up
-        Pattern.compile("warmup");
-
-        double previousThroughput = 0;
-
-        for (int threadCount : threadCounts) {
-            Pattern.resetCache();
-
-            CountDownLatch start = new CountDownLatch(1);
-            CountDownLatch done = new CountDownLatch(threadCount);
-            AtomicLong totalOps = new AtomicLong(0);
-
-            for (int i = 0; i < threadCount; i++) {
-                int threadId = i;
-                new Thread(() -> {
-                    try {
-                        start.await();
-                        for (int j = 0; j < operationsPerThread; j++) {
-                            Pattern.compile("pattern" + threadId + "_" + (j % 100));
-                            totalOps.incrementAndGet();
-                        }
-                    } catch (Exception e) {
-                        logger.error("Thread error", e);
-                    } finally {
-                        done.countDown();
-                    }
-                }).start();
-            }
-
-            long startTime = System.nanoTime();
-            start.countDown();
-            done.await();
-            long endTime = System.nanoTime();
-
-            double durationMs = (endTime - startTime) / 1_000_000.0;
-            double throughput = (totalOps.get() / durationMs) * 1000;
-
-            logger.info("{} threads: {} ops/sec", threadCount, String.format("%.0f", throughput));
-
-            // Key test: throughput should NOT collapse with more threads
-            // Old synchronized implementation would collapse to near-zero
-            // With lock-free implementation, throughput scales with thread count
-            // Skip throughput assertions under QEMU and CI (too slow/variable for strict thresholds)
-            boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
-            if (!isQemuEmulation() && !isCI) {
-                if (threadCount == 1) {
-                    // Single thread does cold compilation - expect at least 50K ops/sec
-                    assertThat(throughput).isGreaterThan(50000);
-                } else {
-                    // Multi-threaded should scale - at least 100K ops/sec
-                    // (each thread compiles its own unique patterns, no contention)
-                    assertThat(throughput).isGreaterThan(100000);
-                }
-            }
-
-            previousThroughput = throughput;
-        }
-
-        logger.info("========================");
-    }
+    logger.info("========================");
+  }
 }

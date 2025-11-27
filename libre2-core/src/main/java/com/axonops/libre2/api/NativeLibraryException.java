@@ -23,11 +23,11 @@ package com.axonops.libre2.api;
  */
 public final class NativeLibraryException extends RE2Exception {
 
-    public NativeLibraryException(String message) {
-        super("RE2: Native library error: " + message);
-    }
+  public NativeLibraryException(String message) {
+    super("RE2: Native library error: " + message);
+  }
 
-    public NativeLibraryException(String message, Throwable cause) {
-        super("RE2: Native library error: " + message, cause);
-    }
+  public NativeLibraryException(String message, Throwable cause) {
+    super("RE2: Native library error: " + message, cause);
+  }
 }

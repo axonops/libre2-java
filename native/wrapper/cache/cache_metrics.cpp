@@ -105,6 +105,10 @@ std::string PatternCacheMetrics::toJson() const {
     // Errors
     j["compilation_errors"] = compilation_errors.load();
 
+    // Refcount tracking
+    j["pattern_releases"] = pattern_releases.load();
+    j["patterns_released_to_zero"] = patterns_released_to_zero.load();
+
     // Evictions
     json evictions;
     evictions["ttl"] = ttl_evictions.load();

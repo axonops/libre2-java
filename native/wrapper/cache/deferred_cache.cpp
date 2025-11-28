@@ -60,7 +60,7 @@ size_t DeferredCache::evict(
 
     for (auto it = cache_.begin(); it != cache_.end(); ) {
         auto& entry = it->second;
-        uint32_t current_refcount = entry.pattern->refcount.load();
+        uint32_t current_refcount = entry.pattern->refcount.load(std::memory_order_acquire);
 
         // Immediate eviction: refcount dropped to 0
         if (current_refcount == 0) {

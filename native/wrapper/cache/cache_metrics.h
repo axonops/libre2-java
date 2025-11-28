@@ -67,6 +67,10 @@ struct PatternCacheMetrics {
     // Errors
     std::atomic<uint64_t> compilation_errors{0};
 
+    // Refcount tracking
+    std::atomic<uint64_t> pattern_releases{0};
+    std::atomic<uint64_t> patterns_released_to_zero{0};
+
     // Evictions
     std::atomic<uint64_t> ttl_evictions{0};
     std::atomic<uint64_t> lru_evictions{0};

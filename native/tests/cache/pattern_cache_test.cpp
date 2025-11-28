@@ -114,15 +114,18 @@ TEST_P(PatternCacheTest, RefcountManagement) {
     auto p3 = cache.getOrCompile("test", true, metrics, error);
     EXPECT_EQ(p1->refcount.load(), 3u);
 
+    // Save raw pointer to check refcount after final release
+    RE2Pattern* raw_ptr = p1.get();
+
     // Release
-    cache.releasePattern("test", true, metrics, deferred);
-    EXPECT_EQ(p1->refcount.load(), 2u);
+    PatternCache::releasePattern(p3, metrics);
+    EXPECT_EQ(raw_ptr->refcount.load(), 2u);
 
-    cache.releasePattern("test", true, metrics, deferred);
-    EXPECT_EQ(p1->refcount.load(), 1u);
+    PatternCache::releasePattern(p2, metrics);
+    EXPECT_EQ(raw_ptr->refcount.load(), 1u);
 
-    cache.releasePattern("test", true, metrics, deferred);
-    EXPECT_EQ(p1->refcount.load(), 0u);
+    PatternCache::releasePattern(p1, metrics);
+    EXPECT_EQ(raw_ptr->refcount.load(), 0u);
 }
 
 // Compilation error
@@ -153,9 +156,12 @@ TEST_P(PatternCacheTest, TTLEviction_ImmediateDelete) {
     auto p = cache.getOrCompile("test", true, metrics, error);
     EXPECT_EQ(cache.size(), 1u);
 
+    // Save raw pointer before releasing
+    RE2Pattern* raw_ptr = p.get();
+
     // Release (refcount → 0)
-    cache.releasePattern("test", true, metrics, deferred);
-    EXPECT_EQ(p->refcount.load(), 0u);
+    PatternCache::releasePattern(p, metrics);
+    EXPECT_EQ(raw_ptr->refcount.load(), 0u);
 
     // Simulate TTL expiration (61 seconds)
     auto now = std::chrono::steady_clock::now() + std::chrono::seconds(61);
@@ -215,7 +221,7 @@ TEST_P(PatternCacheTest, LRUEviction) {
     for (int i = 0; i < 100; i++) {
         auto p = cache.getOrCompile("pattern" + std::to_string(i), true, metrics, error);
         patterns.push_back(p);
-        cache.releasePattern("pattern" + std::to_string(i), true, metrics, deferred);
+        PatternCache::releasePattern(p, metrics);
     }
 
     // Should be over capacity
@@ -381,20 +387,20 @@ TEST_P(PatternCacheTest, ThreadSafe_ConcurrentGetRelease) {
     std::string error;
 
     // Pre-compile pattern
-    cache.getOrCompile("shared", true, metrics, error);
-    cache.releasePattern("shared", true, metrics, deferred);
+    auto precompiled = cache.getOrCompile("shared", true, metrics, error);
+    PatternCache::releasePattern(precompiled, metrics);
 
     const int num_threads = 10;
     const int iterations = 100;
 
     std::vector<std::thread> threads;
     for (int t = 0; t < num_threads; t++) {
-        threads.emplace_back([&cache, &deferred, &metrics, iterations]() {
+        threads.emplace_back([&cache, &metrics, iterations]() {
             for (int i = 0; i < iterations; i++) {
                 std::string error;
                 auto p = cache.getOrCompile("shared", true, metrics, error);
                 // Use pattern...
-                cache.releasePattern("shared", true, metrics, deferred);
+                PatternCache::releasePattern(p, metrics);
             }
         });
     }
@@ -435,7 +441,7 @@ TEST_P(PatternCacheTest, StressTest_RefcountRaceCondition) {
                         use_after_free_detected.fetch_add(1);
                     }
 
-                    cache.releasePattern("stress_pattern", true, metrics, deferred);
+                    PatternCache::releasePattern(p, metrics);
                 }
             }
         });

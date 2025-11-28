@@ -63,18 +63,25 @@ std::shared_ptr<RE2Pattern> PatternCache::getOrCompile(
 }
 
 void PatternCache::releasePattern(
-    const std::string& pattern_string,
-    bool case_sensitive,
-    PatternCacheMetrics& metrics,
-    DeferredCache& deferred_cache) {
+    std::shared_ptr<RE2Pattern>& pattern_ptr,
+    PatternCacheMetrics& metrics) {
 
-    uint64_t key = makeKey(pattern_string, case_sensitive);
-
-    if (using_tbb_) {
-        releasePatternTBB(key, metrics, deferred_cache);
-    } else {
-        releasePatternStd(key, metrics, deferred_cache);
+    if (!pattern_ptr) {
+        return;  // Null pattern - nothing to release
     }
+
+    // Decrement refcount (atomic, works regardless of cache location)
+    uint32_t prev_refcount = pattern_ptr->refcount.fetch_sub(1, std::memory_order_acq_rel);
+
+    // Track metrics
+    metrics.pattern_releases.fetch_add(1, std::memory_order_relaxed);
+    if (prev_refcount == 1) {
+        // Pattern refcount went to 0
+        metrics.patterns_released_to_zero.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    // Release shared_ptr reference
+    pattern_ptr.reset();
 }
 
 size_t PatternCache::evict(
@@ -93,7 +100,7 @@ void PatternCache::clear(DeferredCache& deferred_cache) {
     if (using_tbb_) {
         // Iterate and move in-use patterns to deferred
         for (TBBMap::iterator it = tbb_cache_.begin(); it != tbb_cache_.end(); ++it) {
-            if (it->second.pattern->refcount.load() > 0) {
+            if (it->second.pattern->refcount.load(std::memory_order_acquire) > 0) {
                 DeferredCacheMetrics dummy_metrics;
                 deferred_cache.add(it->first, it->second.pattern, dummy_metrics);
             }
@@ -103,7 +110,7 @@ void PatternCache::clear(DeferredCache& deferred_cache) {
     } else {
         std::unique_lock lock(std_mutex_);
         for (auto& [key, entry] : std_cache_) {
-            if (entry.pattern->refcount.load() > 0) {
+            if (entry.pattern->refcount.load(std::memory_order_acquire) > 0) {
                 DeferredCacheMetrics dummy_metrics;
                 deferred_cache.add(key, entry.pattern, dummy_metrics);
             }
@@ -158,7 +165,7 @@ std::shared_ptr<RE2Pattern> PatternCache::getOrCompileStd(
         if (it != std_cache_.end()) {
             // CACHE HIT
             // CRITICAL: Increment refcount WHILE lock held (prevents race)
-            it->second.pattern->refcount.fetch_add(1);
+            it->second.pattern->refcount.fetch_add(1, std::memory_order_acq_rel);
             it->second.last_access = std::chrono::steady_clock::now();
 
             metrics.hits.fetch_add(1);
@@ -187,13 +194,13 @@ std::shared_ptr<RE2Pattern> PatternCache::getOrCompileStd(
         auto it = std_cache_.find(key);
         if (it != std_cache_.end()) {
             // Another thread compiled it - use theirs, discard ours
-            it->second.pattern->refcount.fetch_add(1);
+            it->second.pattern->refcount.fetch_add(1, std::memory_order_acq_rel);
             it->second.last_access = std::chrono::steady_clock::now();
             return it->second.pattern;
         }
 
         // Insert our compiled pattern
-        pattern->refcount.store(1);  // Initial refcount
+        pattern->refcount.store(1, std::memory_order_release);  // Initial refcount
         auto [inserted_it, inserted] = std_cache_.emplace(key, PatternCacheEntry(pattern));
 
         if (inserted) {
@@ -204,23 +211,7 @@ std::shared_ptr<RE2Pattern> PatternCache::getOrCompileStd(
     }
 }
 
-void PatternCache::releasePatternStd(
-    uint64_t key,
-    PatternCacheMetrics& metrics,
-    DeferredCache& deferred_cache) {
-
-    // Decrement refcount (atomic, no lock needed)
-    std::shared_lock lock(std_mutex_);
-    auto it = std_cache_.find(key);
-
-    if (it != std_cache_.end()) {
-        uint32_t prev = it->second.pattern->refcount.fetch_sub(1);
-
-        // If was 1 and now 0, pattern might be in deferred cache
-        // Deferred cache will clean it up on next eviction pass
-        (void)prev;  // Unused - deferred cache handles cleanup
-    }
-}
+// releasePatternStd() removed - now using static releasePattern() above
 
 size_t PatternCache::evictStd(
     PatternCacheMetrics& metrics,
@@ -236,7 +227,7 @@ size_t PatternCache::evictStd(
         auto age = now - it->second.last_access;
 
         if (age > config_.pattern_cache_ttl_ms) {
-            uint32_t rc = it->second.pattern->refcount.load();
+            uint32_t rc = it->second.pattern->refcount.load(std::memory_order_acquire);
             size_t freed = it->second.pattern->approx_size_bytes;
 
             if (rc == 0) {
@@ -266,41 +257,48 @@ size_t PatternCache::evictStd(
         ++it;
     }
 
-    // LRU eviction if over capacity
+    // LRU eviction if over capacity (batch eviction for O(n + k log k) performance)
     while (std_total_size_bytes_ > config_.pattern_cache_target_capacity_bytes && !std_cache_.empty()) {
-        // Find LRU entry (oldest last_access)
-        auto lru_it = std::min_element(std_cache_.begin(), std_cache_.end(),
+        // Step 1: Collect candidates with refcount == 0
+        std::vector<std::unordered_map<uint64_t, PatternCacheEntry>::iterator> candidates;
+        for (auto it = std_cache_.begin(); it != std_cache_.end(); ++it) {
+            if (it->second.pattern->refcount.load(std::memory_order_acquire) == 0) {
+                candidates.push_back(it);
+            }
+        }
+
+        if (candidates.empty()) break;  // No evictable entries
+
+        // Step 2: Partial sort to find N oldest (batch_size)
+        size_t batch_size = std::min(config_.pattern_cache_lru_batch_size, candidates.size());
+        std::partial_sort(candidates.begin(), candidates.begin() + batch_size, candidates.end(),
             [](const auto& a, const auto& b) {
-                return a.second.last_access < b.second.last_access;
+                return a->second.last_access < b->second.last_access;
             });
 
-        if (lru_it == std_cache_.end()) break;
+        // Step 3: Evict batch
+        bool reached_capacity = false;
+        for (size_t i = 0; i < batch_size; i++) {
+            auto it = candidates[i];
+            size_t freed = it->second.pattern->approx_size_bytes;
 
-        uint32_t rc = lru_it->second.pattern->refcount.load();
-        size_t freed = lru_it->second.pattern->approx_size_bytes;
-
-        if (rc == 0) {
-            // Safe to delete
             std_total_size_bytes_ -= freed;
-            std_cache_.erase(lru_it);
+            std_cache_.erase(it);
 
             metrics.lru_evictions.fetch_add(1);
             metrics.lru_evictions_bytes_freed.fetch_add(freed);
             metrics.total_evictions.fetch_add(1);
             metrics.total_bytes_freed.fetch_add(freed);
-        } else {
-            // Move to deferred
-            DeferredCacheMetrics deferred_metrics;
-            deferred_cache.add(lru_it->first, lru_it->second.pattern, deferred_metrics);
-            std_total_size_bytes_ -= freed;
-            std_cache_.erase(lru_it);
+            evicted++;
 
-            metrics.lru_entries_moved_to_deferred.fetch_add(1);
-            metrics.total_evictions.fetch_add(1);
-            metrics.total_bytes_freed.fetch_add(freed);
+            // Stop if back under capacity
+            if (std_total_size_bytes_ <= config_.pattern_cache_target_capacity_bytes) {
+                reached_capacity = true;
+                break;
+            }
         }
 
-        evicted++;
+        if (reached_capacity) break;
     }
 
     return evicted;
@@ -324,7 +322,7 @@ std::shared_ptr<RE2Pattern> PatternCache::getOrCompileTBB(
         if (tbb_cache_.find(acc, key)) {
             // CACHE HIT
             // CRITICAL: Increment refcount WHILE accessor alive (holds lock)
-            acc->second.pattern->refcount.fetch_add(1);
+            acc->second.pattern->refcount.fetch_add(1, std::memory_order_acq_rel);
             acc->second.last_access = std::chrono::steady_clock::now();
 
             metrics.hits.fetch_add(1);
@@ -351,32 +349,21 @@ std::shared_ptr<RE2Pattern> PatternCache::getOrCompileTBB(
 
         if (tbb_cache_.insert(acc, key)) {
             // We inserted new entry
-            pattern->refcount.store(1);  // Initial refcount
+            pattern->refcount.store(1, std::memory_order_release);  // Initial refcount
             acc->second = PatternCacheEntry(pattern);
             tbb_total_size_bytes_.fetch_add(pattern->approx_size_bytes);
             return pattern;
         } else {
             // Another thread inserted while we were compiling
             // Use their pattern, discard ours
-            acc->second.pattern->refcount.fetch_add(1);
+            acc->second.pattern->refcount.fetch_add(1, std::memory_order_acq_rel);
             acc->second.last_access = std::chrono::steady_clock::now();
             return acc->second.pattern;
         }
     }
 }
 
-void PatternCache::releasePatternTBB(
-    uint64_t key,
-    PatternCacheMetrics& metrics,
-    DeferredCache& deferred_cache) {
-
-    TBBMap::const_accessor acc;
-
-    if (tbb_cache_.find(acc, key)) {
-        uint32_t prev = acc->second.pattern->refcount.fetch_sub(1);
-        (void)prev;  // Deferred cache handles cleanup
-    }
-}
+// releasePatternTBB() removed - now using static releasePattern() above
 
 size_t PatternCache::evictTBB(
     PatternCacheMetrics& metrics,
@@ -400,7 +387,7 @@ size_t PatternCache::evictTBB(
         TBBMap::accessor acc;
 
         if (tbb_cache_.find(acc, key)) {
-            uint32_t rc = acc->second.pattern->refcount.load();
+            uint32_t rc = acc->second.pattern->refcount.load(std::memory_order_acquire);
             size_t freed = acc->second.pattern->approx_size_bytes;
 
             if (rc == 0) {
@@ -427,29 +414,36 @@ size_t PatternCache::evictTBB(
         }
     }
 
-    // LRU eviction if over capacity
+    // LRU eviction if over capacity (batch eviction for O(n + k log k) performance)
     size_t current_size = tbb_total_size_bytes_.load();
 
     while (current_size > config_.pattern_cache_target_capacity_bytes && !tbb_cache_.empty()) {
-        // Find LRU entry
-        uint64_t lru_key = 0;
-        auto lru_time = std::chrono::steady_clock::time_point::max();
-
+        // Step 1: Collect candidates with refcount == 0
+        std::vector<TBBMap::iterator> candidates;
         for (TBBMap::iterator it = tbb_cache_.begin(); it != tbb_cache_.end(); ++it) {
-            if (it->second.last_access < lru_time) {
-                lru_time = it->second.last_access;
-                lru_key = it->first;
+            if (it->second.pattern->refcount.load(std::memory_order_acquire) == 0) {
+                candidates.push_back(it);
             }
         }
 
-        if (lru_key == 0) break;  // No entry found
+        if (candidates.empty()) break;  // No evictable entries
 
-        TBBMap::accessor acc;
-        if (tbb_cache_.find(acc, lru_key)) {
-            uint32_t rc = acc->second.pattern->refcount.load();
-            size_t freed = acc->second.pattern->approx_size_bytes;
+        // Step 2: Partial sort to find N oldest (batch_size)
+        size_t batch_size = std::min(config_.pattern_cache_lru_batch_size, candidates.size());
+        std::partial_sort(candidates.begin(), candidates.begin() + batch_size, candidates.end(),
+            [](const auto& a, const auto& b) {
+                return a->second.last_access < b->second.last_access;
+            });
 
-            if (rc == 0) {
+        // Step 3: Evict batch
+        bool reached_capacity = false;
+        for (size_t i = 0; i < batch_size; i++) {
+            uint64_t key = candidates[i]->first;
+
+            TBBMap::accessor acc;
+            if (tbb_cache_.find(acc, key)) {
+                size_t freed = acc->second.pattern->approx_size_bytes;
+
                 tbb_cache_.erase(acc);
                 tbb_total_size_bytes_.fetch_sub(freed);
 
@@ -457,22 +451,18 @@ size_t PatternCache::evictTBB(
                 metrics.lru_evictions_bytes_freed.fetch_add(freed);
                 metrics.total_evictions.fetch_add(1);
                 metrics.total_bytes_freed.fetch_add(freed);
-            } else {
-                DeferredCacheMetrics deferred_metrics;
-                deferred_cache.add(lru_key, acc->second.pattern, deferred_metrics);
-                tbb_cache_.erase(acc);
-                tbb_total_size_bytes_.fetch_sub(freed);
+                evicted++;
 
-                metrics.lru_entries_moved_to_deferred.fetch_add(1);
-                metrics.total_evictions.fetch_add(1);
-                metrics.total_bytes_freed.fetch_add(freed);
+                // Check if back under capacity
+                current_size = tbb_total_size_bytes_.load();
+                if (current_size <= config_.pattern_cache_target_capacity_bytes) {
+                    reached_capacity = true;
+                    break;
+                }
             }
-
-            evicted++;
-            current_size = tbb_total_size_bytes_.load();
-        } else {
-            break;
         }
+
+        if (reached_capacity) break;
     }
 
     return evicted;

@@ -74,18 +74,17 @@ public:
      * Release pattern (decrements refcount).
      *
      * Caller finished using pattern. Decrements refcount atomically.
-     * If refcount → 0 and pattern in deferred cache, immediately evicts.
+     * Works correctly whether pattern is in active cache, deferred cache, or evicted.
      *
-     * @param pattern_string regex pattern
-     * @param case_sensitive case sensitivity flag
+     * CRITICAL: Pass the pattern pointer (from getOrCompile), not the key.
+     * Key-based lookup can fail if pattern was moved to deferred cache.
+     *
+     * @param pattern_ptr pattern pointer (will be reset to null)
      * @param metrics metrics to update
-     * @param deferred_cache deferred cache for immediate eviction check
      */
-    void releasePattern(
-        const std::string& pattern_string,
-        bool case_sensitive,
-        PatternCacheMetrics& metrics,
-        DeferredCache& deferred_cache);
+    static void releasePattern(
+        std::shared_ptr<RE2Pattern>& pattern_ptr,
+        PatternCacheMetrics& metrics);
 
     /**
      * Evict entries based on TTL and capacity (called by background thread).
@@ -160,11 +159,6 @@ private:
         PatternCacheMetrics& metrics,
         std::string& error_msg);
 
-    void releasePatternStd(
-        uint64_t key,
-        PatternCacheMetrics& metrics,
-        DeferredCache& deferred_cache);
-
     size_t evictStd(
         PatternCacheMetrics& metrics,
         DeferredCache& deferred_cache,
@@ -177,11 +171,6 @@ private:
         bool case_sensitive,
         PatternCacheMetrics& metrics,
         std::string& error_msg);
-
-    void releasePatternTBB(
-        uint64_t key,
-        PatternCacheMetrics& metrics,
-        DeferredCache& deferred_cache);
 
     size_t evictTBB(
         PatternCacheMetrics& metrics,

@@ -16,6 +16,7 @@
 
 #include "cache/deferred_cache.h"
 #include <iostream>
+#include <sstream>
 
 namespace libre2 {
 namespace cache {
@@ -46,6 +47,7 @@ void DeferredCache::add(
     auto [it, inserted] = cache_.emplace(pattern_key, DeferredEntry(pattern));
     if (inserted) {
         total_size_bytes_ += it->second.approx_size_bytes;
+        metrics.total_entries_added.fetch_add(1, std::memory_order_relaxed);
     }
     // If not inserted (key already exists), we just skip (shouldn't happen, but safe)
 }
@@ -84,11 +86,12 @@ size_t DeferredCache::evict(
             size_t freed = entry.approx_size_bytes;
             total_size_bytes_ -= freed;
 
-            // Log warning about memory leak
-            std::cerr << "WARNING: Memory leak detected in RE2 Deferred Cache - "
-                      << "pattern held for " << std::chrono::duration_cast<std::chrono::minutes>(age).count()
-                      << " minutes with refcount=" << current_refcount
-                      << ", forcing eviction" << std::endl;
+            // TODO: Replace with proper logger when C++ logging infrastructure added
+            // For now, stderr is acceptable for critical leak detection warnings
+            std::cerr << "RE2 LEAK WARNING: Pattern in deferred cache for "
+                      << std::chrono::duration_cast<std::chrono::minutes>(age).count()
+                      << " minutes (refcount=" << current_refcount
+                      << "), forcing eviction to prevent memory leak" << std::endl;
 
             it = cache_.erase(it);
 
@@ -122,6 +125,29 @@ void DeferredCache::snapshotMetrics(DeferredCacheMetrics& metrics) const {
 size_t DeferredCache::size() const {
     std::shared_lock lock(mutex_);
     return cache_.size();
+}
+
+std::string DeferredCache::dumpDeferredCache() const {
+    std::shared_lock lock(mutex_);
+
+    std::ostringstream oss;
+    oss << "Deferred Cache Dump (" << cache_.size() << " entries, "
+        << total_size_bytes_ << " bytes):\n";
+
+    auto now = std::chrono::steady_clock::now();
+    for (const auto& [key, entry] : cache_) {
+        auto age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - entry.entered_deferred).count();
+        uint32_t rc = entry.pattern->refcount.load(std::memory_order_acquire);
+
+        oss << "  Key: " << std::hex << key << std::dec
+            << ", Pattern: \"" << entry.pattern->pattern_string << "\""
+            << ", Refcount: " << rc
+            << ", Age: " << age_ms << "ms"
+            << ", Size: " << entry.approx_size_bytes << " bytes\n";
+    }
+
+    return oss.str();
 }
 
 }  // namespace cache

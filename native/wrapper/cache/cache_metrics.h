@@ -97,6 +97,9 @@ struct PatternCacheMetrics {
  * Metrics for Deferred Cache.
  */
 struct DeferredCacheMetrics {
+    // Entries added
+    std::atomic<uint64_t> total_entries_added{0};
+
     // Evictions
     std::atomic<uint64_t> immediate_evictions{0};
     std::atomic<uint64_t> immediate_evictions_bytes_freed{0};

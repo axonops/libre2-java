@@ -141,6 +141,9 @@ std::string PatternCacheMetrics::toJson() const {
 std::string DeferredCacheMetrics::toJson() const {
     json j;
 
+    // Entries added
+    j["total_entries_added"] = total_entries_added.load();
+
     // Evictions
     json evictions;
     evictions["immediate"] = immediate_evictions.load();

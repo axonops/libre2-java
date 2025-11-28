@@ -114,6 +114,14 @@ public:
      */
     size_t size() const;
 
+    /**
+     * Dump deferred cache contents for debugging.
+     * Returns JSON string with all entries and their metadata.
+     *
+     * @return JSON string with cache dump
+     */
+    std::string dumpDeferredCache() const;
+
 private:
     struct DeferredEntry {
         std::shared_ptr<RE2Pattern> pattern;

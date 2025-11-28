@@ -73,6 +73,9 @@ endif()
 # ============================================================================
 
 add_library(re2_cache STATIC
+    # Vendored MurmurHash3 (public domain, from SMHasher)
+    third_party/murmurhash3/MurmurHash3.cpp
+    # Cache implementation
     wrapper/cache/murmur_hash3.cpp
     wrapper/cache/cache_config.cpp
     wrapper/cache/cache_metrics.cpp
@@ -85,6 +88,7 @@ add_library(re2_cache STATIC
 
 target_include_directories(re2_cache PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/wrapper
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
     ${RE2_INCLUDE_DIR}
     ${ABSEIL_INCLUDE_DIR}
 )

@@ -23,24 +23,17 @@ namespace libre2 {
 namespace hash {
 
 /**
- * MurmurHash3 32-bit variant.
+ * MurmurHash3 64-bit hash (first 64 bits of x64 128-bit variant).
+ *
+ * Thin wrapper around SMHasher's MurmurHash3_x64_128 function.
+ * Uses only x64 variant for all platforms (consistency).
  *
  * @param key pointer to data to hash
  * @param len length of data in bytes
  * @param seed hash seed (use 0 for default)
- * @return 32-bit hash value
+ * @return 64-bit hash value (first 64 bits of 128-bit hash)
  */
-uint32_t murmur3_32(const void* key, int len, uint32_t seed);
-
-/**
- * MurmurHash3 64-bit variant.
- *
- * @param key pointer to data to hash
- * @param len length of data in bytes
- * @param seed hash seed (use 0 for default)
- * @return 64-bit hash value
- */
-uint64_t murmur3_64(const void* key, int len, uint64_t seed);
+uint64_t murmur3_64(const void* key, int len, uint32_t seed);
 
 /**
  * Convenience function to hash a std::string.

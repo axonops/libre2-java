@@ -15,19 +15,15 @@
  */
 
 #include "cache/murmur_hash3.h"
+#include "murmurhash3/MurmurHash3.h"
 
 namespace libre2 {
 namespace hash {
 
-// Stub implementation - will be replaced with real MurmurHash3
-uint32_t murmur3_32(const void* key, int len, uint32_t seed) {
-    // TODO: Implement MurmurHash3 32-bit
-    return 0;
-}
-
-uint64_t murmur3_64(const void* key, int len, uint64_t seed) {
-    // TODO: Implement MurmurHash3 64-bit
-    return 0;
+uint64_t murmur3_64(const void* key, int len, uint32_t seed) {
+    uint64_t out[2];
+    MurmurHash3_x64_128(key, len, seed, out);
+    return out[0];  // Return first 64 bits of 128-bit hash
 }
 
 }  // namespace hash

@@ -49,6 +49,7 @@ CacheConfig CacheConfig::fromJson(const std::string& json_str) {
         config.pattern_cache_ttl_ms = std::chrono::milliseconds(
             j.value("pattern_cache_ttl_ms", 300000));  // 5 min default
         config.pattern_cache_use_tbb = j.value("pattern_cache_use_tbb", false);
+        config.pattern_cache_lru_batch_size = j.value("pattern_cache_lru_batch_size", 100UL);
 
         // Deferred Cache (leak protection)
         config.deferred_cache_ttl_ms = std::chrono::milliseconds(
@@ -106,6 +107,10 @@ void CacheConfig::validate() const {
         throw std::invalid_argument(
             "pattern_cache_ttl_ms must be > 0");
     }
+    if (pattern_cache_lru_batch_size == 0) {
+        throw std::invalid_argument(
+            "pattern_cache_lru_batch_size must be > 0");
+    }
 
     // Deferred Cache validation
     if (deferred_cache_ttl_ms.count() <= 0) {
@@ -149,6 +154,7 @@ std::string CacheConfig::toJson() const {
     j["pattern_cache_target_capacity_bytes"] = pattern_cache_target_capacity_bytes;
     j["pattern_cache_ttl_ms"] = pattern_cache_ttl_ms.count();
     j["pattern_cache_use_tbb"] = pattern_cache_use_tbb;
+    j["pattern_cache_lru_batch_size"] = pattern_cache_lru_batch_size;
 
     // Deferred Cache
     j["deferred_cache_ttl_ms"] = deferred_cache_ttl_ms.count();

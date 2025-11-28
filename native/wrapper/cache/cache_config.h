@@ -43,6 +43,7 @@ struct CacheConfig {
     size_t pattern_cache_target_capacity_bytes;
     std::chrono::milliseconds pattern_cache_ttl_ms;
     bool pattern_cache_use_tbb;  // Use TBB concurrent_hash_map (default: false)
+    size_t pattern_cache_lru_batch_size;  // Batch eviction size (default: 100)
 
     // Deferred Cache (leak protection)
     std::chrono::milliseconds deferred_cache_ttl_ms;

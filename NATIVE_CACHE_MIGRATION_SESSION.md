@@ -113,6 +113,93 @@
 
 ### Decision 2: oneTBB Integration for High-Concurrency Caching
 - **Date:** 2025-11-28
+- **Status:** IMPLEMENTED
+
+(Content unchanged - see earlier in file)
+
+---
+
+### Decision 3: Pattern Cache API Design - Pointer-Based Release
+- **Date:** 2025-11-28
+- **What:** Change releasePattern() to accept pattern pointer instead of key
+- **Problem Identified:** Key-based lookup fails when pattern moved to deferred cache
+- **Scenario:**
+  1. Client gets pattern (refcount=1)
+  2. Client holds for 6 minutes
+  3. Eviction thread: TTL expired, moves to deferred cache
+  4. Client calls releasePattern(key) → lookup FAILS
+  5. Refcount never decremented → LEAK!
+- **Solution:** Pass pattern pointer (caller already has it)
+- **New API:** `void releasePattern(std::shared_ptr<RE2Pattern>&, metrics)`
+- **Benefits:**
+  - Works regardless of pattern location (active or deferred cache)
+  - No lookup needed (caller has pointer from getOrCompile)
+  - Single implementation (no std/TBB dispatch)
+  - More robust and clearer semantics
+- **Impact:** API change (but pre-release, no compatibility issue)
+- **Status:** TO BE IMPLEMENTED
+
+---
+
+### Decision 4: Explicit Memory Ordering for ARM64 Correctness
+- **Date:** 2025-11-28
+- **What:** Add explicit memory_order to all atomic refcount operations
+- **Problem:** Implicit ordering works on x86 but may fail on ARM64 (weak memory model)
+- **We Support:** ARM64 Linux and macOS (weak memory ordering)
+- **Fix:**
+  - `store(1)` → `memory_order_release` (establish happens-before)
+  - `fetch_add(1)` → `memory_order_acq_rel` (synchronize with all threads)
+  - `load()` → `memory_order_acquire` (sync with stores)
+  - `fetch_sub(1)` → `memory_order_acq_rel` (full synchronization)
+- **Rationale:** Standard C++ atomic refcount pattern (same as std::shared_ptr)
+- **Benefits:**
+  - Correct on ARM64 (not just x86)
+  - Explicit synchronization intent
+  - Code clarity
+- **Status:** TO BE IMPLEMENTED
+
+---
+
+### Decision 5: Batch Eviction for LRU (Not Bounded List)
+- **Date:** 2025-11-28
+- **What:** Implement batch eviction for LRU instead of O(n²) single-item scan
+- **Problem Identified:** Current code scans entire cache for each eviction
+  - At 10k patterns: 10k × 1k evictions = 10M ops per cycle
+  - At 100ms interval = 100M ops/sec just scanning
+  - CPU starvation of eviction thread
+- **Options Considered:**
+  - Option A: Bounded LRU list (1000 entries, O(k) eviction)
+    - Pros: Very fast (O(1000))
+    - Cons: Extra lock on every access, list maintenance, 64KB memory
+  - **Option B: Batch eviction** (collect N oldest, evict all)
+    - Pros: O(n) single pass, no extra locks, simpler
+    - Cons: Slower than bounded list (but still fast)
+  - Option C: Keep O(n²) (defer optimization)
+- **Chosen:** Option B (Batch eviction)
+- **Algorithm:**
+  1. Collect candidates (refcount==0)
+  2. Partial sort by last_access (find N oldest)
+  3. Evict batch
+  4. Complexity: O(n + k log k) where k = batch size
+- **Batch Size:** Configurable (default: 100)
+  - At 10k patterns: 10k + 100*log(100) = ~10.7k ops per cycle
+  - **100x faster than O(n²)**
+  - 1-2ms per cycle (plenty fast for 100ms interval)
+- **Benefits:**
+  - No extra locks (TBB concurrency unaffected)
+  - No LRU list state to maintain
+  - Simpler code
+  - Still 100x faster than current
+- **Trade-off:** Slightly slower than bounded LRU but much simpler
+- **Configuration:**
+  - `lru_batch_eviction_size` (default: 100)
+  - Tunable per workload
+- **Status:** TO BE IMPLEMENTED
+
+---
+
+### Decision 2: oneTBB Integration for High-Concurrency Caching
+- **Date:** 2025-11-28
 - **What:** Integrate oneTBB concurrent_hash_map for Pattern Cache and Result Cache
 - **Options Considered:**
   - Option A: std::unordered_map + shared_mutex only (simpler)

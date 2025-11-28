@@ -37,10 +37,12 @@ struct CacheConfig {
     size_t pattern_result_cache_target_capacity_bytes;
     size_t pattern_result_cache_string_threshold_bytes;
     std::chrono::milliseconds pattern_result_cache_ttl_ms;
+    bool pattern_result_cache_use_tbb;  // Use TBB concurrent_hash_map (default: false)
 
     // Pattern Compilation Cache (reference-counted)
     size_t pattern_cache_target_capacity_bytes;
     std::chrono::milliseconds pattern_cache_ttl_ms;
+    bool pattern_cache_use_tbb;  // Use TBB concurrent_hash_map (default: false)
 
     // Deferred Cache (leak protection)
     std::chrono::milliseconds deferred_cache_ttl_ms;

@@ -111,6 +111,33 @@
 - **Rationale:** Per prompt requirements to track all decisions, issues, solutions
 - **Status:** ACTIVE
 
+### Decision 2: oneTBB Integration for High-Concurrency Caching
+- **Date:** 2025-11-28
+- **What:** Integrate oneTBB concurrent_hash_map for Pattern Cache and Result Cache
+- **Options Considered:**
+  - Option A: std::unordered_map + shared_mutex only (simpler)
+  - Option B: TBB concurrent_hash_map (high-concurrency performance)
+  - Option C: TBB concurrent_unordered_map (std-compatible API)
+- **Chosen:** Option B (TBB concurrent_hash_map)
+- **Rationale:**
+  - concurrent_hash_map has thread-safe erasure (critical for background eviction)
+  - concurrent_unordered_map does NOT have thread-safe erasure (dealbreaker)
+  - Per-bucket locking provides 2-3x throughput at high concurrency
+  - Only dependency is pthread (no folly/CacheLib nightmare)
+  - 563KB library size (acceptable)
+  - ~3min build time (reasonable)
+- **Architecture:** Runtime-configurable via per-cache flags:
+  - `pattern_cache_use_tbb` (default: false)
+  - `pattern_result_cache_use_tbb` (default: false)
+  - Deferred cache: std::unordered_map only (no TBB - low volume)
+- **Implementation:** Simple if/else dual-path (not interfaces)
+- **Build:** Commit hash pinning (matching RE2/Abseil security model)
+  - ONETBB_COMMIT: f1862f38f83568d96e814e469ab61f88336cc595
+  - ONETBB_VERSION: 2022.3.0
+- **Impact:** Both implementations always present, user chooses at runtime
+- **Testing:** All tests must pass for both TBB ON and TBB OFF configurations
+- **Status:** IMPLEMENTED - Build system ready, configuration ready
+
 ---
 
 ## Issues & Blockers

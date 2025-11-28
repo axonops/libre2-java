@@ -18,10 +18,13 @@ set -e
 # - RE2_RELEASE_VERSION: Release version (for logging/reference)
 # - ABSEIL_COMMIT: Git commit hash for Abseil
 # - ABSEIL_RELEASE_VERSION: Release version (for logging/reference)
+# - ONETBB_COMMIT: Git commit hash for oneTBB
+# - ONETBB_VERSION: Release version (for logging/reference)
 
-if [ -z "$RE2_COMMIT" ] || [ -z "$ABSEIL_COMMIT" ] || [ -z "$RE2_RELEASE_VERSION" ] || [ -z "$ABSEIL_RELEASE_VERSION" ]; then
+if [ -z "$RE2_COMMIT" ] || [ -z "$ABSEIL_COMMIT" ] || [ -z "$ONETBB_COMMIT" ] || \
+   [ -z "$RE2_RELEASE_VERSION" ] || [ -z "$ABSEIL_RELEASE_VERSION" ] || [ -z "$ONETBB_VERSION" ]; then
     echo "ERROR: Required environment variables not set"
-    echo "Missing one or more of: RE2_COMMIT, RE2_RELEASE_VERSION, ABSEIL_COMMIT, ABSEIL_RELEASE_VERSION"
+    echo "Missing one or more of: RE2_COMMIT, RE2_RELEASE_VERSION, ABSEIL_COMMIT, ABSEIL_RELEASE_VERSION, ONETBB_COMMIT, ONETBB_VERSION"
     echo ""
     echo "These should be provided by the GitHub Actions 'native-builds' environment"
     echo ""
@@ -30,12 +33,15 @@ if [ -z "$RE2_COMMIT" ] || [ -z "$ABSEIL_COMMIT" ] || [ -z "$RE2_RELEASE_VERSION
     echo "  export RE2_RELEASE_VERSION=2025-11-05"
     echo "  export ABSEIL_COMMIT=d38452e1ee03523a208362186fd42248ff2609f6"
     echo "  export ABSEIL_RELEASE_VERSION=20250814.1"
+    echo "  export ONETBB_COMMIT=f1862f38f83568d96e814e469ab61f88336cc595"
+    echo "  export ONETBB_VERSION=2022.3.0"
     exit 1
 fi
 
 echo "Building with pinned commits (from protected environment):"
 echo "  RE2:    $RE2_COMMIT (release $RE2_RELEASE_VERSION)"
 echo "  Abseil: $ABSEIL_COMMIT (release $ABSEIL_RELEASE_VERSION)"
+echo "  oneTBB: $ONETBB_COMMIT (release $ONETBB_VERSION)"
 
 # Detect platform
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -153,6 +159,57 @@ cmake ../abseil-cpp \
     -DCMAKE_CXX_STANDARD=17
 cmake --build . -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 cmake --install .
+cd ..
+
+# Clone and checkout oneTBB at pinned commit
+if [ ! -d "oneTBB" ]; then
+    echo "Cloning oneTBB at commit $ONETBB_COMMIT..."
+    git clone https://github.com/uxlfoundation/oneTBB.git
+    cd oneTBB
+    git checkout "$ONETBB_COMMIT"
+
+    echo "oneTBB commit: $(git log -1 --oneline)"
+
+    # SECURITY: Verify commit signature via GitHub API
+    echo "Verifying oneTBB commit signature..."
+
+    API_URL="https://api.github.com/repos/uxlfoundation/oneTBB/commits/$ONETBB_COMMIT"
+    echo "  Calling: $API_URL"
+
+    if [ -n "$GITHUB_TOKEN" ]; then
+        API_JSON=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API_URL")
+    else
+        API_JSON=$(curl -s "$API_URL")
+    fi
+    echo "  API response length: ${#API_JSON} bytes"
+
+    VERIFIED=$(echo "$API_JSON" | jq -r '.commit.verification.verified // empty')
+    echo "  Verification status: '$VERIFIED'"
+
+    if [ "$VERIFIED" = "true" ]; then
+        echo "✓ oneTBB commit signature verified by GitHub"
+    else
+        echo "✗ ERROR: oneTBB commit signature NOT verified"
+        echo "  This commit may not be from a trusted oneTBB maintainer"
+        exit 1
+    fi
+
+    cd ..
+fi
+
+# Build oneTBB statically
+echo "Building oneTBB..."
+mkdir -p tbb-build
+cd tbb-build
+cmake ../oneTBB \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DTBB_TEST=OFF \
+    -DTBB_EXAMPLES=OFF \
+    -DTBB_BENCH=OFF \
+    -DCMAKE_CXX_STANDARD=17
+cmake --build . -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 cd ..
 
 # Build RE2 statically

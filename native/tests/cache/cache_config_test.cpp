@@ -36,10 +36,12 @@ TEST_F(CacheConfigTest, DefaultConfiguration) {
     EXPECT_EQ(config.pattern_result_cache_target_capacity_bytes, 100 * 1024 * 1024UL);
     EXPECT_EQ(config.pattern_result_cache_string_threshold_bytes, 10 * 1024UL);
     EXPECT_EQ(config.pattern_result_cache_ttl_ms.count(), 300000);  // 5 min
+    EXPECT_FALSE(config.pattern_result_cache_use_tbb);  // Default OFF
 
     // Pattern Compilation Cache
     EXPECT_EQ(config.pattern_cache_target_capacity_bytes, 100 * 1024 * 1024UL);
     EXPECT_EQ(config.pattern_cache_ttl_ms.count(), 300000);  // 5 min
+    EXPECT_FALSE(config.pattern_cache_use_tbb);  // Default OFF
 
     // Deferred Cache
     EXPECT_EQ(config.deferred_cache_ttl_ms.count(), 600000);  // 10 min
@@ -57,8 +59,10 @@ TEST_F(CacheConfigTest, CustomConfiguration) {
     j["pattern_result_cache_target_capacity_bytes"] = 50 * 1024 * 1024;
     j["pattern_result_cache_string_threshold_bytes"] = 5 * 1024;
     j["pattern_result_cache_ttl_ms"] = 60000;  // 1 min
+    j["pattern_result_cache_use_tbb"] = true;  // Enable TBB
     j["pattern_cache_target_capacity_bytes"] = 200 * 1024 * 1024;
     j["pattern_cache_ttl_ms"] = 600000;  // 10 min
+    j["pattern_cache_use_tbb"] = true;  // Enable TBB
     j["deferred_cache_ttl_ms"] = 1200000;  // 20 min
     j["auto_start_eviction_thread"] = false;
     j["eviction_check_interval_ms"] = 1000;  // 1 second
@@ -70,8 +74,10 @@ TEST_F(CacheConfigTest, CustomConfiguration) {
     EXPECT_EQ(config.pattern_result_cache_target_capacity_bytes, 50 * 1024 * 1024UL);
     EXPECT_EQ(config.pattern_result_cache_string_threshold_bytes, 5 * 1024UL);
     EXPECT_EQ(config.pattern_result_cache_ttl_ms.count(), 60000);
+    EXPECT_TRUE(config.pattern_result_cache_use_tbb);
     EXPECT_EQ(config.pattern_cache_target_capacity_bytes, 200 * 1024 * 1024UL);
     EXPECT_EQ(config.pattern_cache_ttl_ms.count(), 600000);
+    EXPECT_TRUE(config.pattern_cache_use_tbb);
     EXPECT_EQ(config.deferred_cache_ttl_ms.count(), 1200000);
     EXPECT_FALSE(config.auto_start_eviction_thread);
     EXPECT_EQ(config.eviction_check_interval_ms.count(), 1000);
@@ -266,6 +272,7 @@ TEST_F(CacheConfigTest, SerializationFormat) {
     j["cache_enabled"] = true;
     j["pattern_cache_target_capacity_bytes"] = 100 * 1024 * 1024;
     j["pattern_cache_ttl_ms"] = 300000;
+    j["pattern_cache_use_tbb"] = true;
     j["deferred_cache_ttl_ms"] = 600000;
 
     CacheConfig config = CacheConfig::fromJson(j.dump());
@@ -279,6 +286,8 @@ TEST_F(CacheConfigTest, SerializationFormat) {
     EXPECT_TRUE(parsed.contains("cache_enabled"));
     EXPECT_TRUE(parsed.contains("pattern_cache_target_capacity_bytes"));
     EXPECT_TRUE(parsed.contains("pattern_cache_ttl_ms"));
+    EXPECT_TRUE(parsed.contains("pattern_cache_use_tbb"));
+    EXPECT_TRUE(parsed.contains("pattern_result_cache_use_tbb"));
     EXPECT_TRUE(parsed.contains("deferred_cache_ttl_ms"));
     EXPECT_TRUE(parsed.contains("eviction_check_interval_ms"));
 }

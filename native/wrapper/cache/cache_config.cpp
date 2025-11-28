@@ -41,12 +41,14 @@ CacheConfig CacheConfig::fromJson(const std::string& json_str) {
             j.value("pattern_result_cache_string_threshold_bytes", 10 * 1024UL);
         config.pattern_result_cache_ttl_ms = std::chrono::milliseconds(
             j.value("pattern_result_cache_ttl_ms", 300000));  // 5 min default
+        config.pattern_result_cache_use_tbb = j.value("pattern_result_cache_use_tbb", false);
 
         // Pattern Compilation Cache (reference-counted)
         config.pattern_cache_target_capacity_bytes =
             j.value("pattern_cache_target_capacity_bytes", 100 * 1024 * 1024UL);
         config.pattern_cache_ttl_ms = std::chrono::milliseconds(
             j.value("pattern_cache_ttl_ms", 300000));  // 5 min default
+        config.pattern_cache_use_tbb = j.value("pattern_cache_use_tbb", false);
 
         // Deferred Cache (leak protection)
         config.deferred_cache_ttl_ms = std::chrono::milliseconds(
@@ -141,10 +143,12 @@ std::string CacheConfig::toJson() const {
     j["pattern_result_cache_target_capacity_bytes"] = pattern_result_cache_target_capacity_bytes;
     j["pattern_result_cache_string_threshold_bytes"] = pattern_result_cache_string_threshold_bytes;
     j["pattern_result_cache_ttl_ms"] = pattern_result_cache_ttl_ms.count();
+    j["pattern_result_cache_use_tbb"] = pattern_result_cache_use_tbb;
 
     // Pattern Compilation Cache
     j["pattern_cache_target_capacity_bytes"] = pattern_cache_target_capacity_bytes;
     j["pattern_cache_ttl_ms"] = pattern_cache_ttl_ms.count();
+    j["pattern_cache_use_tbb"] = pattern_cache_use_tbb;
 
     // Deferred Cache
     j["deferred_cache_ttl_ms"] = deferred_cache_ttl_ms.count();

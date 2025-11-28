@@ -78,6 +78,9 @@ std::string PatternResultCacheMetrics::toJson() const {
     capacity["utilization_ratio"] = utilization_ratio;
     j["capacity"] = capacity;
 
+    // Implementation info
+    j["using_tbb"] = using_tbb;
+
     return j.dump();
 }
 
@@ -120,6 +123,9 @@ std::string PatternCacheMetrics::toJson() const {
     capacity["entry_count"] = current_entry_count;
     capacity["utilization_ratio"] = utilization_ratio;
     j["capacity"] = capacity;
+
+    // Implementation info
+    j["using_tbb"] = using_tbb;
 
     return j.dump();
 }

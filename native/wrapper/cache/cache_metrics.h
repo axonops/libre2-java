@@ -49,6 +49,9 @@ struct PatternResultCacheMetrics {
     uint64_t actual_size_bytes = 0;
     double utilization_ratio = 0.0;
 
+    // Implementation info (snapshot)
+    bool using_tbb = false;
+
     double hit_rate() const;
     std::string toJson() const;
 };
@@ -78,6 +81,9 @@ struct PatternCacheMetrics {
     uint64_t target_capacity_bytes = 0;
     uint64_t actual_size_bytes = 0;
     double utilization_ratio = 0.0;
+
+    // Implementation info (snapshot)
+    bool using_tbb = false;
 
     double hit_rate() const;
     std::string toJson() const;

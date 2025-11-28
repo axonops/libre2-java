@@ -60,6 +60,21 @@ endif()
 list(LENGTH ABSEIL_LIBRARIES ABSEIL_LIB_COUNT)
 message(STATUS "Found ${ABSEIL_LIB_COUNT} Abseil libraries")
 
+# Find oneTBB library (built by build.sh)
+# TBB builds into platform-specific subdirectory
+file(GLOB_RECURSE TBB_LIBRARY_FOUND "${BUILD_DIR}/tbb-build/*/libtbb.a")
+if(NOT TBB_LIBRARY_FOUND)
+    message(FATAL_ERROR "oneTBB library not found. Run build.sh first.")
+endif()
+list(GET TBB_LIBRARY_FOUND 0 TBB_LIBRARY)
+message(STATUS "Found oneTBB library: ${TBB_LIBRARY}")
+
+# TBB include directory
+set(TBB_INCLUDE_DIR "${BUILD_DIR}/oneTBB/include")
+if(NOT EXISTS ${TBB_INCLUDE_DIR}/oneapi/tbb/concurrent_hash_map.h)
+    message(FATAL_ERROR "oneTBB headers not found at ${TBB_INCLUDE_DIR}. Run build.sh first.")
+endif()
+
 # Include directories
 set(RE2_INCLUDE_DIR "${BUILD_DIR}/re2")
 set(ABSEIL_INCLUDE_DIR "${BUILD_DIR}/abseil-cpp")
@@ -91,11 +106,13 @@ target_include_directories(re2_cache PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
     ${RE2_INCLUDE_DIR}
     ${ABSEIL_INCLUDE_DIR}
+    ${TBB_INCLUDE_DIR}
 )
 
 target_link_libraries(re2_cache PUBLIC
     ${RE2_LIBRARY}
     ${ABSEIL_LIBRARIES}
+    ${TBB_LIBRARY}
     nlohmann_json
 )
 
@@ -166,5 +183,6 @@ message(STATUS "C++ standard:     C++${CMAKE_CXX_STANDARD}")
 message(STATUS "Build tests:      ${BUILD_TESTS}")
 message(STATUS "RE2 library:      ${RE2_LIBRARY}")
 message(STATUS "Abseil libs:      ${ABSEIL_LIB_COUNT} libraries")
+message(STATUS "oneTBB library:   ${TBB_LIBRARY}")
 message(STATUS "JSON library:     nlohmann/json (header-only)")
 message(STATUS "")

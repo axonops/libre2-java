@@ -22,31 +22,86 @@
 #include "cache/eviction_thread.h"
 #include "cache/pattern_cache.h"
 #include "cache/result_cache.h"
+#include <memory>
+#include <string>
 
 namespace libre2 {
 namespace cache {
 
 /**
- * Cache Manager - orchestrates all three caches.
+ * Cache Manager - orchestrates all three caches and background eviction.
  *
- * Singleton instance manages pattern compilation, result caching,
- * deferred cleanup, and background eviction.
+ * Provides single entry point for:
+ * - Pattern Result Cache (optional, match result caching)
+ * - Pattern Compilation Cache (reference-counted compiled patterns)
+ * - Deferred Cache (leak protection)
+ * - Background eviction thread (periodic TTL + LRU cleanup)
+ *
+ * Lifecycle:
+ * 1. Construct with configuration
+ * 2. Optionally start eviction thread (or auto-start if configured)
+ * 3. Use caches via getter methods
+ * 4. Stop eviction thread on shutdown
+ * 5. Destruct (cleans up all caches)
  */
 class CacheManager {
 public:
     explicit CacheManager(const CacheConfig& config);
     ~CacheManager();
 
-    // TODO: Implement cache operations
+    // Disable copy/move
+    CacheManager(const CacheManager&) = delete;
+    CacheManager& operator=(const CacheManager&) = delete;
+
+    /**
+     * Start background eviction thread.
+     * Safe to call multiple times (no-op if already running).
+     */
+    void startEvictionThread();
+
+    /**
+     * Stop background eviction thread.
+     * Blocks until thread exits gracefully.
+     * Safe to call multiple times (no-op if not running).
+     */
+    void stopEvictionThread();
+
+    /**
+     * Check if eviction thread is running.
+     */
+    bool isEvictionThreadRunning() const;
+
+    /**
+     * Get current metrics snapshot (all caches).
+     * Thread-safe - can be called while eviction thread running.
+     *
+     * @return JSON string with all metrics
+     */
+    std::string getMetricsJSON() const;
+
+    /**
+     * Clear all caches (for testing or reset).
+     * Stops eviction thread first, clears all caches, moves in-use patterns to deferred.
+     */
+    void clearAllCaches();
+
+    // Cache accessors (for testing and direct use)
+    ResultCache& resultCache() { return result_cache_; }
+    PatternCache& patternCache() { return pattern_cache_; }
+    DeferredCache& deferredCache() { return deferred_cache_; }
+    CacheMetrics& metrics() { return metrics_; }
 
 private:
     CacheConfig config_;
     CacheMetrics metrics_;
 
+    // Caches (order matters for initialization)
     ResultCache result_cache_;
     PatternCache pattern_cache_;
     DeferredCache deferred_cache_;
-    EvictionThread eviction_thread_;
+
+    // Eviction thread (initialized last, references all caches)
+    std::unique_ptr<EvictionThread> eviction_thread_;
 };
 
 }  // namespace cache

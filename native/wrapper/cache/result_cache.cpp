@@ -178,18 +178,24 @@ void ResultCache::putStd(
         // Check if already exists (update if so)
         auto it = std_cache_.find(key);
         if (it != std_cache_.end()) {
+            bool old_result = it->second.match_result;
             it->second.match_result = match_result;
             it->second.last_access = std::chrono::steady_clock::now();
+
+            if (old_result != match_result) {
+                metrics.result_flips.fetch_add(1, std::memory_order_relaxed);
+            }
+            metrics.updates.fetch_add(1, std::memory_order_relaxed);
             return;  // Updated existing entry
         }
 
-        // Insert new entry
-        size_t entry_size = 20 + input_string.size();
+        // Insert new entry (fixed size - string not stored!)
         auto [inserted_it, inserted] = std_cache_.emplace(
-            key, ResultCacheEntry(match_result, input_string.size()));
+            key, ResultCacheEntry(match_result, 0));
 
         if (inserted) {
-            std_total_size_bytes_ += entry_size;
+            std_total_size_bytes_ += RESULT_CACHE_ENTRY_SIZE;
+            metrics.inserts.fetch_add(1, std::memory_order_relaxed);
         }
 
     } catch (const std::exception&) {
@@ -229,39 +235,48 @@ size_t ResultCache::evictStd(
     while (std_total_size_bytes_ > config_.pattern_result_cache_target_capacity_bytes
            && !std_cache_.empty()) {
 
-        // Collect all entries as candidates
-        std::vector<std::unordered_map<uint64_t, ResultCacheEntry>::iterator> candidates;
-        for (auto it = std_cache_.begin(); it != std_cache_.end(); ++it) {
-            candidates.push_back(it);
+        // Collect keys (not iterators - prevents invalidation!)
+        std::vector<uint64_t> lru_keys;
+        for (auto& [key, entry] : std_cache_) {
+            lru_keys.push_back(key);
         }
 
-        if (candidates.empty()) break;
+        if (lru_keys.empty()) break;
 
         // Partial sort to find N oldest
-        size_t batch_size = std::min(size_t(100), candidates.size());  // Fixed batch size for results
-        std::partial_sort(candidates.begin(), candidates.begin() + batch_size, candidates.end(),
-            [](const auto& a, const auto& b) {
-                return a->second.last_access < b->second.last_access;
+        size_t batch_size = std::min(size_t(100), lru_keys.size());
+        std::partial_sort(lru_keys.begin(), lru_keys.begin() + batch_size, lru_keys.end(),
+            [this](uint64_t a, uint64_t b) {
+                auto it_a = std_cache_.find(a);
+                auto it_b = std_cache_.find(b);
+                if (it_a != std_cache_.end() && it_b != std_cache_.end()) {
+                    return it_a->second.last_access < it_b->second.last_access;
+                }
+                return false;
             });
 
-        // Evict batch
+        // Evict batch using fresh lookups (safe from iterator invalidation)
         bool reached_capacity = false;
         for (size_t i = 0; i < batch_size; i++) {
-            auto it = candidates[i];
-            size_t freed = it->second.approx_size_bytes;
+            uint64_t key = lru_keys[i];
 
-            std_total_size_bytes_ -= freed;
-            std_cache_.erase(it);
+            auto it = std_cache_.find(key);
+            if (it != std_cache_.end()) {
+                size_t freed = it->second.approx_size_bytes;
 
-            metrics.lru_evictions.fetch_add(1, std::memory_order_relaxed);
-            metrics.lru_evictions_bytes_freed.fetch_add(freed, std::memory_order_relaxed);
-            metrics.total_evictions.fetch_add(1, std::memory_order_relaxed);
-            metrics.total_bytes_freed.fetch_add(freed, std::memory_order_relaxed);
-            evicted++;
+                std_total_size_bytes_ -= freed;
+                std_cache_.erase(it);
 
-            if (std_total_size_bytes_ <= config_.pattern_result_cache_target_capacity_bytes) {
-                reached_capacity = true;
-                break;
+                metrics.lru_evictions.fetch_add(1, std::memory_order_relaxed);
+                metrics.lru_evictions_bytes_freed.fetch_add(freed, std::memory_order_relaxed);
+                metrics.total_evictions.fetch_add(1, std::memory_order_relaxed);
+                metrics.total_bytes_freed.fetch_add(freed, std::memory_order_relaxed);
+                evicted++;
+
+                if (std_total_size_bytes_ <= config_.pattern_result_cache_target_capacity_bytes) {
+                    reached_capacity = true;
+                    break;
+                }
             }
         }
 
@@ -308,16 +323,22 @@ void ResultCache::putTBB(
 
     try {
         TBBMap::accessor acc;
-        size_t entry_size = 20 + input_string.size();
 
         if (tbb_cache_.insert(acc, key)) {
-            // Inserted new entry
-            acc->second = ResultCacheEntry(match_result, input_string.size());
-            tbb_total_size_bytes_.fetch_add(entry_size, std::memory_order_relaxed);
+            // Inserted new entry (fixed size - string not stored!)
+            acc->second = ResultCacheEntry(match_result, 0);
+            tbb_total_size_bytes_.fetch_add(RESULT_CACHE_ENTRY_SIZE, std::memory_order_relaxed);
+            metrics.inserts.fetch_add(1, std::memory_order_relaxed);
         } else {
             // Entry already exists - update it
+            bool old_result = acc->second.match_result;
             acc->second.match_result = match_result;
             acc->second.last_access = std::chrono::steady_clock::now();
+
+            if (old_result != match_result) {
+                metrics.result_flips.fetch_add(1, std::memory_order_relaxed);
+            }
+            metrics.updates.fetch_add(1, std::memory_order_relaxed);
         }
 
     } catch (const std::exception&) {
@@ -362,25 +383,31 @@ size_t ResultCache::evictTBB(
     size_t current_size = tbb_total_size_bytes_.load(std::memory_order_acquire);
 
     while (current_size > config_.pattern_result_cache_target_capacity_bytes && !tbb_cache_.empty()) {
-        // Collect all candidates
-        std::vector<TBBMap::iterator> candidates;
+        // Collect keys (consistent with std path, prevents iterator issues)
+        std::vector<uint64_t> lru_keys;
         for (TBBMap::iterator it = tbb_cache_.begin(); it != tbb_cache_.end(); ++it) {
-            candidates.push_back(it);
+            lru_keys.push_back(it->first);
         }
 
-        if (candidates.empty()) break;
+        if (lru_keys.empty()) break;
 
         // Partial sort to find N oldest
-        size_t batch_size = std::min(size_t(100), candidates.size());
-        std::partial_sort(candidates.begin(), candidates.begin() + batch_size, candidates.end(),
-            [](const auto& a, const auto& b) {
-                return a->second.last_access < b->second.last_access;
+        size_t batch_size = std::min(size_t(100), lru_keys.size());
+        std::partial_sort(lru_keys.begin(), lru_keys.begin() + batch_size, lru_keys.end(),
+            [this](uint64_t a, uint64_t b) {
+                TBBMap::const_accessor acc_a, acc_b;
+                bool found_a = tbb_cache_.find(acc_a, a);
+                bool found_b = tbb_cache_.find(acc_b, b);
+                if (found_a && found_b) {
+                    return acc_a->second.last_access < acc_b->second.last_access;
+                }
+                return false;
             });
 
-        // Evict batch
+        // Evict batch using fresh lookups
         bool reached_capacity = false;
         for (size_t i = 0; i < batch_size; i++) {
-            uint64_t key = candidates[i]->first;
+            uint64_t key = lru_keys[i];
 
             TBBMap::accessor acc;
             if (tbb_cache_.find(acc, key)) {

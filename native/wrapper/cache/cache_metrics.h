@@ -32,6 +32,11 @@ struct PatternResultCacheMetrics {
     std::atomic<uint64_t> hits{0};
     std::atomic<uint64_t> misses{0};
 
+    // Put operations
+    std::atomic<uint64_t> inserts{0};
+    std::atomic<uint64_t> updates{0};
+    std::atomic<uint64_t> result_flips{0};  // Result changed from true→false or vice versa
+
     // Errors (non-fatal)
     std::atomic<uint64_t> get_errors{0};
     std::atomic<uint64_t> put_errors{0};

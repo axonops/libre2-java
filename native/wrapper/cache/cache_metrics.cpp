@@ -57,6 +57,11 @@ std::string PatternResultCacheMetrics::toJson() const {
     j["misses"] = misses.load();
     j["hit_rate"] = hit_rate();
 
+    // Put operations
+    j["inserts"] = inserts.load();
+    j["updates"] = updates.load();
+    j["result_flips"] = result_flips.load();
+
     // Errors
     j["get_errors"] = get_errors.load();
     j["put_errors"] = put_errors.load();

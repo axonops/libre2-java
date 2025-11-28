@@ -388,6 +388,54 @@ TEST_P(ResultCacheTest, MetricsJSON) {
     EXPECT_NE(json.find("\"hit_rate\""), std::string::npos);
 }
 
+// Memory size accuracy (CRITICAL - verify 64 bytes per entry)
+TEST_P(ResultCacheTest, MemorySizeAccurate) {
+    bool use_tbb = GetParam();
+    CacheConfig config = makeConfig(use_tbb);
+    ResultCache cache(config);
+    PatternResultCacheMetrics metrics;
+
+    // Add 10 entries with varying input sizes
+    for (int i = 0; i < 10; i++) {
+        std::string input = "test_input_" + std::to_string(i);  // Variable size
+        cache.put(i * 1000, input, (i % 2 == 0), metrics);
+    }
+
+    // Snapshot to get size
+    cache.snapshotMetrics(metrics);
+
+    size_t actual_size = metrics.actual_size_bytes;
+    size_t expected_size = 10 * 64;  // 10 entries × 64 bytes each (FIXED)
+
+    // Should be exactly 640 bytes (input string size doesn't matter)
+    EXPECT_EQ(actual_size, expected_size)
+        << "Expected " << expected_size << " bytes (10 × 64), got " << actual_size;
+    EXPECT_EQ(metrics.inserts.load(), 10u);
+}
+
+// Result flips tracked
+TEST_P(ResultCacheTest, ResultFlipsTracked) {
+    bool use_tbb = GetParam();
+    CacheConfig config = makeConfig(use_tbb);
+    ResultCache cache(config);
+    PatternResultCacheMetrics metrics;
+
+    // Insert with true
+    cache.put(123, "test", true, metrics);
+    EXPECT_EQ(metrics.inserts.load(), 1u);
+    EXPECT_EQ(metrics.result_flips.load(), 0u);
+
+    // Update with false (flip!)
+    cache.put(123, "test", false, metrics);
+    EXPECT_EQ(metrics.updates.load(), 1u);
+    EXPECT_EQ(metrics.result_flips.load(), 1u);
+
+    // Update with false again (no flip)
+    cache.put(123, "test", false, metrics);
+    EXPECT_EQ(metrics.updates.load(), 2u);
+    EXPECT_EQ(metrics.result_flips.load(), 1u);  // Still 1
+}
+
 // Run tests with both std and TBB implementations
 INSTANTIATE_TEST_SUITE_P(
     BothImplementations,

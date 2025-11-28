@@ -1,3 +1,5 @@
+// This file is vendored from https://github.com/nlohmann/json
+// Used unmodified for JSON handling in libre2-java
 //     __ _____ _____ _____
 //  __|  |   __|     |   | |  JSON for Modern C++
 // |  |  |__   |  |  | | | |  version 3.11.3

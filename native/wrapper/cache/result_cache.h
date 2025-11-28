@@ -111,17 +111,21 @@ public:
     size_t size() const;
 
 private:
+    // Fixed memory cost per entry (does NOT include input string - only hash stored!)
+    // Breakdown: 24 bytes (struct) + 40 bytes (hash table overhead) = 64 bytes
+    static constexpr size_t RESULT_CACHE_ENTRY_SIZE = 64;
+
     struct ResultCacheEntry {
         bool match_result;
         mutable std::chrono::steady_clock::time_point last_access;  // Mutable for TBB const_accessor
-        size_t approx_size_bytes;  // Pattern hash + input string hash + bool ≈ 20 bytes per entry
+        size_t approx_size_bytes;  // Fixed size per entry
 
-        ResultCacheEntry() : match_result(false), approx_size_bytes(20) {}
+        ResultCacheEntry() : match_result(false), approx_size_bytes(RESULT_CACHE_ENTRY_SIZE) {}
 
-        ResultCacheEntry(bool result, size_t input_size)
+        ResultCacheEntry(bool result, size_t /*input_size_unused*/)
             : match_result(result),
               last_access(std::chrono::steady_clock::now()),
-              approx_size_bytes(20 + input_size) {}  // Hash overhead + input string
+              approx_size_bytes(RESULT_CACHE_ENTRY_SIZE) {}  // Fixed size (string not stored!)
     };
 
     const CacheConfig& config_;

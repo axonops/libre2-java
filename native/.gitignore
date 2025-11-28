@@ -1,0 +1,32 @@
+# CMake build artifacts
+cmake-build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+
+# Build output
+build/
+*.a
+*.so
+*.dylib
+*.o
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Downloaded dependencies
+_deps/
+
+# Test binaries
+cache_tests
+*_test
+
+# macOS
+.DS_Store

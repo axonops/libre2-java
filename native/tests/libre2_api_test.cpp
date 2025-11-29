@@ -1853,8 +1853,9 @@ TEST_F(Libre2APITest, FullMatchN_OneCapture) {
     RE2Pattern* p = compilePattern(PATTERN, true, error);
     ASSERT_NE(p, nullptr);
     std::string cap1_wrapper;
-    std::string* caps[] = {&cap1_wrapper};
-    bool result_wrapper = fullMatchN(p, TEXT, caps, 1);
+    const Arg arg1_wrapper(&cap1_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 1);
     // =====================================
 
     // ========== COMPARE ==========
@@ -1889,8 +1890,9 @@ TEST_F(Libre2APITest, FullMatchN_ThreeCaptures) {
     RE2Pattern* p = compilePattern(PATTERN, true, error);
     ASSERT_NE(p, nullptr);
     std::string cap1_wrapper, cap2_wrapper, cap3_wrapper;
-    std::string* caps[] = {&cap1_wrapper, &cap2_wrapper, &cap3_wrapper};
-    bool result_wrapper = fullMatchN(p, TEXT, caps, 3);
+    const Arg arg1_wrapper(&cap1_wrapper), arg2_wrapper(&cap2_wrapper), arg3_wrapper(&cap3_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper, &arg2_wrapper, &arg3_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 3);
     // =====================================
 
     // ========== COMPARE ==========
@@ -1926,8 +1928,9 @@ TEST_F(Libre2APITest, FullMatchN_FiveCaptures) {
     RE2Pattern* p = compilePattern(PATTERN, true, error);
     ASSERT_NE(p, nullptr);
     std::string c1_w, c2_w, c3_w, c4_w, c5_w;
-    std::string* caps[] = {&c1_w, &c2_w, &c3_w, &c4_w, &c5_w};
-    bool result_wrapper = fullMatchN(p, TEXT, caps, 5);
+    const Arg a1_w(&c1_w), a2_w(&c2_w), a3_w(&c3_w), a4_w(&c4_w), a5_w(&c5_w);
+    const Arg* args_wrapper[] = {&a1_w, &a2_w, &a3_w, &a4_w, &a5_w};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 5);
     // =====================================
 
     // ========== COMPARE ==========
@@ -1964,8 +1967,9 @@ TEST_F(Libre2APITest, FullMatchN_NoMatch) {
     RE2Pattern* p = compilePattern(PATTERN, true, error);
     ASSERT_NE(p, nullptr);
     std::string cap1_wrapper;
-    std::string* caps[] = {&cap1_wrapper};
-    bool result_wrapper = fullMatchN(p, TEXT, caps, 1);
+    const Arg arg1_wrapper(&cap1_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 1);
     // =====================================
 
     // ========== COMPARE ==========
@@ -1998,8 +2002,9 @@ TEST_F(Libre2APITest, PartialMatchN_TwoCaptures) {
     RE2Pattern* p = compilePattern(PATTERN, true, error);
     ASSERT_NE(p, nullptr);
     std::string cap1_wrapper, cap2_wrapper;
-    std::string* caps[] = {&cap1_wrapper, &cap2_wrapper};
-    bool result_wrapper = partialMatchN(p, TEXT, caps, 2);
+    const Arg arg1_wrapper(&cap1_wrapper), arg2_wrapper(&cap2_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper, &arg2_wrapper};
+    bool result_wrapper = partialMatchN(p, TEXT, args_wrapper, 2);
     // =====================================
 
     // ========== COMPARE ==========
@@ -2037,8 +2042,9 @@ TEST_F(Libre2APITest, ConsumeN_TwoCaptures) {
     const char* input_wrapper = INPUT_TEXT.data();
     int len_wrapper = INPUT_TEXT.size();
     std::string cap1_wrapper, cap2_wrapper;
-    std::string* caps[] = {&cap1_wrapper, &cap2_wrapper};
-    bool result_wrapper = consumeN(p, &input_wrapper, &len_wrapper, caps, 2);
+    const Arg arg1_wrapper(&cap1_wrapper), arg2_wrapper(&cap2_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper, &arg2_wrapper};
+    bool result_wrapper = consumeN(p, &input_wrapper, &len_wrapper, args_wrapper, 2);
     std::string remaining_wrapper(input_wrapper, len_wrapper);
     // =====================================
 
@@ -2078,8 +2084,9 @@ TEST_F(Libre2APITest, FindAndConsumeN_TwoCaptures) {
     const char* input_wrapper = INPUT_TEXT.data();
     int len_wrapper = INPUT_TEXT.size();
     std::string cap1_wrapper, cap2_wrapper;
-    std::string* caps[] = {&cap1_wrapper, &cap2_wrapper};
-    bool result_wrapper = findAndConsumeN(p, &input_wrapper, &len_wrapper, caps, 2);
+    const Arg arg1_wrapper(&cap1_wrapper), arg2_wrapper(&cap2_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper, &arg2_wrapper};
+    bool result_wrapper = findAndConsumeN(p, &input_wrapper, &len_wrapper, args_wrapper, 2);
     std::string remaining_wrapper(input_wrapper, len_wrapper);
     // =====================================
 
@@ -2115,9 +2122,10 @@ TEST_F(Libre2APITest, FullMatchNDirect_TwoCaptures) {
     RE2Pattern* p = compilePattern(PATTERN, true, error);
     ASSERT_NE(p, nullptr);
     std::string cap1_wrapper, cap2_wrapper;
-    std::string* caps[] = {&cap1_wrapper, &cap2_wrapper};
+    const Arg arg1_wrapper(&cap1_wrapper), arg2_wrapper(&cap2_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper, &arg2_wrapper};
     int64_t address = reinterpret_cast<int64_t>(TEXT.data());
-    bool result_wrapper = fullMatchNDirect(p, address, TEXT.size(), caps, 2);
+    bool result_wrapper = fullMatchNDirect(p, address, TEXT.size(), args_wrapper, 2);
     // =====================================
 
     // ========== COMPARE ==========
@@ -2159,14 +2167,18 @@ TEST_F(Libre2APITest, FullMatchNBulk_MultipleTexts) {
     const char* texts[3] = {TEXTS[0].data(), TEXTS[1].data(), TEXTS[2].data()};
     int lens[3] = {(int)TEXTS[0].size(), (int)TEXTS[1].size(), (int)TEXTS[2].size()};
 
+    // Each text gets its own capture storage and Arg array
     std::string caps_wrapper[3][2];
-    std::string* caps0[] = {&caps_wrapper[0][0], &caps_wrapper[0][1]};
-    std::string* caps1[] = {&caps_wrapper[1][0], &caps_wrapper[1][1]};
-    std::string* caps2[] = {&caps_wrapper[2][0], &caps_wrapper[2][1]};
-    std::string** caps_array[] = {caps0, caps1, caps2};
+    const Arg arg0_0(&caps_wrapper[0][0]), arg0_1(&caps_wrapper[0][1]);
+    const Arg arg1_0(&caps_wrapper[1][0]), arg1_1(&caps_wrapper[1][1]);
+    const Arg arg2_0(&caps_wrapper[2][0]), arg2_1(&caps_wrapper[2][1]);
+    const Arg* args0[] = {&arg0_0, &arg0_1};
+    const Arg* args1[] = {&arg1_0, &arg1_1};
+    const Arg* args2[] = {&arg2_0, &arg2_1};
+    const Arg** args_array[] = {args0, args1, args2};
 
     bool results_wrapper[3];
-    fullMatchNBulk(p, texts, lens, 3, caps_array, 2, results_wrapper);
+    fullMatchNBulk(p, texts, lens, 3, args_array, 2, results_wrapper);
     // ============================================
 
     // ========== COMPARE ==========
@@ -2216,13 +2228,16 @@ TEST_F(Libre2APITest, FullMatchNDirectBulk_Combined) {
     int lens[3] = {(int)TEXTS[0].size(), (int)TEXTS[1].size(), (int)TEXTS[2].size()};
 
     std::string caps_wrapper[3];
-    std::string* caps0[] = {&caps_wrapper[0]};
-    std::string* caps1[] = {&caps_wrapper[1]};
-    std::string* caps2[] = {&caps_wrapper[2]};
-    std::string** caps_array[] = {caps0, caps1, caps2};
+    const Arg arg0(&caps_wrapper[0]);
+    const Arg arg1(&caps_wrapper[1]);
+    const Arg arg2(&caps_wrapper[2]);
+    const Arg* args0[] = {&arg0};
+    const Arg* args1[] = {&arg1};
+    const Arg* args2[] = {&arg2};
+    const Arg** args_array[] = {args0, args1, args2};
 
     bool results_wrapper[3];
-    fullMatchNDirectBulk(p, addresses, lens, 3, caps_array, 1, results_wrapper);
+    fullMatchNDirectBulk(p, addresses, lens, 3, args_array, 1, results_wrapper);
     // =====================================
 
     // ========== COMPARE ==========
@@ -3173,6 +3188,294 @@ TEST_F(Libre2APITest, PossibleMatchRange_Complex) {
     EXPECT_FALSE(max_wrapper.empty());
     EXPECT_EQ('a', min_wrapper[0]);
     EXPECT_EQ('a', max_wrapper[0]);
+    // =============================
+
+    releasePattern(p);
+}
+
+//=============================================================================
+// TYPED CAPTURE TESTS (Phase 1.2.5h - RE2::Arg Support)
+// Ported from re2/re2/testing/re2_arg_test.cc
+//=============================================================================
+
+// fullMatchN - int capture
+TEST_F(Libre2APITest, FullMatchN_IntCapture) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\d+)";
+    const std::string TEXT = "12345";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int value_re2;
+    const RE2::Arg arg_re2(&value_re2);
+    const RE2::Arg* args_re2[] = {&arg_re2};
+    bool result_re2 = RE2::FullMatchN(TEXT, re2_pattern, args_re2, 1);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int value_wrapper;
+    const Arg arg_wrapper(&value_wrapper);
+    const Arg* args_wrapper[] = {&arg_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 1);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(value_re2, value_wrapper);
+    EXPECT_EQ(12345, value_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// fullMatchN - mixed types (string + int + float)
+TEST_F(Libre2APITest, FullMatchN_MixedTypes) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+):([0-9.]+)";
+    const std::string TEXT = "foo:123:3.14";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string word_re2;
+    int number_re2;
+    double value_re2;
+    const RE2::Arg arg1_re2(&word_re2);
+    const RE2::Arg arg2_re2(&number_re2);
+    const RE2::Arg arg3_re2(&value_re2);
+    const RE2::Arg* args_re2[] = {&arg1_re2, &arg2_re2, &arg3_re2};
+    bool result_re2 = RE2::FullMatchN(TEXT, re2_pattern, args_re2, 3);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string word_wrapper;
+    int number_wrapper;
+    double value_wrapper;
+    const Arg arg1_wrapper(&word_wrapper);
+    const Arg arg2_wrapper(&number_wrapper);
+    const Arg arg3_wrapper(&value_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper, &arg2_wrapper, &arg3_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 3);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(word_re2, word_wrapper);
+    EXPECT_EQ(number_re2, number_wrapper);
+    EXPECT_DOUBLE_EQ(value_re2, value_wrapper);
+    EXPECT_EQ("foo", word_wrapper);
+    EXPECT_EQ(123, number_wrapper);
+    EXPECT_DOUBLE_EQ(3.14, value_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// fullMatchN - Hex parsing
+TEST_F(Libre2APITest, FullMatchN_HexParsing) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "0x([0-9A-Fa-f]+)";
+    const std::string TEXT = "0xFF";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int value_re2;
+    const RE2::Arg arg_re2 = RE2::Hex(&value_re2);
+    const RE2::Arg* args_re2[] = {&arg_re2};
+    bool result_re2 = RE2::FullMatchN(TEXT, re2_pattern, args_re2, 1);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int value_wrapper;
+    const Arg arg_wrapper = Hex(&value_wrapper);
+    const Arg* args_wrapper[] = {&arg_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 1);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(value_re2, value_wrapper);
+    EXPECT_EQ(255, value_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// fullMatchN - Octal parsing
+TEST_F(Libre2APITest, FullMatchN_OctalParsing) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "0([0-7]+)";
+    const std::string TEXT = "077";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int value_re2;
+    const RE2::Arg arg_re2 = RE2::Octal(&value_re2);
+    const RE2::Arg* args_re2[] = {&arg_re2};
+    bool result_re2 = RE2::FullMatchN(TEXT, re2_pattern, args_re2, 1);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int value_wrapper;
+    const Arg arg_wrapper = Octal(&value_wrapper);
+    const Arg* args_wrapper[] = {&arg_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 1);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(value_re2, value_wrapper);
+    EXPECT_EQ(63, value_wrapper);  // 077 octal = 63 decimal
+    // =============================
+
+    releasePattern(p);
+}
+
+// fullMatchN - CRadix (auto-detect 0x, 0, decimal)
+TEST_F(Libre2APITest, FullMatchN_CRadixHex) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(.+)";
+    const std::string TEXT = "0x2830";  // Should parse as hex
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int value_re2;
+    const RE2::Arg arg_re2 = RE2::CRadix(&value_re2);
+    const RE2::Arg* args_re2[] = {&arg_re2};
+    bool result_re2 = RE2::FullMatchN(TEXT, re2_pattern, args_re2, 1);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int value_wrapper;
+    const Arg arg_wrapper = CRadix(&value_wrapper);
+    const Arg* args_wrapper[] = {&arg_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 1);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(value_re2, value_wrapper);
+    EXPECT_EQ(10288, value_wrapper);  // 0x2830 hex = 10288 decimal
+    // =============================
+
+    releasePattern(p);
+}
+
+// fullMatchN - std::optional (missing capture)
+TEST_F(Libre2APITest, FullMatchN_OptionalMissing) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+)(?::(\\d+))?";  // Second group optional
+    const std::string TEXT = "foo";  // No number
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string word_re2;
+    std::optional<int> number_re2;
+    const RE2::Arg arg1_re2(&word_re2);
+    const RE2::Arg arg2_re2(&number_re2);
+    const RE2::Arg* args_re2[] = {&arg1_re2, &arg2_re2};
+    bool result_re2 = RE2::FullMatchN(TEXT, re2_pattern, args_re2, 2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string word_wrapper;
+    std::optional<int> number_wrapper;
+    const Arg arg1_wrapper(&word_wrapper);
+    const Arg arg2_wrapper(&number_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper, &arg2_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 2);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(word_re2, word_wrapper);
+    EXPECT_EQ(number_re2.has_value(), number_wrapper.has_value());
+    EXPECT_FALSE(number_wrapper.has_value());  // Should be empty
+    // =============================
+
+    releasePattern(p);
+}
+
+// fullMatchN - std::optional (present capture)
+TEST_F(Libre2APITest, FullMatchN_OptionalPresent) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+)(?::(\\d+))?";
+    const std::string TEXT = "foo:123";  // Has number
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string word_re2;
+    std::optional<int> number_re2;
+    const RE2::Arg arg1_re2(&word_re2);
+    const RE2::Arg arg2_re2(&number_re2);
+    const RE2::Arg* args_re2[] = {&arg1_re2, &arg2_re2};
+    bool result_re2 = RE2::FullMatchN(TEXT, re2_pattern, args_re2, 2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string word_wrapper;
+    std::optional<int> number_wrapper;
+    const Arg arg1_wrapper(&word_wrapper);
+    const Arg arg2_wrapper(&number_wrapper);
+    const Arg* args_wrapper[] = {&arg1_wrapper, &arg2_wrapper};
+    bool result_wrapper = fullMatchN(p, TEXT, args_wrapper, 2);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(word_re2, word_wrapper);
+    EXPECT_EQ(number_re2.has_value(), number_wrapper.has_value());
+    EXPECT_TRUE(number_wrapper.has_value());
+    EXPECT_EQ(*number_re2, *number_wrapper);
+    EXPECT_EQ(123, *number_wrapper);
     // =============================
 
     releasePattern(p);

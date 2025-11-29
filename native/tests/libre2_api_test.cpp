@@ -4891,3 +4891,156 @@ TEST_F(Libre2APITest, RE2Ported_CapturingGroupNames) {
     EXPECT_TRUE(json_w.find("\"bar\"") != std::string::npos);
     releasePattern(p);
 }
+
+// MaxSubmatchTooLarge (from RE2)
+TEST_F(Libre2APITest, RE2Ported_MaxSubmatchTooLarge) {
+    EXPECT_EQ(1000000, RE2::MaxSubmatch("\\1"));
+    EXPECT_EQ(1000000, RE2::MaxSubmatch("\\100"));
+    EXPECT_EQ(1000000, maxSubmatch("\\1"));
+    EXPECT_EQ(1000000, maxSubmatch("\\100"));
+}
+
+// EmptyCharset Fuzz (from RE2)
+TEST_F(Libre2APITest, RE2Ported_EmptyCharset) {
+    RE2 re2_pat1("[^\\S\\s]");
+    RE2 re2_pat2("[^\\S[:space:]]", RE2::POSIX);
+    EXPECT_FALSE(RE2::PartialMatch("x", re2_pat1));
+    EXPECT_FALSE(RE2::PartialMatch(" ", re2_pat1));
+    std::string err1, err2;
+    RE2Pattern* p1 = compilePattern("[^\\S\\s]", true, err1);
+    ASSERT_NE(p1, nullptr);
+    EXPECT_FALSE(partialMatch(p1, "x"));
+    EXPECT_FALSE(partialMatch(p1, " "));
+    releasePattern(p1);
+}
+
+// ProgramSize BigProgram (from RE2)
+TEST_F(Libre2APITest, RE2Ported_ProgramSize) {
+    RE2 re2_pat("(\\d+)|(\\w+)|(\\s+)");
+    int size_re2 = re2_pat.ProgramSize();
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\d+)|(\\w+)|(\\s+)", true, error);
+    ASSERT_NE(p, nullptr);
+    int size_w = getProgramSize(p);
+    EXPECT_EQ(size_re2, size_w);
+    EXPECT_GT(size_w, 0);
+    releasePattern(p);
+}
+
+// ProgramFanout BigProgram (from RE2)
+TEST_F(Libre2APITest, RE2Ported_ProgramFanout) {
+    RE2 re2_pat("(a|b|c|d|e|f|g|h)*");
+    std::vector<int> hist_re2;
+    int bucket_re2 = re2_pat.ProgramFanout(&hist_re2);
+    std::string error;
+    RE2Pattern* p = compilePattern("(a|b|c|d|e|f|g|h)*", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string json_w = getProgramFanoutJSON(p);
+    EXPECT_GT(bucket_re2, 0);
+    EXPECT_FALSE(json_w.empty());
+    EXPECT_NE("[]", json_w);
+    releasePattern(p);
+}
+
+// CapturedGroupTest (from RE2)
+TEST_F(Libre2APITest, RE2Ported_CapturedGroupTest) {
+    RE2 re2_pat("(\\w+).*?(\\d+)");
+    std::string s_re2; int i_re2;
+    EXPECT_TRUE(RE2::FullMatch("test123", re2_pat, &s_re2, &i_re2));
+    EXPECT_EQ("test", s_re2);
+    EXPECT_EQ(123, i_re2);
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\w+).*?(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string s_w; int i_w;
+    const Arg a1(&s_w), a2(&i_w);
+    const Arg* args[] = {&a1, &a2};
+    EXPECT_TRUE(fullMatchN(p, "test123", args, 2));
+    EXPECT_EQ("test", s_w);
+    EXPECT_EQ(123, i_w);
+    releasePattern(p);
+}
+
+// FullMatchAnchored (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchAnchored) {
+    RE2 re2_pat("foo");
+    EXPECT_TRUE(RE2::FullMatch("foo", re2_pat));
+    EXPECT_FALSE(RE2::FullMatch("foobar", re2_pat));
+    std::string error;
+    RE2Pattern* p = compilePattern("foo", true, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(fullMatch(p, "foo"));
+    EXPECT_FALSE(fullMatch(p, "foobar"));
+    releasePattern(p);
+}
+
+// UnicodeClasses (from RE2)
+TEST_F(Libre2APITest, RE2Ported_UnicodeClasses) {
+    RE2 re2_pat("\\p{L}+");
+    EXPECT_TRUE(RE2::FullMatch("hello", re2_pat));
+    EXPECT_TRUE(RE2::FullMatch("Привет", re2_pat));
+    std::string error;
+    RE2Pattern* p = compilePattern("\\p{L}+", true, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(fullMatch(p, "hello"));
+    EXPECT_TRUE(fullMatch(p, "Привет"));
+    releasePattern(p);
+}
+
+// ImplicitConversions (from RE2)
+TEST_F(Libre2APITest, RE2Ported_ImplicitConversions) {
+    EXPECT_TRUE(RE2::FullMatch("foo", "foo"));
+    EXPECT_TRUE(RE2::FullMatch("foo", std::string("foo")));
+    std::string error;
+    RE2Pattern* p = compilePattern("foo", true, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(fullMatch(p, "foo"));
+    EXPECT_TRUE(fullMatch(p, std::string("foo")));
+    releasePattern(p);
+}
+
+// FullMatchBraces (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchBraces) {
+    RE2 re2_pat("(\\w{2,10})");
+    std::string s_re2;
+    EXPECT_TRUE(RE2::FullMatch("ab", re2_pat, &s_re2));
+    EXPECT_EQ("ab", s_re2);
+    EXPECT_TRUE(RE2::FullMatch("abcdefghij", re2_pat, &s_re2));
+    EXPECT_EQ("abcdefghij", s_re2);
+    EXPECT_FALSE(RE2::FullMatch("a", re2_pat, &s_re2));
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\w{2,10})", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string s_w;
+    const Arg a(&s_w); const Arg* args[] = {&a};
+    EXPECT_TRUE(fullMatchN(p, "ab", args, 1));
+    EXPECT_EQ("ab", s_w);
+    EXPECT_TRUE(fullMatchN(p, "abcdefghij", args, 1));
+    EXPECT_EQ("abcdefghij", s_w);
+    EXPECT_FALSE(fullMatchN(p, "a", args, 1));
+    releasePattern(p);
+}
+
+// Recursion test (from RE2)
+TEST_F(Libre2APITest, RE2Ported_Recursion) {
+    RE2 re2_pat("((((((((((((((((((((x))))))))))))))))))))");
+    EXPECT_TRUE(RE2::FullMatch("x", re2_pat));
+    std::string error;
+    RE2Pattern* p = compilePattern("((((((((((((((((((((x))))))))))))))))))))", true, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(fullMatch(p, "x"));
+    releasePattern(p);
+}
+
+// BigCountedRepetition (from RE2)
+TEST_F(Libre2APITest, RE2Ported_BigCountedRepetition) {
+    RE2 re2_pat(".{1000}");
+    std::string big(1000, 'x');
+    EXPECT_TRUE(RE2::FullMatch(big, re2_pat));
+    std::string error;
+    RE2Pattern* p = compilePattern(".{1000}", true, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(fullMatch(p, big));
+    releasePattern(p);
+}

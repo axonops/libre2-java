@@ -84,6 +84,18 @@ void PatternCache::releasePattern(
     pattern_ptr.reset();
 }
 
+void PatternCache::releasePattern(RE2Pattern* pattern) {
+    if (!pattern) {
+        return;  // Null pattern - nothing to release
+    }
+
+    // Decrement refcount (atomic, works regardless of cache location)
+    // Note: Metrics not tracked for raw pointer calls (used by facade layer)
+    pattern->refcount.fetch_sub(1, std::memory_order_acq_rel);
+
+    // Pattern will be cleaned by eviction thread when refcount=0
+}
+
 size_t PatternCache::evict(
     PatternCacheMetrics& metrics,
     DeferredCache& deferred_cache,

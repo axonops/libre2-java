@@ -99,6 +99,8 @@ add_library(re2_cache STATIC
     wrapper/cache/deferred_cache.cpp
     wrapper/cache/eviction_thread.cpp
     wrapper/cache/cache_manager.cpp
+    # Facade API for language wrappers
+    wrapper/libre2_api.cpp
 )
 
 target_include_directories(re2_cache PUBLIC

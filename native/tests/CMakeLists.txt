@@ -11,6 +11,7 @@ add_executable(cache_tests
     cache/integration_test.cpp
     cache/leak_test.cpp
     cache/stress_test.cpp
+    libre2_api_test.cpp
 )
 
 target_link_libraries(cache_tests PRIVATE

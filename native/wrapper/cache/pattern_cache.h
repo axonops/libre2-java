@@ -87,6 +87,16 @@ public:
         PatternCacheMetrics& metrics);
 
     /**
+     * Release pattern (raw pointer overload for language wrappers).
+     *
+     * Convenience overload for JNI/Python/Go wrappers that work with raw pointers.
+     * Decrements refcount atomically. Pattern cleaned by eviction when refcount=0.
+     *
+     * @param pattern raw pointer to pattern
+     */
+    static void releasePattern(RE2Pattern* pattern);
+
+    /**
      * Evict entries based on TTL and capacity (called by background thread).
      *
      * Eviction logic:

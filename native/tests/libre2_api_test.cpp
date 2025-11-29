@@ -4893,11 +4893,24 @@ TEST_F(Libre2APITest, RE2Ported_CapturingGroupNames) {
 }
 
 // MaxSubmatchTooLarge (from RE2)
-TEST_F(Libre2APITest, DISABLED_RE2Ported_MaxSubmatchTooLarge) {
-    EXPECT_EQ(1000000, RE2::MaxSubmatch("\\1"));
-    EXPECT_EQ(1000000, RE2::MaxSubmatch("\\100"));
-    EXPECT_EQ(1000000, maxSubmatch("\\1"));
-    EXPECT_EQ(1000000, maxSubmatch("\\100"));
+TEST_F(Libre2APITest, RE2Ported_MaxSubmatchTooLarge) {
+    initCache();
+    // MaxSubmatch parses only single digit after backslash
+    EXPECT_EQ(1, RE2::MaxSubmatch("\\1"));
+    EXPECT_EQ(1, RE2::MaxSubmatch("\\100"));  // Parses as \\1, ignores 00
+    EXPECT_EQ(9, RE2::MaxSubmatch("\\9"));
+    EXPECT_EQ(1, maxSubmatch("\\1"));
+    EXPECT_EQ(1, maxSubmatch("\\100"));
+    EXPECT_EQ(9, maxSubmatch("\\9"));
+
+    // Test Extract/Replace fail with too large submatch reference
+    std::string error;
+    RE2Pattern* p = compilePattern("f(o+)", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string out;
+    EXPECT_FALSE(extract(p, "foo", "\\1\\2", &out));  // \\2 doesn't exist
+    EXPECT_FALSE(replace(p, "foo", "\\1\\2", &out));
+    releasePattern(p);
 }
 
 // EmptyCharset Fuzz (from RE2)
@@ -4928,36 +4941,55 @@ TEST_F(Libre2APITest, RE2Ported_ProgramSize) {
 }
 
 // ProgramFanout BigProgram (from RE2)
-TEST_F(Libre2APITest, DISABLED_RE2Ported_ProgramFanout) {
+TEST_F(Libre2APITest, RE2Ported_ProgramFanout) {
+    initCache();
     RE2 re2_pat("(a|b|c|d|e|f|g|h)*");
     std::vector<int> hist_re2;
     int bucket_re2 = re2_pat.ProgramFanout(&hist_re2);
+
     std::string error;
     RE2Pattern* p = compilePattern("(a|b|c|d|e|f|g|h)*", true, error);
     ASSERT_NE(p, nullptr);
     std::string json_w = getProgramFanoutJSON(p);
+
+    // Just validate JSON is valid array, not empty
     EXPECT_GT(bucket_re2, 0);
     EXPECT_FALSE(json_w.empty());
     EXPECT_NE("[]", json_w);
+    EXPECT_EQ('[', json_w[0]);
+    EXPECT_EQ(']', json_w[json_w.size()-1]);
+
     releasePattern(p);
 }
 
 // CapturedGroupTest (from RE2)
-TEST_F(Libre2APITest, DISABLED_RE2Ported_CapturedGroupTest) {
-    RE2 re2_pat("(\\w+).*?(\\d+)");
-    std::string s_re2; int i_re2;
-    EXPECT_TRUE(RE2::FullMatch("test123", re2_pat, &s_re2, &i_re2));
-    EXPECT_EQ("test", s_re2);
-    EXPECT_EQ(123, i_re2);
+TEST_F(Libre2APITest, RE2Ported_CapturedGroupTest) {
+    initCache();
+    const std::string PATTERN = "directions from (?P<S>.*) to (?P<D>.*)";
+    const std::string TEXT = "directions from mountain view to san jose";
+
+    RE2 re2_pat(PATTERN);
+    EXPECT_EQ(2, re2_pat.NumberOfCapturingGroups());
+    std::string args_re2[2];
+    const RE2::Arg arg0(&args_re2[0]), arg1(&args_re2[1]);
+    const RE2::Arg* matches_re2[] = {&arg0, &arg1};
+    EXPECT_TRUE(RE2::FullMatchN(TEXT, re2_pat, matches_re2, 2));
+    const auto& named = re2_pat.NamedCapturingGroups();
+
     std::string error;
-    RE2Pattern* p = compilePattern("(\\w+).*?(\\d+)", true, error);
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
     ASSERT_NE(p, nullptr);
-    std::string s_w; int i_w;
-    const Arg a1(&s_w), a2(&i_w);
-    const Arg* args[] = {&a1, &a2};
-    EXPECT_TRUE(fullMatchN(p, "test123", args, 2));
-    EXPECT_EQ("test", s_w);
-    EXPECT_EQ(123, i_w);
+    EXPECT_EQ(2, getNumberOfCapturingGroups(p));
+    std::string args_w[2];
+    const Arg a0(&args_w[0]), a1(&args_w[1]);
+    const Arg* matches_w[] = {&a0, &a1};
+    EXPECT_TRUE(fullMatchN(p, TEXT, matches_w, 2));
+
+    EXPECT_EQ(args_re2[0], args_w[0]);
+    EXPECT_EQ(args_re2[1], args_w[1]);
+    EXPECT_EQ("mountain view", args_w[0]);
+    EXPECT_EQ("san jose", args_w[1]);
+
     releasePattern(p);
 }
 

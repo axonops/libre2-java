@@ -17,6 +17,10 @@
 #include "cache/eviction_thread.h"
 #include <chrono>
 
+#if defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+#endif
+
 namespace libre2 {
 namespace cache {
 
@@ -49,6 +53,11 @@ void EvictionThread::start() {
 
     // Start thread
     thread_ = std::make_unique<std::thread>(&EvictionThread::evictionLoop, this);
+
+    // Set thread name (platform-specific, for debugging)
+#if defined(__linux__)
+    pthread_setname_np(thread_->native_handle(), "libre2-evict");
+#endif
 }
 
 void EvictionThread::stop() {
@@ -59,6 +68,9 @@ void EvictionThread::stop() {
 
     // Request stop
     stop_requested_.store(true, std::memory_order_release);
+
+    // Wake up sleeping thread immediately (graceful shutdown)
+    sleep_cv_.notify_one();
 
     // Wait for thread to exit
     if (thread_ && thread_->joinable()) {
@@ -73,6 +85,14 @@ bool EvictionThread::isRunning() const {
 }
 
 void EvictionThread::evictionLoop() {
+    // Set thread name on macOS (must be called from thread itself)
+#if defined(__APPLE__)
+    pthread_setname_np("libre2-evict");
+#endif
+
+    // Calculate next cycle time (prevents drift)
+    auto next_cycle = std::chrono::steady_clock::now() + config_.eviction_check_interval_ms;
+
     while (!stop_requested_.load(std::memory_order_acquire)) {
         auto now = std::chrono::steady_clock::now();
 
@@ -100,8 +120,21 @@ void EvictionThread::evictionLoop() {
             // TODO: Log when C++ logging infrastructure added
         }
 
-        // Sleep until next cycle
-        std::this_thread::sleep_for(config_.eviction_check_interval_ms);
+        // Calculate next cycle (prevents drift from variable eviction duration)
+        next_cycle += config_.eviction_check_interval_ms;
+
+        // If we're behind schedule, reset to now + interval
+        if (next_cycle <= std::chrono::steady_clock::now()) {
+            next_cycle = std::chrono::steady_clock::now() + config_.eviction_check_interval_ms;
+        }
+
+        // Interruptible sleep using condition variable (allows fast shutdown)
+        {
+            std::unique_lock<std::mutex> lock(sleep_mutex_);
+            sleep_cv_.wait_until(lock, next_cycle, [this] {
+                return stop_requested_.load(std::memory_order_acquire);
+            });
+        }
     }
 
     // Thread exiting

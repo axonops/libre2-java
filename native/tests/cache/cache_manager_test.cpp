@@ -76,14 +76,17 @@ TEST_F(CacheManagerTest, CacheAccessors) {
     CacheConfig config = makeConfig(false);
     CacheManager manager(config);
 
+    // Local metrics for test
+    PatternResultCacheMetrics result_metrics;
+    PatternCacheMetrics pattern_metrics;
+
     // Add to Result Cache
-    manager.resultCache().put(1, "test", true, manager.metrics().pattern_result_cache);
+    manager.resultCache().put(1, "test", true, result_metrics);
     EXPECT_EQ(manager.resultCache().size(), 1u);
 
     // Add to Pattern Cache
     std::string error;
-    auto pattern = manager.patternCache().getOrCompile("test.*", true,
-                                                        manager.metrics().pattern_cache, error);
+    auto pattern = manager.patternCache().getOrCompile("test.*", true, pattern_metrics, error);
     EXPECT_NE(pattern, nullptr);
     EXPECT_EQ(manager.patternCache().size(), 1u);
 }
@@ -93,8 +96,10 @@ TEST_F(CacheManagerTest, MetricsJSON) {
     CacheConfig config = makeConfig(false);
     CacheManager manager(config);
 
+    PatternResultCacheMetrics metrics;
+
     // Add some data
-    manager.resultCache().put(1, "test", true, manager.metrics().pattern_result_cache);
+    manager.resultCache().put(1, "test", true, metrics);
 
     std::string json = manager.getMetricsJSON();
 
@@ -109,12 +114,14 @@ TEST_F(CacheManagerTest, ClearAllCaches) {
     CacheConfig config = makeConfig(false);
     CacheManager manager(config);
 
+    PatternResultCacheMetrics result_metrics;
+    PatternCacheMetrics pattern_metrics;
+
     // Add to all caches
-    manager.resultCache().put(1, "test", true, manager.metrics().pattern_result_cache);
+    manager.resultCache().put(1, "test", true, result_metrics);
 
     std::string error;
-    auto pattern = manager.patternCache().getOrCompile("pattern", true,
-                                                        manager.metrics().pattern_cache, error);
+    auto pattern = manager.patternCache().getOrCompile("pattern", true, pattern_metrics, error);
 
     EXPECT_EQ(manager.resultCache().size(), 1u);
     EXPECT_EQ(manager.patternCache().size(), 1u);
@@ -132,9 +139,11 @@ TEST_F(CacheManagerTest, EvictionThreadRuns) {
     CacheConfig config = makeConfig(false);  // Manual start
     CacheManager manager(config);
 
+    PatternResultCacheMetrics metrics;
+
     // Add entries
     for (int i = 0; i < 10; i++) {
-        manager.resultCache().put(i, "test", true, manager.metrics().pattern_result_cache);
+        manager.resultCache().put(i, "test", true, metrics);
     }
 
     EXPECT_EQ(manager.resultCache().size(), 10u);
@@ -156,22 +165,23 @@ TEST_F(CacheManagerTest, PatternCacheWithDeferred) {
     CacheConfig config = makeConfig(false);
     CacheManager manager(config);
 
+    PatternCacheMetrics metrics;
+
     // Compile pattern
     std::string error;
-    auto pattern = manager.patternCache().getOrCompile("test.*", true,
-                                                        manager.metrics().pattern_cache, error);
+    auto pattern = manager.patternCache().getOrCompile("test.*", true, metrics, error);
     ASSERT_NE(pattern, nullptr);
     EXPECT_EQ(manager.patternCache().size(), 1u);
 
     // Release it
-    PatternCache::releasePattern(pattern, manager.metrics().pattern_cache);
+    PatternCache::releasePattern(pattern, metrics);
 
     // Should still be in cache (refcount = 0)
     EXPECT_EQ(manager.patternCache().size(), 1u);
 
     // Trigger eviction with expired TTL
     auto now = std::chrono::steady_clock::now() + std::chrono::seconds(61);
-    manager.patternCache().evict(manager.metrics().pattern_cache, manager.deferredCache(), now);
+    manager.patternCache().evict(metrics, manager.deferredCache(), now);
 
     // Should be evicted (refcount was 0)
     EXPECT_EQ(manager.patternCache().size(), 0u);
@@ -186,8 +196,10 @@ TEST_F(CacheManagerTest, DestructorCleanup) {
         CacheManager manager(config);
         EXPECT_TRUE(manager.isEvictionThreadRunning());
 
+        PatternResultCacheMetrics metrics;
+
         // Add some data
-        manager.resultCache().put(1, "test", true, manager.metrics().pattern_result_cache);
+        manager.resultCache().put(1, "test", true, metrics);
 
         // Destructor will be called here
     }

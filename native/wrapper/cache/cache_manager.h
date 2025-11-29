@@ -72,8 +72,10 @@ public:
     bool isEvictionThreadRunning() const;
 
     /**
-     * Get current metrics snapshot (all caches).
-     * Thread-safe - can be called while eviction thread running.
+     * Get current metrics snapshot as JSON string.
+     * Thread-safe - returns fresh snapshot from all caches.
+     *
+     * Note: Creates fresh snapshot on each call (not from cached metrics_).
      *
      * @return JSON string with all metrics
      */
@@ -81,26 +83,26 @@ public:
 
     /**
      * Clear all caches (for testing or reset).
+     * NOT thread-safe: Must not be called while other threads access caches.
      * Stops eviction thread first, clears all caches, moves in-use patterns to deferred.
      */
     void clearAllCaches();
 
-    // Cache accessors (for testing and direct use)
+    // Cache accessors (thread-safe - caches have internal locking)
     ResultCache& resultCache() { return result_cache_; }
     PatternCache& patternCache() { return pattern_cache_; }
     DeferredCache& deferredCache() { return deferred_cache_; }
-    CacheMetrics& metrics() { return metrics_; }
 
 private:
     CacheConfig config_;
-    CacheMetrics metrics_;
+    CacheMetrics metrics_;  // Used by eviction thread
 
     // Caches (order matters for initialization)
     ResultCache result_cache_;
     PatternCache pattern_cache_;
     DeferredCache deferred_cache_;
 
-    // Eviction thread (initialized last, references all caches)
+    // Eviction thread (initialized last, references all caches + metrics_)
     std::unique_ptr<EvictionThread> eviction_thread_;
 };
 

@@ -68,19 +68,23 @@ bool CacheManager::isEvictionThreadRunning() const {
 }
 
 std::string CacheManager::getMetricsJSON() const {
-    // Snapshot all caches first
-    result_cache_.snapshotMetrics(const_cast<PatternResultCacheMetrics&>(metrics_.pattern_result_cache));
-    pattern_cache_.snapshotMetrics(const_cast<PatternCacheMetrics&>(metrics_.pattern_cache));
-    deferred_cache_.snapshotMetrics(const_cast<DeferredCacheMetrics&>(metrics_.deferred_cache));
+    // Create fresh snapshot (thread-safe - independent of eviction thread's metrics_)
+    CacheMetrics snapshot;
 
-    // Update timestamp
-    const_cast<CacheMetrics&>(metrics_).generated_at = std::chrono::system_clock::now();
+    result_cache_.snapshotMetrics(snapshot.pattern_result_cache);
+    pattern_cache_.snapshotMetrics(snapshot.pattern_cache);
+    deferred_cache_.snapshotMetrics(snapshot.deferred_cache);
 
-    return metrics_.toJson();
+    snapshot.generated_at = std::chrono::system_clock::now();
+
+    return snapshot.toJson();
 }
 
 void CacheManager::clearAllCaches() {
-    // Stop eviction first
+    // Remember if eviction was running before clear
+    bool was_running = isEvictionThreadRunning();
+
+    // Stop eviction thread
     stopEvictionThread();
 
     // Clear all caches
@@ -88,11 +92,8 @@ void CacheManager::clearAllCaches() {
     result_cache_.clear();
     deferred_cache_.clear();
 
-    // Note: Metrics are cumulative counters, not reset
-    // Snapshot metrics will show 0 entries after clear
-
-    // Restart eviction if it was running
-    if (config_.auto_start_eviction_thread) {
+    // Restart only if it WAS running before clear
+    if (was_running) {
         startEvictionThread();
     }
 }

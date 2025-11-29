@@ -88,6 +88,10 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> stop_requested_{false};
 
+    // For interruptible sleep (graceful shutdown)
+    std::mutex sleep_mutex_;
+    std::condition_variable sleep_cv_;
+
     /**
      * Eviction thread main loop.
      */

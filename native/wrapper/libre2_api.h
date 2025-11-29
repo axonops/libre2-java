@@ -152,6 +152,98 @@ bool partialMatch(
     std::string* capture1,
     std::string* capture2);
 
+//=============================================================================
+// CONSUME/SCAN FUNCTIONS (Phase 1.2.1)
+//=============================================================================
+
+/**
+ * Consume pattern from start of input, advance input on match.
+ *
+ * Like Perl's m//gc - matches at beginning and consumes matched portion.
+ * Updates input_text and input_len to point past the match.
+ *
+ * @param pattern compiled pattern pointer
+ * @param input_text pointer to input text pointer (advanced on match)
+ * @param input_len pointer to input length (reduced on match)
+ * @return true if match at start, false otherwise (input unchanged)
+ */
+bool consume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len);
+
+/**
+ * Consume with 1 capture group.
+ *
+ * @param capture1 output for first capture group
+ * @return true if match, false otherwise
+ */
+bool consume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* capture1);
+
+/**
+ * Consume with 2 capture groups.
+ *
+ * @param capture1 output for first capture group
+ * @param capture2 output for second capture group
+ * @return true if match, false otherwise
+ */
+bool consume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* capture1,
+    std::string* capture2);
+
+/**
+ * Find pattern anywhere in input, advance past match.
+ *
+ * Like Perl's m//g - finds pattern anywhere and consumes up to end of match.
+ * Updates input_text and input_len to point past the match.
+ *
+ * @param pattern compiled pattern pointer
+ * @param input_text pointer to input text pointer (advanced past match)
+ * @param input_len pointer to input length (reduced by consumed amount)
+ * @return true if match found, false otherwise (input unchanged)
+ */
+bool findAndConsume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len);
+
+/**
+ * FindAndConsume with 1 capture group.
+ *
+ * @param capture1 output for first capture group
+ * @return true if match, false otherwise
+ */
+bool findAndConsume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* capture1);
+
+/**
+ * FindAndConsume with 2 capture groups.
+ *
+ * @param capture1 output for first capture group
+ * @param capture2 output for second capture group
+ * @return true if match, false otherwise
+ */
+bool findAndConsume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* capture1,
+    std::string* capture2);
+
+//=============================================================================
+// UTILITY FUNCTIONS
+//=============================================================================
+
 /**
  * Get current cache metrics as JSON string.
  *

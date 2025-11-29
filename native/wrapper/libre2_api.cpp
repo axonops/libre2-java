@@ -156,6 +156,144 @@ bool partialMatch(
     return RE2::PartialMatch(text, *pattern->compiled_regex, capture1, capture2);
 }
 
+//============================================================================
+// CONSUME/SCAN FUNCTIONS (Phase 1.2.1)
+//============================================================================
+
+bool consume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len) {
+
+    if (!pattern || !pattern->isValid() || !input_text || !input_len) {
+        return false;
+    }
+
+    // Create string_view from current input
+    std::string_view input(*input_text, *input_len);
+
+    // Try to consume from start
+    if (RE2::Consume(&input, *pattern->compiled_regex)) {
+        // Match succeeded - update input pointers
+        *input_text = input.data();
+        *input_len = input.size();
+        return true;
+    }
+
+    // No match - input unchanged
+    return false;
+}
+
+bool consume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* capture1) {
+
+    if (!pattern || !pattern->isValid() || !input_text || !input_len) {
+        return false;
+    }
+
+    std::string_view input(*input_text, *input_len);
+
+    if (RE2::Consume(&input, *pattern->compiled_regex, capture1)) {
+        *input_text = input.data();
+        *input_len = input.size();
+        return true;
+    }
+
+    return false;
+}
+
+bool consume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* capture1,
+    std::string* capture2) {
+
+    if (!pattern || !pattern->isValid() || !input_text || !input_len) {
+        return false;
+    }
+
+    std::string_view input(*input_text, *input_len);
+
+    if (RE2::Consume(&input, *pattern->compiled_regex, capture1, capture2)) {
+        *input_text = input.data();
+        *input_len = input.size();
+        return true;
+    }
+
+    return false;
+}
+
+bool findAndConsume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len) {
+
+    if (!pattern || !pattern->isValid() || !input_text || !input_len) {
+        return false;
+    }
+
+    std::string_view input(*input_text, *input_len);
+
+    if (RE2::FindAndConsume(&input, *pattern->compiled_regex)) {
+        *input_text = input.data();
+        *input_len = input.size();
+        return true;
+    }
+
+    return false;
+}
+
+bool findAndConsume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* capture1) {
+
+    if (!pattern || !pattern->isValid() || !input_text || !input_len) {
+        return false;
+    }
+
+    std::string_view input(*input_text, *input_len);
+
+    if (RE2::FindAndConsume(&input, *pattern->compiled_regex, capture1)) {
+        *input_text = input.data();
+        *input_len = input.size();
+        return true;
+    }
+
+    return false;
+}
+
+bool findAndConsume(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* capture1,
+    std::string* capture2) {
+
+    if (!pattern || !pattern->isValid() || !input_text || !input_len) {
+        return false;
+    }
+
+    std::string_view input(*input_text, *input_len);
+
+    if (RE2::FindAndConsume(&input, *pattern->compiled_regex, capture1, capture2)) {
+        *input_text = input.data();
+        *input_len = input.size();
+        return true;
+    }
+
+    return false;
+}
+
+//============================================================================
+// UTILITY FUNCTIONS
+//============================================================================
+
 std::string getMetricsJSON() {
     cache::CacheManager* mgr = g_cache_manager.load(std::memory_order_acquire);
 

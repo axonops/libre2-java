@@ -4764,3 +4764,130 @@ TEST_F(Libre2APITest, RE2Ported_ErrorCodeAndArg) {
     EXPECT_EQ(p, nullptr);
     EXPECT_FALSE(error.empty());
 }
+
+// NeverNewline (from RE2)
+TEST_F(Libre2APITest, RE2Ported_NeverNewline) {
+    RE2::Options opts; opts.set_never_nl(true);
+    RE2 re2_pat(".", opts);
+    EXPECT_FALSE(RE2::PartialMatch("\n", re2_pat));
+    Options opts_w; opts_w.set_never_nl(true);
+    std::string error;
+    RE2Pattern* p = compilePattern(".", opts_w, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_FALSE(partialMatch(p, "\n"));
+    releasePattern(p);
+}
+
+// DotNL (from RE2)
+TEST_F(Libre2APITest, RE2Ported_DotNL) {
+    RE2::Options opts; opts.set_dot_nl(true);
+    RE2 re2_pat(".", opts);
+    EXPECT_TRUE(RE2::PartialMatch("\n", re2_pat));
+    Options opts_w; opts_w.set_dot_nl(true);
+    std::string error;
+    RE2Pattern* p = compilePattern(".", opts_w, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(partialMatch(p, "\n"));
+    releasePattern(p);
+}
+
+// NeverCapture (from RE2)
+TEST_F(Libre2APITest, RE2Ported_NeverCapture) {
+    RE2::Options opts; opts.set_never_capture(true);
+    RE2 re2_pat("(foo)", opts);
+    EXPECT_EQ(0, re2_pat.NumberOfCapturingGroups());
+    Options opts_w; opts_w.set_never_capture(true);
+    std::string error;
+    RE2Pattern* p = compilePattern("(foo)", opts_w, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_EQ(0, getNumberOfCapturingGroups(p));
+    releasePattern(p);
+}
+
+// PartialMatchN (from RE2)
+TEST_F(Libre2APITest, RE2Ported_PartialMatchN) {
+    RE2 re2_pat("(\\d+)");
+    int i_re2;
+    const RE2::Arg a_re2(&i_re2); const RE2::Arg* args_re2[] = {&a_re2};
+    EXPECT_TRUE(RE2::PartialMatchN("x 100 y", re2_pat, args_re2, 1));
+    EXPECT_EQ(100, i_re2);
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+    int i_w;
+    const Arg a_w(&i_w); const Arg* args_w[] = {&a_w};
+    EXPECT_TRUE(partialMatchN(p, "x 100 y", args_w, 1));
+    EXPECT_EQ(100, i_w);
+    releasePattern(p);
+}
+
+// FullMatchN comprehensive (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchN_Comprehensive) {
+    RE2 re2_pat("(\\d+)-(\\d+)-(\\d+)");
+    int a_re2, b_re2, c_re2;
+    const RE2::Arg args_re2[] = {&a_re2, &b_re2, &c_re2};
+    const RE2::Arg* ptrs_re2[] = {&args_re2[0], &args_re2[1], &args_re2[2]};
+    EXPECT_TRUE(RE2::FullMatchN("1-2-3", re2_pat, ptrs_re2, 3));
+    EXPECT_EQ(1, a_re2); EXPECT_EQ(2, b_re2); EXPECT_EQ(3, c_re2);
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\d+)-(\\d+)-(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+    int a_w, b_w, c_w;
+    const Arg a1(&a_w), a2(&b_w), a3(&c_w);
+    const Arg* args_w[] = {&a1, &a2, &a3};
+    EXPECT_TRUE(fullMatchN(p, "1-2-3", args_w, 3));
+    EXPECT_EQ(1, a_w); EXPECT_EQ(2, b_w); EXPECT_EQ(3, c_w);
+    releasePattern(p);
+}
+
+// Complicated patterns (from RE2)
+TEST_F(Libre2APITest, RE2Ported_Complicated) {
+    struct Test { std::string pattern; std::string text; bool match; };
+    const Test cases[] = {
+        {"(\\d+)", "12345", true},
+        {"(\\d+)x(\\d+)", "123x456", true},
+        {"(\\d+)x(\\d+)", "123y456", false},
+        {"foo.*bar", "foobar", true},
+        {"foo.*bar", "foo123bar", true},
+        {"foo.*bar", "foxbar", false}
+    };
+    for (const auto& tc : cases) {
+        RE2 re2_pat(tc.pattern);
+        bool r_re2 = RE2::FullMatch(tc.text, re2_pat);
+        std::string error;
+        RE2Pattern* p = compilePattern(tc.pattern, true, error);
+        ASSERT_NE(p, nullptr);
+        bool r_w = fullMatch(p, tc.text);
+        EXPECT_EQ(r_re2, r_w);
+        EXPECT_EQ(tc.match, r_w);
+        releasePattern(p);
+    }
+}
+
+// NullVsEmptyString (from RE2)
+TEST_F(Libre2APITest, RE2Ported_NullVsEmptyString) {
+    RE2 re2_pat("");
+    EXPECT_TRUE(RE2::FullMatch("", re2_pat));
+    EXPECT_TRUE(RE2::FullMatch(absl::string_view(), re2_pat));
+    std::string error;
+    RE2Pattern* p = compilePattern("", true, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(fullMatch(p, ""));
+    EXPECT_TRUE(fullMatch(p, std::string_view()));
+    releasePattern(p);
+}
+
+// CapturingGroupNames (from RE2)
+TEST_F(Libre2APITest, RE2Ported_CapturingGroupNames) {
+    RE2 re2_pat("(?P<foo>\\w+):(?P<bar>\\d+)");
+    const auto& names_re2 = re2_pat.CapturingGroupNames();
+    std::string error;
+    RE2Pattern* p = compilePattern("(?P<foo>\\w+):(?P<bar>\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string json_w = getCapturingGroupNamesJSON(p);
+    EXPECT_EQ(2u, names_re2.size());
+    EXPECT_TRUE(json_w.find("\"foo\"") != std::string::npos);
+    EXPECT_TRUE(json_w.find("\"bar\"") != std::string::npos);
+    releasePattern(p);
+}

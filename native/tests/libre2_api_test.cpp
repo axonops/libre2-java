@@ -5157,3 +5157,152 @@ TEST_F(Libre2APITest,EX10){RE2 r("(a)?");EXPECT_TRUE(RE2::FullMatch("",r));EXPEC
 TEST_F(Libre2APITest,EX11){RE2 r("(a|b)");EXPECT_TRUE(RE2::FullMatch("a",r));EXPECT_TRUE(RE2::FullMatch("b",r));std::string e;RE2Pattern*p=compilePattern("(a|b)",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"a"));EXPECT_TRUE(fullMatch(p,"b"));releasePattern(p);}
 TEST_F(Libre2APITest,EX12){RE2 r("(a|b)*");EXPECT_TRUE(RE2::FullMatch("abab",r));std::string e;RE2Pattern*p=compilePattern("(a|b)*",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"abab"));releasePattern(p);}
 TEST_F(Libre2APITest,EX13){RE2 r("a{2,4}");EXPECT_FALSE(RE2::FullMatch("a",r));EXPECT_TRUE(RE2::FullMatch("aa",r));EXPECT_TRUE(RE2::FullMatch("aaaa",r));EXPECT_FALSE(RE2::FullMatch("aaaaa",r));std::string e;RE2Pattern*p=compilePattern("a{2,4}",true,e);ASSERT_NE(p,nullptr);EXPECT_FALSE(fullMatch(p,"a"));EXPECT_TRUE(fullMatch(p,"aa"));EXPECT_TRUE(fullMatch(p,"aaaa"));EXPECT_FALSE(fullMatch(p,"aaaaa"));releasePattern(p);}
+
+//=============================================================================
+// SET TESTS - Ported from set_test.cc
+//=============================================================================
+
+// Set Unanchored (from RE2)
+TEST_F(Libre2APITest, SetTest_Unanchored) {
+    RE2::Set s_re2(RE2::DefaultOptions, RE2::UNANCHORED);
+    EXPECT_EQ(0, s_re2.Size());
+    EXPECT_EQ(0, s_re2.Add("foo", nullptr));
+    EXPECT_EQ(1, s_re2.Size());
+    EXPECT_EQ(-1, s_re2.Add("(", nullptr));
+    EXPECT_EQ(1, s_re2.Size());
+    EXPECT_EQ(1, s_re2.Add("bar", nullptr));
+    EXPECT_TRUE(s_re2.Compile());
+    std::vector<int> v_re2;
+    EXPECT_TRUE(s_re2.Match("foobar", &v_re2));
+    EXPECT_EQ(2u, v_re2.size());
+    
+    Set s_w(Options(), RE2::UNANCHORED);
+    EXPECT_EQ(0, s_w.Size());
+    EXPECT_EQ(0, s_w.Add("foo", nullptr));
+    EXPECT_EQ(1, s_w.Size());
+    EXPECT_EQ(-1, s_w.Add("(", nullptr));
+    EXPECT_EQ(1, s_w.Size());
+    EXPECT_EQ(1, s_w.Add("bar", nullptr));
+    EXPECT_TRUE(s_w.Compile());
+    std::vector<int> v_w;
+    EXPECT_TRUE(s_w.Match("foobar", &v_w));
+    EXPECT_EQ(2u, v_w.size());
+    EXPECT_EQ(v_re2, v_w);
+}
+
+// Set Anchored (from RE2)
+TEST_F(Libre2APITest, SetTest_Anchored) {
+    RE2::Set s_re2(RE2::DefaultOptions, RE2::ANCHOR_BOTH);
+    s_re2.Add("foo", nullptr);
+    s_re2.Add("bar", nullptr);
+    s_re2.Compile();
+    EXPECT_TRUE(s_re2.Match("foo", nullptr));
+    EXPECT_FALSE(s_re2.Match("foobar", nullptr));
+    
+    Set s_w(Options(), RE2::ANCHOR_BOTH);
+    s_w.Add("foo", nullptr);
+    s_w.Add("bar", nullptr);
+    s_w.Compile();
+    EXPECT_TRUE(s_w.Match("foo", nullptr));
+    EXPECT_FALSE(s_w.Match("foobar", nullptr));
+}
+
+// Set EmptyUnanchored (from RE2)
+TEST_F(Libre2APITest, SetTest_EmptyUnanchored) {
+    RE2::Set s_re2(RE2::DefaultOptions, RE2::UNANCHORED);
+    s_re2.Compile();
+    EXPECT_FALSE(s_re2.Match("foo", nullptr));
+    
+    Set s_w(Options(), RE2::UNANCHORED);
+    s_w.Compile();
+    EXPECT_FALSE(s_w.Match("foo", nullptr));
+}
+
+// Set EmptyAnchored (from RE2)
+TEST_F(Libre2APITest, SetTest_EmptyAnchored) {
+    RE2::Set s_re2(RE2::DefaultOptions, RE2::ANCHOR_BOTH);
+    s_re2.Compile();
+    EXPECT_FALSE(s_re2.Match("", nullptr));
+    
+    Set s_w(Options(), RE2::ANCHOR_BOTH);
+    s_w.Compile();
+    EXPECT_FALSE(s_w.Match("", nullptr));
+}
+
+// Set MoveSemantics (from RE2)
+TEST_F(Libre2APITest, SetTest_MoveSemantics) {
+    RE2::Set s1_re2(RE2::DefaultOptions, RE2::UNANCHORED);
+    s1_re2.Add("foo", nullptr);
+    RE2::Set s2_re2(std::move(s1_re2));
+    s2_re2.Compile();
+    EXPECT_TRUE(s2_re2.Match("foo", nullptr));
+    
+    Set s1_w(Options(), RE2::UNANCHORED);
+    s1_w.Add("foo", nullptr);
+    Set s2_w(std::move(s1_w));
+    s2_w.Compile();
+    EXPECT_TRUE(s2_w.Match("foo", nullptr));
+}
+
+//=============================================================================
+// POSSIBLE_MATCH_TEST.CC - Ported
+//=============================================================================
+
+// PossibleMatchRange tests (from possible_match_test.cc)
+TEST_F(Libre2APITest, PossibleMatch_Simple) {
+    initCache();
+    RE2 r_re2("foo");
+    std::string min_re2, max_re2;
+    EXPECT_TRUE(r_re2.PossibleMatchRange(&min_re2, &max_re2, 10));
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("foo", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string min_w, max_w;
+    EXPECT_TRUE(possibleMatchRange(p, &min_w, &max_w, 10));
+    EXPECT_EQ(min_re2, min_w);
+    EXPECT_EQ(max_re2, max_w);
+    releasePattern(p);
+}
+
+//=============================================================================
+// COMPILE_TEST.CC - Ported
+//=============================================================================
+
+// Options compilation (from compile_test.cc)
+TEST_F(Libre2APITest, CompileTest_WithOptions) {
+    RE2::Options opts_re2;
+    opts_re2.set_max_mem(1024);
+    RE2 r_re2("test", opts_re2);
+    EXPECT_TRUE(r_re2.ok());
+    
+    Options opts_w;
+    opts_w.set_max_mem(1024);
+    std::string error;
+    RE2Pattern* p = compilePattern("test", opts_w, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(ok(p));
+    releasePattern(p);
+}
+
+//=============================================================================
+// SEARCH_TEST.CC - Ported
+//=============================================================================
+
+// Search test (from search_test.cc)
+TEST_F(Libre2APITest, SearchTest_Basic) {
+    initCache();
+    RE2 r_re2("(\\d+)");
+    std::string s_re2;
+    EXPECT_TRUE(RE2::PartialMatch("foo 123 bar", r_re2, &s_re2));
+    EXPECT_EQ("123", s_re2);
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string s_w;
+    const Arg a(&s_w); const Arg* args[] = {&a};
+    EXPECT_TRUE(partialMatchN(p, "foo 123 bar", args, 1));
+    EXPECT_EQ("123", s_w);
+    releasePattern(p);
+}

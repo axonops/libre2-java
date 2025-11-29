@@ -18,6 +18,7 @@
 
 #include "cache/cache_config.h"
 #include "cache/cache_metrics.h"
+#include "pattern_options.h"
 #include <re2/re2.h>
 #include <chrono>
 #include <memory>
@@ -38,14 +39,30 @@ struct RE2Pattern {
     std::atomic<uint32_t> refcount{0};
     std::chrono::steady_clock::time_point last_access;
     std::string pattern_string;
-    bool case_sensitive;
+    bool case_sensitive;  // DEPRECATED - kept for backward compat
+    api::PatternOptions options;  // NEW FIELD: full pattern options
     size_t approx_size_bytes;
 
+    // NEW CONSTRUCTOR with PatternOptions
+    RE2Pattern(std::unique_ptr<RE2> regex, const std::string& pattern, const api::PatternOptions& opts)
+        : compiled_regex(std::move(regex)),
+          last_access(std::chrono::steady_clock::now()),
+          pattern_string(pattern),
+          case_sensitive(opts.case_sensitive),  // For backward compat
+          options(opts),  // Store full options
+          approx_size_bytes(0) {
+        if (compiled_regex && compiled_regex->ok()) {
+            approx_size_bytes = compiled_regex->ProgramSize();
+        }
+    }
+
+    // KEEP OLD CONSTRUCTOR for backward compat
     RE2Pattern(std::unique_ptr<RE2> regex, const std::string& pattern, bool cs)
         : compiled_regex(std::move(regex)),
           last_access(std::chrono::steady_clock::now()),
           pattern_string(pattern),
           case_sensitive(cs),
+          options(api::PatternOptions::fromCaseSensitive(cs)),  // Convert to options
           approx_size_bytes(0) {
         if (compiled_regex && compiled_regex->ok()) {
             approx_size_bytes = compiled_regex->ProgramSize();

@@ -100,6 +100,7 @@ add_library(re2_cache STATIC
     wrapper/cache/eviction_thread.cpp
     wrapper/cache/cache_manager.cpp
     # Facade API for language wrappers
+    wrapper/pattern_options.cpp
     wrapper/libre2_api.cpp
 )
 

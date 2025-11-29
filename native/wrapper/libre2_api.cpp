@@ -15,6 +15,7 @@
  */
 
 #include "libre2_api.h"
+#include "pattern_options.h"
 #include "cache/cache_manager.h"
 #include "cache/murmur_hash3.h"
 #include <atomic>
@@ -42,12 +43,14 @@ cache::RE2Pattern* compilePattern(
     bool case_sensitive,
     std::string& error_out) {
 
+    // Convert bool case_sensitive to PatternOptions for new API
+    api::PatternOptions options = api::PatternOptions::fromCaseSensitive(case_sensitive);
+
     cache::CacheManager* mgr = g_cache_manager.load(std::memory_order_acquire);
 
     if (mgr == nullptr) {
         // NO CACHE - Compile directly with raw RE2
-        RE2::Options opts;
-        opts.set_case_sensitive(case_sensitive);
+        RE2::Options opts = options.toRE2Options();
         opts.set_log_errors(false);
 
         auto regex = std::make_unique<RE2>(pattern, opts);
@@ -58,13 +61,57 @@ cache::RE2Pattern* compilePattern(
         }
 
         // Create RE2Pattern wrapper (no caching, refcount stays 0)
-        auto* pattern_wrapper = new cache::RE2Pattern(std::move(regex), pattern, case_sensitive);
+        auto* pattern_wrapper = new cache::RE2Pattern(std::move(regex), pattern, options);
         return pattern_wrapper;
     }
 
     // CACHE ENABLED - Use cached compilation
     cache::PatternCacheMetrics metrics;  // Local metrics
-    auto shared_pattern = mgr->patternCache().getOrCompile(pattern, case_sensitive, metrics, error_out);
+    auto shared_pattern = mgr->patternCache().getOrCompile(pattern, options, metrics, error_out);
+
+    if (!shared_pattern) {
+        return nullptr;  // Compilation error
+    }
+
+    // Return raw pointer (cache holds shared_ptr)
+    return shared_pattern.get();
+}
+
+cache::RE2Pattern* compilePattern(
+    const std::string& pattern,
+    const std::string& options_json,
+    std::string& error_out) {
+
+    // Parse options from JSON
+    api::PatternOptions options;
+    try {
+        options = api::PatternOptions::fromJson(options_json);
+    } catch (const std::exception& e) {
+        error_out = std::string("Invalid options JSON: ") + e.what();
+        return nullptr;
+    }
+
+    cache::CacheManager* mgr = g_cache_manager.load(std::memory_order_acquire);
+
+    if (mgr == nullptr) {
+        // NO CACHE - Compile directly with raw RE2
+        RE2::Options re2_opts = options.toRE2Options();
+
+        auto regex = std::make_unique<RE2>(pattern, re2_opts);
+
+        if (!regex->ok()) {
+            error_out = regex->error();
+            return nullptr;
+        }
+
+        // Create RE2Pattern wrapper (no caching, refcount stays 0)
+        auto* pattern_wrapper = new cache::RE2Pattern(std::move(regex), pattern, options);
+        return pattern_wrapper;
+    }
+
+    // CACHE ENABLED - Use cached compilation
+    cache::PatternCacheMetrics metrics;  // Local metrics
+    auto shared_pattern = mgr->patternCache().getOrCompile(pattern, options, metrics, error_out);
 
     if (!shared_pattern) {
         return nullptr;  // Compilation error

@@ -15,10 +15,17 @@
  */
 
 #include "cache/pattern_cache.h"
+#include "pattern_options.h"
 #include <gtest/gtest.h>
 #include <thread>
 
 using namespace libre2::cache;
+using namespace libre2::api;
+
+// Helper: Create PatternOptions with case sensitivity flag
+inline PatternOptions opts(bool case_sensitive) {
+    return PatternOptions::fromCaseSensitive(case_sensitive);
+}
 
 /**
  * Pattern Cache Tests - Test BOTH std and TBB implementations.
@@ -49,7 +56,7 @@ TEST_P(PatternCacheTest, CompilePattern) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    auto pattern = cache.getOrCompile("test.*", true, metrics, error);
+    auto pattern = cache.getOrCompile("test.*", opts(true), metrics, error);
 
     ASSERT_NE(pattern, nullptr) << "Pattern compilation failed: " << error;
     EXPECT_TRUE(pattern->isValid());
@@ -70,8 +77,8 @@ TEST_P(PatternCacheTest, CacheHit) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    auto p1 = cache.getOrCompile("test.*", true, metrics, error);
-    auto p2 = cache.getOrCompile("test.*", true, metrics, error);
+    auto p1 = cache.getOrCompile("test.*", opts(true), metrics, error);
+    auto p2 = cache.getOrCompile("test.*", opts(true), metrics, error);
 
     EXPECT_EQ(p1.get(), p2.get()) << "Same pattern should return same pointer";
     EXPECT_EQ(p1->refcount.load(), 2u) << "Refcount should be 2";
@@ -88,8 +95,8 @@ TEST_P(PatternCacheTest, CaseSensitivity) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    auto p1 = cache.getOrCompile("TEST", true, metrics, error);   // Case sensitive
-    auto p2 = cache.getOrCompile("TEST", false, metrics, error);  // Case insensitive
+    auto p1 = cache.getOrCompile("TEST", opts(true), metrics, error);   // Case sensitive
+    auto p2 = cache.getOrCompile("TEST", opts(false), metrics, error);  // Case insensitive
 
     EXPECT_NE(p1.get(), p2.get()) << "Different case sensitivity = different entries";
     EXPECT_EQ(cache.size(), 2u);
@@ -105,13 +112,13 @@ TEST_P(PatternCacheTest, RefcountManagement) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    auto p1 = cache.getOrCompile("test", true, metrics, error);
+    auto p1 = cache.getOrCompile("test", opts(true), metrics, error);
     EXPECT_EQ(p1->refcount.load(), 1u);
 
-    auto p2 = cache.getOrCompile("test", true, metrics, error);
+    auto p2 = cache.getOrCompile("test", opts(true), metrics, error);
     EXPECT_EQ(p1->refcount.load(), 2u);
 
-    auto p3 = cache.getOrCompile("test", true, metrics, error);
+    auto p3 = cache.getOrCompile("test", opts(true), metrics, error);
     EXPECT_EQ(p1->refcount.load(), 3u);
 
     // Save raw pointer to check refcount after final release
@@ -137,7 +144,7 @@ TEST_P(PatternCacheTest, CompilationError) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    auto pattern = cache.getOrCompile("[invalid", true, metrics, error);
+    auto pattern = cache.getOrCompile("[invalid", opts(true), metrics, error);
 
     EXPECT_EQ(pattern, nullptr);
     EXPECT_FALSE(error.empty()) << "Should have error message";
@@ -153,7 +160,7 @@ TEST_P(PatternCacheTest, TTLEviction_ImmediateDelete) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    auto p = cache.getOrCompile("test", true, metrics, error);
+    auto p = cache.getOrCompile("test", opts(true), metrics, error);
     EXPECT_EQ(cache.size(), 1u);
 
     // Save raw pointer before releasing
@@ -182,7 +189,7 @@ TEST_P(PatternCacheTest, TTLEviction_MoveToDeferred) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    auto p = cache.getOrCompile("test", true, metrics, error);
+    auto p = cache.getOrCompile("test", opts(true), metrics, error);
     EXPECT_EQ(cache.size(), 1u);
     EXPECT_EQ(deferred.size(), 0u);
 
@@ -219,7 +226,7 @@ TEST_P(PatternCacheTest, LRUEviction) {
     // Add patterns until over capacity
     std::vector<std::shared_ptr<RE2Pattern>> patterns;
     for (int i = 0; i < 100; i++) {
-        auto p = cache.getOrCompile("pattern" + std::to_string(i), true, metrics, error);
+        auto p = cache.getOrCompile("pattern" + std::to_string(i), opts(true), metrics, error);
         patterns.push_back(p);
         PatternCache::releasePattern(p, metrics);
     }
@@ -249,9 +256,9 @@ TEST_P(PatternCacheTest, Clear) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    cache.getOrCompile("p1", true, metrics, error);
-    cache.getOrCompile("p2", true, metrics, error);
-    cache.getOrCompile("p3", true, metrics, error);
+    cache.getOrCompile("p1", opts(true), metrics, error);
+    cache.getOrCompile("p2", opts(true), metrics, error);
+    cache.getOrCompile("p3", opts(true), metrics, error);
     EXPECT_EQ(cache.size(), 3u);
 
     cache.clear(deferred);
@@ -269,8 +276,8 @@ TEST_P(PatternCacheTest, SnapshotMetrics) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    cache.getOrCompile("p1", true, metrics, error);
-    cache.getOrCompile("p2", true, metrics, error);
+    cache.getOrCompile("p1", opts(true), metrics, error);
+    cache.getOrCompile("p2", opts(true), metrics, error);
 
     cache.snapshotMetrics(metrics);
 
@@ -291,11 +298,11 @@ TEST_P(PatternCacheTest, RefcountInvariant_NoRaceCondition) {
     std::string error;
 
     // Compile pattern
-    auto p1 = cache.getOrCompile("test", true, metrics, error);
+    auto p1 = cache.getOrCompile("test", opts(true), metrics, error);
     EXPECT_EQ(p1->refcount.load(), 1u);
 
     // Get again (cache hit)
-    auto p2 = cache.getOrCompile("test", true, metrics, error);
+    auto p2 = cache.getOrCompile("test", opts(true), metrics, error);
 
     // CRITICAL: Refcount should be 2 BEFORE p2 is returned
     // This proves refcount was incremented while lock was held
@@ -321,7 +328,7 @@ TEST_P(PatternCacheTest, ThreadSafe_ConcurrentCompile) {
             for (int i = 0; i < patterns_per_thread; i++) {
                 std::string pattern = "pattern_" + std::to_string(t * patterns_per_thread + i);
                 std::string error;
-                auto p = cache.getOrCompile(pattern, true, metrics, error);
+                auto p = cache.getOrCompile(pattern, opts(true), metrics, error);
                 if (!p) {
                     compilation_errors.fetch_add(1);
                 }
@@ -353,7 +360,7 @@ TEST_P(PatternCacheTest, ThreadSafe_RaceOnSamePattern) {
     for (int t = 0; t < num_threads; t++) {
         threads.emplace_back([&cache, &metrics, &results, t]() {
             std::string error;
-            results[t] = cache.getOrCompile("shared_pattern", true, metrics, error);
+            results[t] = cache.getOrCompile("shared_pattern", opts(true), metrics, error);
         });
     }
 
@@ -387,7 +394,7 @@ TEST_P(PatternCacheTest, ThreadSafe_ConcurrentGetRelease) {
     std::string error;
 
     // Pre-compile pattern
-    auto precompiled = cache.getOrCompile("shared", true, metrics, error);
+    auto precompiled = cache.getOrCompile("shared", opts(true), metrics, error);
     PatternCache::releasePattern(precompiled, metrics);
 
     const int num_threads = 10;
@@ -398,7 +405,7 @@ TEST_P(PatternCacheTest, ThreadSafe_ConcurrentGetRelease) {
         threads.emplace_back([&cache, &metrics, iterations]() {
             for (int i = 0; i < iterations; i++) {
                 std::string error;
-                auto p = cache.getOrCompile("shared", true, metrics, error);
+                auto p = cache.getOrCompile("shared", opts(true), metrics, error);
                 // Use pattern...
                 PatternCache::releasePattern(p, metrics);
             }
@@ -411,7 +418,7 @@ TEST_P(PatternCacheTest, ThreadSafe_ConcurrentGetRelease) {
 
     // Final refcount should be 0 (all released)
     std::string err;
-    auto final = cache.getOrCompile("shared", true, metrics, err);
+    auto final = cache.getOrCompile("shared", opts(true), metrics, err);
     EXPECT_EQ(final->refcount.load(), 1u) << "All threads released, refcount should be 1";
 }
 
@@ -433,7 +440,7 @@ TEST_P(PatternCacheTest, StressTest_RefcountRaceCondition) {
         workers.emplace_back([&]() {
             while (!stop.load()) {
                 std::string error;
-                auto p = cache.getOrCompile("stress_pattern", true, metrics, error);
+                auto p = cache.getOrCompile("stress_pattern", opts(true), metrics, error);
 
                 if (p) {
                     // Verify pattern is valid (catches use-after-free)
@@ -468,7 +475,7 @@ TEST_P(PatternCacheTest, EvictWhileConcurrentAccess) {
     std::string error;
 
     // Pre-compile pattern
-    auto p = cache.getOrCompile("test", true, metrics, error);
+    auto p = cache.getOrCompile("test", opts(true), metrics, error);
     EXPECT_EQ(p->refcount.load(), 1u);
 
     // Try to evict (should move to deferred, not delete)
@@ -492,13 +499,13 @@ TEST_P(PatternCacheTest, Metrics_HitRate) {
     std::string error;
 
     // 1 miss
-    cache.getOrCompile("p1", true, metrics, error);
+    cache.getOrCompile("p1", opts(true), metrics, error);
 
     // 4 hits
-    cache.getOrCompile("p1", true, metrics, error);
-    cache.getOrCompile("p1", true, metrics, error);
-    cache.getOrCompile("p1", true, metrics, error);
-    cache.getOrCompile("p1", true, metrics, error);
+    cache.getOrCompile("p1", opts(true), metrics, error);
+    cache.getOrCompile("p1", opts(true), metrics, error);
+    cache.getOrCompile("p1", opts(true), metrics, error);
+    cache.getOrCompile("p1", opts(true), metrics, error);
 
     EXPECT_EQ(metrics.hits.load(), 4u);
     EXPECT_EQ(metrics.misses.load(), 1u);
@@ -513,8 +520,8 @@ TEST_P(PatternCacheTest, Metrics_BytesTracked) {
     PatternCacheMetrics metrics;
     std::string error;
 
-    cache.getOrCompile("p1", true, metrics, error);
-    cache.getOrCompile("p2", true, metrics, error);
+    cache.getOrCompile("p1", opts(true), metrics, error);
+    cache.getOrCompile("p2", opts(true), metrics, error);
 
     cache.snapshotMetrics(metrics);
 
@@ -534,12 +541,12 @@ TEST_P(PatternCacheTest, DoubleCompilation_UsesFirst) {
 
     std::thread t1([&]() {
         std::string error;
-        p1 = cache.getOrCompile("same_pattern", true, metrics, error);
+        p1 = cache.getOrCompile("same_pattern", opts(true), metrics, error);
     });
 
     std::thread t2([&]() {
         std::string error;
-        p2 = cache.getOrCompile("same_pattern", true, metrics, error);
+        p2 = cache.getOrCompile("same_pattern", opts(true), metrics, error);
     });
 
     t1.join();

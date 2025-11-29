@@ -49,16 +49,16 @@ PatternCache::~PatternCache() {
 
 std::shared_ptr<RE2Pattern> PatternCache::getOrCompile(
     const std::string& pattern_string,
-    bool case_sensitive,
+    const api::PatternOptions& options,
     PatternCacheMetrics& metrics,
     std::string& error_msg) {
 
-    uint64_t key = makeKey(pattern_string, case_sensitive);
+    uint64_t key = makeKey(pattern_string, options);
 
     if (using_tbb_) {
-        return getOrCompileTBB(key, pattern_string, case_sensitive, metrics, error_msg);
+        return getOrCompileTBB(key, pattern_string, options, metrics, error_msg);
     } else {
-        return getOrCompileStd(key, pattern_string, case_sensitive, metrics, error_msg);
+        return getOrCompileStd(key, pattern_string, options, metrics, error_msg);
     }
 }
 
@@ -165,7 +165,7 @@ size_t PatternCache::size() const {
 std::shared_ptr<RE2Pattern> PatternCache::getOrCompileStd(
     uint64_t key,
     const std::string& pattern_string,
-    bool case_sensitive,
+    const api::PatternOptions& options,
     PatternCacheMetrics& metrics,
     std::string& error_msg) {
 
@@ -192,7 +192,7 @@ std::shared_ptr<RE2Pattern> PatternCache::getOrCompileStd(
     metrics.misses.fetch_add(1);
 
     // Compile pattern (no lock held - compilation can be slow)
-    auto pattern = compilePattern(pattern_string, case_sensitive, error_msg);
+    auto pattern = compilePattern(pattern_string, options, error_msg);
     if (!pattern) {
         metrics.compilation_errors.fetch_add(1);
         return nullptr;
@@ -323,7 +323,7 @@ size_t PatternCache::evictStd(
 std::shared_ptr<RE2Pattern> PatternCache::getOrCompileTBB(
     uint64_t key,
     const std::string& pattern_string,
-    bool case_sensitive,
+    const api::PatternOptions& options,
     PatternCacheMetrics& metrics,
     std::string& error_msg) {
 
@@ -349,7 +349,7 @@ std::shared_ptr<RE2Pattern> PatternCache::getOrCompileTBB(
     metrics.misses.fetch_add(1);
 
     // Compile pattern (no lock held)
-    auto pattern = compilePattern(pattern_string, case_sensitive, error_msg);
+    auto pattern = compilePattern(pattern_string, options, error_msg);
     if (!pattern) {
         metrics.compilation_errors.fetch_add(1);
         return nullptr;
@@ -484,29 +484,32 @@ size_t PatternCache::evictTBB(
 // Helper Methods
 //============================================================================
 
-uint64_t PatternCache::makeKey(const std::string& pattern, bool case_sensitive) const {
-    // Hash: pattern_string + case_sensitive flag
-    std::string key_str = pattern + (case_sensitive ? "|CS" : "|CI");
-    return hash::hashString(key_str);
+uint64_t PatternCache::makeKey(const std::string& pattern, const api::PatternOptions& options) const {
+    // Hash: pattern_string + options hash
+    uint64_t pattern_hash = hash::hashString(pattern);
+    uint64_t options_hash = options.hash();
+    // Combine hashes with XOR
+    return pattern_hash ^ options_hash;
 }
 
 std::shared_ptr<RE2Pattern> PatternCache::compilePattern(
     const std::string& pattern_string,
-    bool case_sensitive,
+    const api::PatternOptions& options,
     std::string& error_msg) {
 
-    RE2::Options opts;
-    opts.set_case_sensitive(case_sensitive);
-    opts.set_log_errors(false);
+    // Convert PatternOptions to RE2::Options
+    RE2::Options re2_opts = options.toRE2Options();
+    re2_opts.set_log_errors(false);  // Ensure errors not logged to stderr
 
-    auto regex = std::make_unique<RE2>(pattern_string, opts);
+    auto regex = std::make_unique<RE2>(pattern_string, re2_opts);
 
     if (!regex->ok()) {
         error_msg = regex->error();
         return nullptr;
     }
 
-    return std::make_shared<RE2Pattern>(std::move(regex), pattern_string, case_sensitive);
+    // Create pattern with full options
+    return std::make_shared<RE2Pattern>(std::move(regex), pattern_string, options);
 }
 
 }  // namespace cache

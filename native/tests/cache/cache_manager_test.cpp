@@ -15,10 +15,17 @@
  */
 
 #include "cache/cache_manager.h"
+#include "pattern_options.h"
 #include <gtest/gtest.h>
 #include <thread>
 
 using namespace libre2::cache;
+using namespace libre2::api;
+
+// Helper: Create PatternOptions with case sensitivity flag
+inline PatternOptions opts(bool case_sensitive) {
+    return PatternOptions::fromCaseSensitive(case_sensitive);
+}
 
 class CacheManagerTest : public ::testing::Test {
 protected:
@@ -86,7 +93,7 @@ TEST_F(CacheManagerTest, CacheAccessors) {
 
     // Add to Pattern Cache
     std::string error;
-    auto pattern = manager.patternCache().getOrCompile("test.*", true, pattern_metrics, error);
+    auto pattern = manager.patternCache().getOrCompile("test.*", opts(true), pattern_metrics, error);
     EXPECT_NE(pattern, nullptr);
     EXPECT_EQ(manager.patternCache().size(), 1u);
 }
@@ -121,7 +128,7 @@ TEST_F(CacheManagerTest, ClearAllCaches) {
     manager.resultCache().put(1, "test", true, result_metrics);
 
     std::string error;
-    auto pattern = manager.patternCache().getOrCompile("pattern", true, pattern_metrics, error);
+    auto pattern = manager.patternCache().getOrCompile("pattern", opts(true), pattern_metrics, error);
 
     EXPECT_EQ(manager.resultCache().size(), 1u);
     EXPECT_EQ(manager.patternCache().size(), 1u);
@@ -169,7 +176,7 @@ TEST_F(CacheManagerTest, PatternCacheWithDeferred) {
 
     // Compile pattern
     std::string error;
-    auto pattern = manager.patternCache().getOrCompile("test.*", true, metrics, error);
+    auto pattern = manager.patternCache().getOrCompile("test.*", opts(true), metrics, error);
     ASSERT_NE(pattern, nullptr);
     EXPECT_EQ(manager.patternCache().size(), 1u);
 

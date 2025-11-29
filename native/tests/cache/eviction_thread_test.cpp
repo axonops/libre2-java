@@ -15,10 +15,17 @@
  */
 
 #include "cache/eviction_thread.h"
+#include "pattern_options.h"
 #include <gtest/gtest.h>
 #include <thread>
 
 using namespace libre2::cache;
+using namespace libre2::api;
+
+// Helper: Create PatternOptions with case sensitivity flag
+inline PatternOptions opts(bool case_sensitive) {
+    return PatternOptions::fromCaseSensitive(case_sensitive);
+}
 
 class EvictionThreadTest : public ::testing::Test {
 protected:
@@ -134,7 +141,7 @@ TEST_F(EvictionThreadTest, MetricsUpdated) {
     result_cache.put(1, "test", true, metrics.pattern_result_cache);
 
     std::string error;
-    pattern_cache.getOrCompile("pattern", true, metrics.pattern_cache, error);
+    pattern_cache.getOrCompile("pattern", opts(true), metrics.pattern_cache, error);
 
     // Start thread
     EvictionThread thread(config, result_cache, pattern_cache, deferred_cache, metrics);
@@ -200,7 +207,7 @@ TEST_F(EvictionThreadTest, AllCachesEvicted) {
     result_cache.put(1, "test", true, metrics.pattern_result_cache);
 
     std::string error;
-    auto pattern = pattern_cache.getOrCompile("pattern", true, metrics.pattern_cache, error);
+    auto pattern = pattern_cache.getOrCompile("pattern", opts(true), metrics.pattern_cache, error);
     PatternCache::releasePattern(pattern, metrics.pattern_cache);  // Refcount → 0
 
     // Start eviction

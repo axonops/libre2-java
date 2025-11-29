@@ -20,6 +20,7 @@
 #include "cache/cache_metrics.h"
 #include "cache/deferred_cache.h"
 #include "cache/murmur_hash3.h"
+#include "pattern_options.h"
 #include <oneapi/tbb/concurrent_hash_map.h>
 #include <chrono>
 #include <memory>
@@ -59,14 +60,14 @@ public:
      * CRITICAL: Refcount incremented BEFORE lock released (prevents race).
      *
      * @param pattern_string regex pattern
-     * @param case_sensitive case sensitivity flag
+     * @param options pattern compilation options (includes case sensitivity)
      * @param metrics metrics to update
      * @param error_msg output parameter for compilation errors
      * @return compiled pattern, or nullptr on error
      */
     std::shared_ptr<RE2Pattern> getOrCompile(
         const std::string& pattern_string,
-        bool case_sensitive,
+        const api::PatternOptions& options,
         PatternCacheMetrics& metrics,
         std::string& error_msg);
 
@@ -165,7 +166,7 @@ private:
     std::shared_ptr<RE2Pattern> getOrCompileStd(
         uint64_t key,
         const std::string& pattern_string,
-        bool case_sensitive,
+        const api::PatternOptions& options,
         PatternCacheMetrics& metrics,
         std::string& error_msg);
 
@@ -178,7 +179,7 @@ private:
     std::shared_ptr<RE2Pattern> getOrCompileTBB(
         uint64_t key,
         const std::string& pattern_string,
-        bool case_sensitive,
+        const api::PatternOptions& options,
         PatternCacheMetrics& metrics,
         std::string& error_msg);
 
@@ -188,10 +189,10 @@ private:
         const std::chrono::steady_clock::time_point& now);
 
     // Helpers
-    uint64_t makeKey(const std::string& pattern, bool case_sensitive) const;
+    uint64_t makeKey(const std::string& pattern, const api::PatternOptions& options) const;
     std::shared_ptr<RE2Pattern> compilePattern(
         const std::string& pattern_string,
-        bool case_sensitive,
+        const api::PatternOptions& options,
         std::string& error_msg);
 };
 

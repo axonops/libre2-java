@@ -49,7 +49,7 @@ namespace api {
  */
 
 /**
- * Compile RE2 pattern.
+ * Compile RE2 pattern (simple case-sensitive flag).
  *
  * Behavior depends on whether cache is initialized:
  * - If initCache() was called: Uses cache (reuses patterns, refcount management)
@@ -63,6 +63,37 @@ namespace api {
 cache::RE2Pattern* compilePattern(
     const std::string& pattern,
     bool case_sensitive,
+    std::string& error_out);
+
+/**
+ * Compile RE2 pattern with full options (JSON).
+ *
+ * Options affect cache key: different options = different cache entry.
+ *
+ * JSON format (all fields optional):
+ * {
+ *   "case_sensitive": true,
+ *   "encoding": "UTF8",
+ *   "posix_syntax": false,
+ *   "longest_match": false,
+ *   "literal": false,
+ *   "never_nl": false,
+ *   "dot_nl": false,
+ *   "never_capture": false,
+ *   "perl_classes": false,
+ *   "word_boundary": false,
+ *   "one_line": false,
+ *   "max_mem": 8388608
+ * }
+ *
+ * @param pattern regex pattern string
+ * @param options_json JSON string with options (empty = defaults)
+ * @param error_out output parameter for compilation errors
+ * @return compiled pattern pointer, or nullptr on error
+ */
+cache::RE2Pattern* compilePattern(
+    const std::string& pattern,
+    const std::string& options_json,
     std::string& error_out);
 
 /**

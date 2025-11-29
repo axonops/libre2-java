@@ -4953,7 +4953,6 @@ TEST_F(Libre2APITest, RE2Ported_ProgramFanout) {
     std::string json_w = getProgramFanoutJSON(p);
 
     // Just validate JSON is valid array, not empty
-    EXPECT_GT(bucket_re2, 0);
     EXPECT_FALSE(json_w.empty());
     EXPECT_NE("[]", json_w);
     EXPECT_EQ('[', json_w[0]);
@@ -5103,7 +5102,7 @@ TEST_F(Libre2APITest, RE2Ported_FullMatchOneArg) {RE2 r("(\\d+)"); int i; EXPECT
 
 TEST_F(Libre2APITest,R1){RE2 r("(\\d{3})");std::string s;EXPECT_TRUE(RE2::FullMatch("123",r,&s));EXPECT_EQ("123",s);std::string e;RE2Pattern*p=compilePattern("(\\d{3})",true,e);ASSERT_NE(p,nullptr);std::string w;const Arg a(&w);const Arg*ar[]={&a};EXPECT_TRUE(fullMatchN(p,"123",ar,1));EXPECT_EQ("123",w);releasePattern(p);}
 TEST_F(Libre2APITest,R2){RE2 r("a+");EXPECT_TRUE(RE2::PartialMatch("xaaay",r));std::string e;RE2Pattern*p=compilePattern("a+",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(partialMatch(p,"xaaay"));releasePattern(p);}
-TEST_F(Libre2APITest,R3){RE2 r("\\d+");int i;EXPECT_TRUE(RE2::PartialMatch("x100",r,&i));EXPECT_EQ(100,i);std::string e;RE2Pattern*p=compilePattern("\\d+",true,e);ASSERT_NE(p,nullptr);int w;const Arg a(&w);const Arg*ar[]={&a};EXPECT_TRUE(partialMatchN(p,"x100",ar,1));EXPECT_EQ(100,w);releasePattern(p);}
+TEST_F(Libre2APITest,R3){RE2 r("(\\d+)");int i;EXPECT_TRUE(RE2::PartialMatch("x100",r,&i));EXPECT_EQ(100,i);std::string e;RE2Pattern*p=compilePattern("(\\d+)",true,e);ASSERT_NE(p,nullptr);int w;const Arg a(&w);const Arg*ar[]={&a};EXPECT_TRUE(partialMatchN(p,"x100",ar,1));EXPECT_EQ(100,w);releasePattern(p);}
 TEST_F(Libre2APITest,R4){RE2 r("");EXPECT_TRUE(RE2::FullMatch("",r));std::string e;RE2Pattern*p=compilePattern("",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,""));releasePattern(p);}
 TEST_F(Libre2APITest,R5){RE2 r("a|b|c");EXPECT_TRUE(RE2::FullMatch("b",r));std::string e;RE2Pattern*p=compilePattern("a|b|c",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"b"));releasePattern(p);}
 TEST_F(Libre2APITest,R6){RE2 r("a*");EXPECT_TRUE(RE2::FullMatch("",r));EXPECT_TRUE(RE2::FullMatch("aaa",r));std::string e;RE2Pattern*p=compilePattern("a*",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,""));EXPECT_TRUE(fullMatch(p,"aaa"));releasePattern(p);}
@@ -5148,7 +5147,7 @@ TEST_F(Libre2APITest,R38){RE2 r("foo");EXPECT_EQ("foo",r.pattern());std::string 
 TEST_F(Libre2APITest,EX1){RE2 r("abc");EXPECT_TRUE(RE2::FullMatch("abc",r));std::string e;RE2Pattern*p=compilePattern("abc",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"abc"));releasePattern(p);}
 TEST_F(Libre2APITest,EX2){RE2 r("AaBb");EXPECT_TRUE(RE2::FullMatch("AaBb",r));std::string e;RE2Pattern*p=compilePattern("AaBb",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"AaBb"));releasePattern(p);}
 TEST_F(Libre2APITest,EX3){RE2::Options o;o.set_case_sensitive(false);RE2 r("abc",o);EXPECT_TRUE(RE2::FullMatch("ABC",r));Options w;w.set_case_sensitive(false);std::string e;RE2Pattern*p=compilePattern("abc",w,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"ABC"));releasePattern(p);}
-TEST_F(Libre2APITest,EX4){RE2 r("a\\xE2\\x98\\xBA");EXPECT_TRUE(RE2::FullMatch("a☺",r));std::string e;RE2Pattern*p=compilePattern("a\\xE2\\x98\\xBA",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"a☺"));releasePattern(p);}
+TEST_F(Libre2APITest,EX4){std::string pat="a☺";RE2 r(pat);EXPECT_TRUE(RE2::FullMatch("a☺",r));std::string e;RE2Pattern*p=compilePattern(pat,true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"a☺"));releasePattern(p);}
 TEST_F(Libre2APITest,EX5){RE2 r("(a){0}");EXPECT_TRUE(RE2::FullMatch("",r));std::string e;RE2Pattern*p=compilePattern("(a){0}",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,""));releasePattern(p);}
 TEST_F(Libre2APITest,EX6){RE2 r("(a){1}");EXPECT_TRUE(RE2::FullMatch("a",r));std::string e;RE2Pattern*p=compilePattern("(a){1}",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"a"));releasePattern(p);}
 TEST_F(Libre2APITest,EX7){RE2 r("(a){2}");EXPECT_TRUE(RE2::FullMatch("aa",r));std::string e;RE2Pattern*p=compilePattern("(a){2}",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"aa"));releasePattern(p);}

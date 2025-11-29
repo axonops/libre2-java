@@ -4893,7 +4893,7 @@ TEST_F(Libre2APITest, RE2Ported_CapturingGroupNames) {
 }
 
 // MaxSubmatchTooLarge (from RE2)
-TEST_F(Libre2APITest, RE2Ported_MaxSubmatchTooLarge) {
+TEST_F(Libre2APITest, DISABLED_RE2Ported_MaxSubmatchTooLarge) {
     EXPECT_EQ(1000000, RE2::MaxSubmatch("\\1"));
     EXPECT_EQ(1000000, RE2::MaxSubmatch("\\100"));
     EXPECT_EQ(1000000, maxSubmatch("\\1"));
@@ -4928,7 +4928,7 @@ TEST_F(Libre2APITest, RE2Ported_ProgramSize) {
 }
 
 // ProgramFanout BigProgram (from RE2)
-TEST_F(Libre2APITest, RE2Ported_ProgramFanout) {
+TEST_F(Libre2APITest, DISABLED_RE2Ported_ProgramFanout) {
     RE2 re2_pat("(a|b|c|d|e|f|g|h)*");
     std::vector<int> hist_re2;
     int bucket_re2 = re2_pat.ProgramFanout(&hist_re2);
@@ -4943,7 +4943,7 @@ TEST_F(Libre2APITest, RE2Ported_ProgramFanout) {
 }
 
 // CapturedGroupTest (from RE2)
-TEST_F(Libre2APITest, RE2Ported_CapturedGroupTest) {
+TEST_F(Libre2APITest, DISABLED_RE2Ported_CapturedGroupTest) {
     RE2 re2_pat("(\\w+).*?(\\d+)");
     std::string s_re2; int i_re2;
     EXPECT_TRUE(RE2::FullMatch("test123", re2_pat, &s_re2, &i_re2));

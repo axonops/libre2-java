@@ -19,6 +19,7 @@
 #include "cache/deferred_cache.h"
 #include <string>
 #include "re2/re2.h"
+#include "re2/set.h"
 
 namespace libre2 {
 namespace api {
@@ -54,6 +55,22 @@ using Arg = RE2::Arg;
  *   opts.set_max_mem(1024*1024);
  */
 using Options = RE2::Options;
+
+/**
+ * Re-export RE2::Set for multi-pattern matching.
+ *
+ * Set allows matching text against multiple patterns simultaneously.
+ * More efficient than matching against each pattern individually.
+ *
+ * Example:
+ *   Set set(Options(), RE2::UNANCHORED);
+ *   set.Add("pattern1", &error);
+ *   set.Add("pattern2", &error);
+ *   set.Compile();
+ *   std::vector<int> matches;
+ *   set.Match("text", &matches);  // Returns indices of matching patterns
+ */
+using Set = RE2::Set;
 
 /**
  * Parse integer with C-style radix detection.

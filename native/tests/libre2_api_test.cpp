@@ -3704,3 +3704,148 @@ TEST_F(Libre2APITest, Options_Copy) {
     EXPECT_EQ(1024, opts2_wrapper.max_mem());
     // =============================
 }
+
+//=============================================================================
+// RE2::SET TESTS (Phase 1.2.6 - Multi-Pattern Matching)
+//=============================================================================
+
+// Set - basic multi-pattern matching
+TEST_F(Libre2APITest, Set_BasicMatching) {
+    // ========== TEST DATA ==========
+    const std::vector<std::string> PATTERNS = {"foo", "bar", "baz"};
+    const std::string TEXT = "bar";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2::Set set_re2(RE2::Options(), RE2::UNANCHORED);
+    std::string error_re2;
+    for (const auto& pat : PATTERNS) {
+        ASSERT_GE(set_re2.Add(pat, &error_re2), 0) << "Failed to add: " << error_re2;
+    }
+    ASSERT_TRUE(set_re2.Compile());
+    std::vector<int> matches_re2;
+    bool result_re2 = set_re2.Match(TEXT, &matches_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    Set set_wrapper(Options(), RE2::UNANCHORED);
+    std::string error_wrapper;
+    for (const auto& pat : PATTERNS) {
+        ASSERT_GE(set_wrapper.Add(pat, &error_wrapper), 0) << "Failed to add: " << error_wrapper;
+    }
+    ASSERT_TRUE(set_wrapper.Compile());
+    std::vector<int> matches_wrapper;
+    bool result_wrapper = set_wrapper.Match(TEXT, &matches_wrapper);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(matches_re2.size(), matches_wrapper.size());
+    EXPECT_EQ(1u, matches_wrapper.size());  // Only "bar" matches
+    EXPECT_EQ(1, matches_wrapper[0]);  // Index 1 (second pattern)
+    // =============================
+}
+
+// Set - multiple matches
+TEST_F(Libre2APITest, Set_MultipleMatches) {
+    // ========== TEST DATA ==========
+    const std::vector<std::string> PATTERNS = {"\\d+", "\\w+", "[a-z]+"};
+    const std::string TEXT = "abc123";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2::Set set_re2(RE2::Options(), RE2::UNANCHORED);
+    std::string error_re2;
+    for (const auto& pat : PATTERNS) {
+        set_re2.Add(pat, &error_re2);
+    }
+    set_re2.Compile();
+    std::vector<int> matches_re2;
+    bool result_re2 = set_re2.Match(TEXT, &matches_re2);
+    std::sort(matches_re2.begin(), matches_re2.end());
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    Set set_wrapper(Options(), RE2::UNANCHORED);
+    std::string error_wrapper;
+    for (const auto& pat : PATTERNS) {
+        set_wrapper.Add(pat, &error_wrapper);
+    }
+    set_wrapper.Compile();
+    std::vector<int> matches_wrapper;
+    bool result_wrapper = set_wrapper.Match(TEXT, &matches_wrapper);
+    std::sort(matches_wrapper.begin(), matches_wrapper.end());
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(matches_re2.size(), matches_wrapper.size());
+    EXPECT_EQ(matches_re2, matches_wrapper);
+    // All 3 patterns match "abc123"
+    EXPECT_EQ(3u, matches_wrapper.size());
+    // =============================
+}
+
+// Set - no matches
+TEST_F(Libre2APITest, Set_NoMatches) {
+    // ========== TEST DATA ==========
+    const std::vector<std::string> PATTERNS = {"foo", "bar"};
+    const std::string TEXT = "baz";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2::Set set_re2(RE2::Options(), RE2::UNANCHORED);
+    std::string error_re2;
+    for (const auto& pat : PATTERNS) {
+        set_re2.Add(pat, &error_re2);
+    }
+    set_re2.Compile();
+    std::vector<int> matches_re2;
+    bool result_re2 = set_re2.Match(TEXT, &matches_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    Set set_wrapper(Options(), RE2::UNANCHORED);
+    std::string error_wrapper;
+    for (const auto& pat : PATTERNS) {
+        set_wrapper.Add(pat, &error_wrapper);
+    }
+    set_wrapper.Compile();
+    std::vector<int> matches_wrapper;
+    bool result_wrapper = set_wrapper.Match(TEXT, &matches_wrapper);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_FALSE(result_wrapper);
+    EXPECT_EQ(matches_re2.size(), matches_wrapper.size());
+    EXPECT_TRUE(matches_wrapper.empty());
+    // =============================
+}
+
+// Set - Size() method
+TEST_F(Libre2APITest, Set_Size) {
+    // ========== EXECUTE RE2 ==========
+    RE2::Set set_re2(RE2::Options(), RE2::UNANCHORED);
+    std::string error_re2;
+    set_re2.Add("pattern1", &error_re2);
+    set_re2.Add("pattern2", &error_re2);
+    set_re2.Add("pattern3", &error_re2);
+    int size_re2 = set_re2.Size();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    Set set_wrapper(Options(), RE2::UNANCHORED);
+    std::string error_wrapper;
+    set_wrapper.Add("pattern1", &error_wrapper);
+    set_wrapper.Add("pattern2", &error_wrapper);
+    set_wrapper.Add("pattern3", &error_wrapper);
+    int size_wrapper = set_wrapper.Size();
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(size_re2, size_wrapper);
+    EXPECT_EQ(3, size_wrapper);
+    // =============================
+}

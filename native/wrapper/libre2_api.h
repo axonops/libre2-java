@@ -272,6 +272,271 @@ bool findAndConsume(
     std::string* capture2);
 
 //=============================================================================
+// N-VARIANT MATCHING (Phase 1.2.5a - Unlimited Captures)
+//=============================================================================
+
+/**
+ * Full match with N capture groups (unlimited).
+ *
+ * Unlike the 0/1/2 capture overloads, this function supports unlimited
+ * capture groups via array-based API. Caller must pre-allocate capture array.
+ *
+ * Usage:
+ *   std::string cap1, cap2, cap3;
+ *   std::string* caps[] = {&cap1, &cap2, &cap3};
+ *   bool matched = fullMatchN(pattern, "foo:123:bar", caps, 3);
+ *
+ * @param pattern compiled pattern pointer
+ * @param text input text to match
+ * @param captures array of string pointers (pre-allocated by caller)
+ * @param n_captures number of captures to extract
+ * @return true if entire text matches pattern and all captures extracted
+ */
+bool fullMatchN(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string* captures[],
+    int n_captures);
+
+/**
+ * Partial match with N capture groups (unlimited).
+ *
+ * Like fullMatchN() but allows pattern to match substring of text.
+ *
+ * @param pattern compiled pattern pointer
+ * @param text input text to search
+ * @param captures array of string pointers (pre-allocated)
+ * @param n_captures number of captures to extract
+ * @return true if pattern found in text and all captures extracted
+ */
+bool partialMatchN(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string* captures[],
+    int n_captures);
+
+/**
+ * Consume with N capture groups (unlimited).
+ *
+ * Matches at beginning of input and advances past match.
+ * Supports unlimited captures via array-based API.
+ *
+ * @param pattern compiled pattern pointer
+ * @param input_text pointer to input text pointer (advanced on match)
+ * @param input_len pointer to input length (reduced on match)
+ * @param captures array of string pointers (pre-allocated)
+ * @param n_captures number of captures to extract
+ * @return true if match at start and all captures extracted
+ */
+bool consumeN(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* captures[],
+    int n_captures);
+
+/**
+ * FindAndConsume with N capture groups (unlimited).
+ *
+ * Finds pattern anywhere in input and advances past match.
+ * Supports unlimited captures via array-based API.
+ *
+ * @param pattern compiled pattern pointer
+ * @param input_text pointer to input text pointer (advanced past match)
+ * @param input_len pointer to input length (reduced by consumed amount)
+ * @param captures array of string pointers (pre-allocated)
+ * @param n_captures number of captures to extract
+ * @return true if match found and all captures extracted
+ */
+bool findAndConsumeN(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* captures[],
+    int n_captures);
+
+//=============================================================================
+// N-VARIANT DIRECT MEMORY (Phase 1.2.5a - Zero-Copy + Unlimited Captures)
+//=============================================================================
+
+/**
+ * Full match direct with N captures (zero-copy + unlimited).
+ *
+ * Combines zero-copy direct memory access with unlimited capture groups.
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_address memory address (from DirectByteBuffer)
+ * @param text_length length in bytes
+ * @param captures array of string pointers (pre-allocated)
+ * @param n_captures number of captures to extract
+ * @return true if match and captures extracted
+ */
+bool fullMatchNDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length,
+    std::string* captures[],
+    int n_captures);
+
+/**
+ * Partial match direct with N captures (zero-copy + unlimited).
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_address memory address
+ * @param text_length length in bytes
+ * @param captures array of string pointers (pre-allocated)
+ * @param n_captures number of captures to extract
+ * @return true if match found and captures extracted
+ */
+bool partialMatchNDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length,
+    std::string* captures[],
+    int n_captures);
+
+/**
+ * Consume direct with N captures (zero-copy + unlimited).
+ *
+ * @param pattern compiled pattern pointer
+ * @param input_address pointer to memory address (advanced on match)
+ * @param input_len pointer to input length (reduced on match)
+ * @param captures array of string pointers (pre-allocated)
+ * @param n_captures number of captures to extract
+ * @return true if match at start and captures extracted
+ */
+bool consumeNDirect(
+    cache::RE2Pattern* pattern,
+    int64_t* input_address,
+    int* input_len,
+    std::string* captures[],
+    int n_captures);
+
+/**
+ * FindAndConsume direct with N captures (zero-copy + unlimited).
+ *
+ * @param pattern compiled pattern pointer
+ * @param input_address pointer to memory address (advanced past match)
+ * @param input_len pointer to input length (reduced by consumed amount)
+ * @param captures array of string pointers (pre-allocated)
+ * @param n_captures number of captures to extract
+ * @return true if match found and captures extracted
+ */
+bool findAndConsumeNDirect(
+    cache::RE2Pattern* pattern,
+    int64_t* input_address,
+    int* input_len,
+    std::string* captures[],
+    int n_captures);
+
+//=============================================================================
+// N-VARIANT BULK (Phase 1.2.5a - Multiple Texts + Unlimited Captures)
+//=============================================================================
+
+/**
+ * Full match bulk with N captures (multiple texts + unlimited).
+ *
+ * Process multiple texts with unlimited captures in one call.
+ * Each text gets its own capture array.
+ *
+ * Capture array structure: captures_array[text_idx][capture_idx]
+ *
+ * Example:
+ *   const char* texts[] = {"foo:1", "bar:2"};
+ *   int lens[] = {5, 5};
+ *   std::string cap0[2], cap1[2];  // 2 texts, 2 captures each
+ *   std::string* caps0[] = {&cap0[0], &cap1[0]};
+ *   std::string* caps1[] = {&cap0[1], &cap1[1]};
+ *   std::string** caps_array[] = {caps0, caps1};
+ *   bool results[2];
+ *   fullMatchNBulk(pattern, texts, lens, 2, caps_array, 2, results);
+ *
+ * @param pattern compiled pattern pointer
+ * @param texts array of text pointers
+ * @param text_lens array of lengths
+ * @param num_texts number of texts to process
+ * @param captures_array array of capture arrays (one per text)
+ * @param n_captures number of captures per text
+ * @param results_out pre-allocated bool array (size >= num_texts)
+ */
+void fullMatchNBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    std::string** captures_array[],
+    int n_captures,
+    bool* results_out);
+
+/**
+ * Partial match bulk with N captures (multiple texts + unlimited).
+ *
+ * Same as fullMatchNBulk but uses partial matching.
+ *
+ * @param pattern compiled pattern pointer
+ * @param texts array of text pointers
+ * @param text_lens array of lengths
+ * @param num_texts number of texts
+ * @param captures_array array of capture arrays
+ * @param n_captures number of captures per text
+ * @param results_out pre-allocated bool array
+ */
+void partialMatchNBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    std::string** captures_array[],
+    int n_captures,
+    bool* results_out);
+
+//=============================================================================
+// N-VARIANT BULK+DIRECT (Phase 1.2.5a - Zero-Copy + Multiple + Unlimited)
+//=============================================================================
+
+/**
+ * Full match direct bulk with N captures (zero-copy + bulk + unlimited).
+ *
+ * Combines all optimizations: zero-copy, multiple texts, unlimited captures.
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_addresses array of memory addresses
+ * @param text_lengths array of lengths
+ * @param num_texts number of texts
+ * @param captures_array array of capture arrays
+ * @param n_captures number of captures per text
+ * @param results_out pre-allocated bool array
+ */
+void fullMatchNDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    std::string** captures_array[],
+    int n_captures,
+    bool* results_out);
+
+/**
+ * Partial match direct bulk with N captures (zero-copy + bulk + unlimited).
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_addresses array of memory addresses
+ * @param text_lengths array of lengths
+ * @param num_texts number of texts
+ * @param captures_array array of capture arrays
+ * @param n_captures number of captures per text
+ * @param results_out pre-allocated bool array
+ */
+void partialMatchNDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    std::string** captures_array[],
+    int n_captures,
+    bool* results_out);
+
+//=============================================================================
 // REPLACEMENT FUNCTIONS (Phase 1.2.2)
 //=============================================================================
 

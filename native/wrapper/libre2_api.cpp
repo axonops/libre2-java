@@ -340,6 +340,370 @@ bool findAndConsume(
 }
 
 //============================================================================
+// N-VARIANT MATCHING (Phase 1.2.5a - Unlimited Captures)
+//============================================================================
+
+bool fullMatchN(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string* captures[],
+    int n_captures) {
+
+    if (!pattern || !pattern->isValid()) {
+        return false;
+    }
+
+    if (n_captures < 0) {
+        return false;
+    }
+
+    // Special case: no captures requested
+    if (n_captures == 0 || captures == nullptr) {
+        return RE2::FullMatch(text, *pattern->compiled_regex);
+    }
+
+    // Convert std::string*[] to RE2::Arg[] (required by RE2::FullMatchN)
+    std::vector<RE2::Arg> args_vec;
+    args_vec.reserve(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        args_vec.emplace_back(captures[i]);
+    }
+
+    // Build pointer array (RE2::FullMatchN signature)
+    std::vector<const RE2::Arg*> args_ptrs(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        args_ptrs[i] = &args_vec[i];
+    }
+
+    return RE2::FullMatchN(text, *pattern->compiled_regex, args_ptrs.data(), n_captures);
+}
+
+bool partialMatchN(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string* captures[],
+    int n_captures) {
+
+    if (!pattern || !pattern->isValid()) {
+        return false;
+    }
+
+    if (n_captures < 0) {
+        return false;
+    }
+
+    if (n_captures == 0 || captures == nullptr) {
+        return RE2::PartialMatch(text, *pattern->compiled_regex);
+    }
+
+    std::vector<RE2::Arg> args_vec;
+    args_vec.reserve(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        args_vec.emplace_back(captures[i]);
+    }
+
+    std::vector<const RE2::Arg*> args_ptrs(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        args_ptrs[i] = &args_vec[i];
+    }
+
+    return RE2::PartialMatchN(text, *pattern->compiled_regex, args_ptrs.data(), n_captures);
+}
+
+bool consumeN(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* captures[],
+    int n_captures) {
+
+    if (!pattern || !pattern->isValid() || !input_text || !input_len) {
+        return false;
+    }
+
+    if (n_captures < 0) {
+        return false;
+    }
+
+    std::string_view input(*input_text, *input_len);
+
+    if (n_captures == 0 || captures == nullptr) {
+        if (RE2::Consume(&input, *pattern->compiled_regex)) {
+            *input_text = input.data();
+            *input_len = input.size();
+            return true;
+        }
+        return false;
+    }
+
+    std::vector<RE2::Arg> args_vec;
+    args_vec.reserve(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        args_vec.emplace_back(captures[i]);
+    }
+
+    std::vector<const RE2::Arg*> args_ptrs(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        args_ptrs[i] = &args_vec[i];
+    }
+
+    if (RE2::ConsumeN(&input, *pattern->compiled_regex, args_ptrs.data(), n_captures)) {
+        *input_text = input.data();
+        *input_len = input.size();
+        return true;
+    }
+
+    return false;
+}
+
+bool findAndConsumeN(
+    cache::RE2Pattern* pattern,
+    const char** input_text,
+    int* input_len,
+    std::string* captures[],
+    int n_captures) {
+
+    if (!pattern || !pattern->isValid() || !input_text || !input_len) {
+        return false;
+    }
+
+    if (n_captures < 0) {
+        return false;
+    }
+
+    std::string_view input(*input_text, *input_len);
+
+    if (n_captures == 0 || captures == nullptr) {
+        if (RE2::FindAndConsume(&input, *pattern->compiled_regex)) {
+            *input_text = input.data();
+            *input_len = input.size();
+            return true;
+        }
+        return false;
+    }
+
+    std::vector<RE2::Arg> args_vec;
+    args_vec.reserve(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        args_vec.emplace_back(captures[i]);
+    }
+
+    std::vector<const RE2::Arg*> args_ptrs(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        args_ptrs[i] = &args_vec[i];
+    }
+
+    if (RE2::FindAndConsumeN(&input, *pattern->compiled_regex, args_ptrs.data(), n_captures)) {
+        *input_text = input.data();
+        *input_len = input.size();
+        return true;
+    }
+
+    return false;
+}
+
+//============================================================================
+// N-VARIANT DIRECT MEMORY (Phase 1.2.5a - Zero-Copy + Unlimited Captures)
+//============================================================================
+
+bool fullMatchNDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length,
+    std::string* captures[],
+    int n_captures) {
+
+    if (text_address == 0 || text_length < 0) {
+        return false;
+    }
+
+    const char* text = reinterpret_cast<const char*>(text_address);
+    re2::StringPiece sp(text, static_cast<size_t>(text_length));
+
+    // Delegate to standard variant
+    return fullMatchN(pattern, sp, captures, n_captures);
+}
+
+bool partialMatchNDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length,
+    std::string* captures[],
+    int n_captures) {
+
+    if (text_address == 0 || text_length < 0) {
+        return false;
+    }
+
+    const char* text = reinterpret_cast<const char*>(text_address);
+    re2::StringPiece sp(text, static_cast<size_t>(text_length));
+
+    return partialMatchN(pattern, sp, captures, n_captures);
+}
+
+bool consumeNDirect(
+    cache::RE2Pattern* pattern,
+    int64_t* input_address,
+    int* input_len,
+    std::string* captures[],
+    int n_captures) {
+
+    if (!input_address || !input_len || *input_address == 0 || *input_len < 0) {
+        return false;
+    }
+
+    const char* text = reinterpret_cast<const char*>(*input_address);
+
+    // Use consumeN with const char** (which expects const char**)
+    const char* text_ptr = text;
+    bool result = consumeN(pattern, &text_ptr, input_len, captures, n_captures);
+
+    if (result) {
+        // Update address to new position
+        *input_address = reinterpret_cast<int64_t>(text_ptr);
+    }
+
+    return result;
+}
+
+bool findAndConsumeNDirect(
+    cache::RE2Pattern* pattern,
+    int64_t* input_address,
+    int* input_len,
+    std::string* captures[],
+    int n_captures) {
+
+    if (!input_address || !input_len || *input_address == 0 || *input_len < 0) {
+        return false;
+    }
+
+    const char* text = reinterpret_cast<const char*>(*input_address);
+    const char* text_ptr = text;
+    bool result = findAndConsumeN(pattern, &text_ptr, input_len, captures, n_captures);
+
+    if (result) {
+        *input_address = reinterpret_cast<int64_t>(text_ptr);
+    }
+
+    return result;
+}
+
+//============================================================================
+// N-VARIANT BULK (Phase 1.2.5a - Multiple Texts + Unlimited Captures)
+//============================================================================
+
+void fullMatchNBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    std::string** captures_array[],
+    int n_captures,
+    bool* results_out) {
+
+    if (!pattern || !results_out || num_texts <= 0) {
+        return;
+    }
+
+    // Process each text
+    for (int i = 0; i < num_texts; i++) {
+        // Handle null text (mark false, continue - partial success)
+        if (!texts || !texts[i] || !text_lens || text_lens[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        // Handle null captures for this text
+        std::string** captures_for_text = (captures_array && captures_array[i]) ? captures_array[i] : nullptr;
+
+        re2::StringPiece sp(texts[i], static_cast<size_t>(text_lens[i]));
+        results_out[i] = fullMatchN(pattern, sp, captures_for_text, n_captures);
+    }
+}
+
+void partialMatchNBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    std::string** captures_array[],
+    int n_captures,
+    bool* results_out) {
+
+    if (!pattern || !results_out || num_texts <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < num_texts; i++) {
+        if (!texts || !texts[i] || !text_lens || text_lens[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        std::string** captures_for_text = (captures_array && captures_array[i]) ? captures_array[i] : nullptr;
+
+        re2::StringPiece sp(texts[i], static_cast<size_t>(text_lens[i]));
+        results_out[i] = partialMatchN(pattern, sp, captures_for_text, n_captures);
+    }
+}
+
+//============================================================================
+// N-VARIANT BULK+DIRECT (Phase 1.2.5a - Zero-Copy + Multiple + Unlimited)
+//============================================================================
+
+void fullMatchNDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    std::string** captures_array[],
+    int n_captures,
+    bool* results_out) {
+
+    if (!pattern || !results_out || num_texts <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < num_texts; i++) {
+        if (!text_addresses || text_addresses[i] == 0 || !text_lengths || text_lengths[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        std::string** captures_for_text = (captures_array && captures_array[i]) ? captures_array[i] : nullptr;
+
+        results_out[i] = fullMatchNDirect(pattern, text_addresses[i], text_lengths[i],
+                                          captures_for_text, n_captures);
+    }
+}
+
+void partialMatchNDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    std::string** captures_array[],
+    int n_captures,
+    bool* results_out) {
+
+    if (!pattern || !results_out || num_texts <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < num_texts; i++) {
+        if (!text_addresses || text_addresses[i] == 0 || !text_lengths || text_lengths[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        std::string** captures_for_text = (captures_array && captures_array[i]) ? captures_array[i] : nullptr;
+
+        results_out[i] = partialMatchNDirect(pattern, text_addresses[i], text_lengths[i],
+                                             captures_for_text, n_captures);
+    }
+}
+
+//============================================================================
 // REPLACEMENT FUNCTIONS (Phase 1.2.2)
 //============================================================================
 

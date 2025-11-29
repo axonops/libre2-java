@@ -3849,3 +3849,119 @@ TEST_F(Libre2APITest, Set_Size) {
     EXPECT_EQ(3, size_wrapper);
     // =============================
 }
+
+//=============================================================================
+// RE2 PORTED TESTS - QuoteMeta (from re2_test.cc)
+//=============================================================================
+
+// QuoteMeta - comprehensive test cases
+TEST_F(Libre2APITest, QuoteMeta_Comprehensive) {
+    // Test data from RE2's QuoteMeta Simple test
+    const std::vector<std::string> TEST_CASES = {
+        "foo",
+        "foo.bar",
+        "foo\\.bar",
+        "[1-9]",
+        "1.5-2.0?",
+        "\\d",
+        "Who doesn't like ice cream?",
+        "((a|b)c?d*e+[f-h]i)",
+        "((?!)xxx).*yyy",
+        "(["
+    };
+
+    for (const auto& unquoted : TEST_CASES) {
+        // ========== EXECUTE RE2 ==========
+        std::string quoted_re2 = RE2::QuoteMeta(unquoted);
+        RE2 re2_pattern(quoted_re2);
+        bool result_re2 = RE2::FullMatch(unquoted, re2_pattern);
+        // =================================
+
+        // ========== EXECUTE WRAPPER ==========
+        std::string quoted_wrapper = quoteMeta(unquoted);
+        std::string error;
+        RE2Pattern* p = compilePattern(quoted_wrapper, true, error);
+        ASSERT_NE(p, nullptr) << "Failed to compile quoted: " << quoted_wrapper;
+        bool result_wrapper = fullMatch(p, unquoted);
+        // =====================================
+
+        // ========== COMPARE ==========
+        EXPECT_EQ(quoted_re2, quoted_wrapper) << "Quoted strings differ for: " << unquoted;
+        EXPECT_EQ(result_re2, result_wrapper) << "Match results differ for: " << unquoted;
+        EXPECT_TRUE(result_wrapper) << "Quoted pattern should match original: " << unquoted;
+        // =============================
+
+        releasePattern(p);
+    }
+}
+
+// QuoteMeta - UTF8 handling
+TEST_F(Libre2APITest, QuoteMeta_UTF8) {
+    initCache();
+
+    const std::vector<std::string> UTF8_CASES = {
+        "Plácido Domingo",
+        "xyz",
+        "\xc2\xb0",  // 2-byte UTF8 (degree symbol)
+        "27\xc2\xb0 degrees",
+        "\xe2\x80\xb3",  // 3-byte UTF8 (double prime)
+        "\xf0\x9d\x85\x9f"  // 4-byte UTF8 (music note)
+    };
+
+    for (const auto& text : UTF8_CASES) {
+        // ========== EXECUTE RE2 ==========
+        std::string quoted_re2 = RE2::QuoteMeta(text);
+        RE2 re2_pattern(quoted_re2);
+        bool result_re2 = RE2::FullMatch(text, re2_pattern);
+        // =================================
+
+        // ========== EXECUTE WRAPPER ==========
+        std::string quoted_wrapper = quoteMeta(text);
+        std::string error;
+        RE2Pattern* p = compilePattern(quoted_wrapper, true, error);
+        ASSERT_NE(p, nullptr);
+        bool result_wrapper = fullMatch(p, text);
+        // =====================================
+
+        // ========== COMPARE ==========
+        EXPECT_EQ(quoted_re2, quoted_wrapper);
+        EXPECT_EQ(result_re2, result_wrapper);
+        EXPECT_TRUE(result_wrapper);
+        // =============================
+
+        releasePattern(p);
+    }
+}
+
+// QuoteMeta - with null byte
+TEST_F(Libre2APITest, QuoteMeta_HasNull) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    std::string text_with_null;
+    text_with_null += '\0';
+    text_with_null += "abc";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    std::string quoted_re2 = RE2::QuoteMeta(text_with_null);
+    RE2 re2_pattern(quoted_re2);
+    bool result_re2 = RE2::FullMatch(text_with_null, re2_pattern);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string quoted_wrapper = quoteMeta(text_with_null);
+    std::string error;
+    RE2Pattern* p = compilePattern(quoted_wrapper, true, error);
+    ASSERT_NE(p, nullptr);
+    bool result_wrapper = fullMatch(p, text_with_null);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(quoted_re2, quoted_wrapper);
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    // =============================
+
+    releasePattern(p);
+}

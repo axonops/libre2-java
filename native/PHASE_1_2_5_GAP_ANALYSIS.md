@@ -409,10 +409,18 @@ std::string getCapturingGroupNamesJSON(RE2Pattern* pattern);   // Map as JSON
 
 **Goal:** Expose all 40 core RE2 methods identified in user's checklist
 
+**CRITICAL REQUIREMENT:** Each RE2 function needs **3 variants**:
+1. **Standard** - String-based (like RE2)
+2. **Direct** - Zero-copy direct memory (for DirectByteBuffer)
+3. **Bulk** - Process multiple inputs (minimize JNI overhead)
+
+This pattern applies to ALL matching/consume/replacement functions.
+
 #### 1.2.5a - N-Variant Matching (CRITICAL)
 
+**Standard (String-based):**
 ```cpp
-// Add array-based matching with unlimited captures
+// Array-based matching with unlimited captures
 bool fullMatchN(RE2Pattern* pattern, std::string_view text,
                 std::string* captures[], int n_captures);
 
@@ -426,7 +434,51 @@ bool findAndConsumeN(RE2Pattern* pattern, const char** input_text, int* input_le
                      std::string* captures[], int n_captures);
 ```
 
-**Tests:** 20+ tests with 0, 1, 2, 3, 5, 10, 20 captures
+**Direct Memory (Zero-Copy):**
+```cpp
+// Direct memory variants with captures
+bool fullMatchNDirect(RE2Pattern* pattern, int64_t text_address, int text_len,
+                      std::string* captures[], int n_captures);
+
+bool partialMatchNDirect(RE2Pattern* pattern, int64_t text_address, int text_len,
+                         std::string* captures[], int n_captures);
+
+bool consumeNDirect(RE2Pattern* pattern, int64_t* input_address, int* input_len,
+                    std::string* captures[], int n_captures);
+
+bool findAndConsumeNDirect(RE2Pattern* pattern, int64_t* input_address, int* input_len,
+                           std::string* captures[], int n_captures);
+```
+
+**Bulk Operations:**
+```cpp
+// Bulk variants with captures (process multiple texts)
+void fullMatchNBulk(RE2Pattern* pattern, const char** texts, const int* text_lens,
+                    int num_texts, std::string** captures_array[], int n_captures,
+                    bool* results_out);
+
+void partialMatchNBulk(RE2Pattern* pattern, const char** texts, const int* text_lens,
+                       int num_texts, std::string** captures_array[], int n_captures,
+                       bool* results_out);
+
+// Bulk + Direct (zero-copy + multiple texts)
+void fullMatchNDirectBulk(RE2Pattern* pattern, const int64_t* addresses,
+                          const int* lens, int num_texts,
+                          std::string** captures_array[], int n_captures,
+                          bool* results_out);
+
+void partialMatchNDirectBulk(RE2Pattern* pattern, const int64_t* addresses,
+                             const int* lens, int num_texts,
+                             std::string** captures_array[], int n_captures,
+                             bool* results_out);
+```
+
+**Tests:**
+- Standard: 20 tests (0, 1, 2, 3, 5, 10, 20 captures)
+- Direct: 10 tests (with DirectByteBuffer simulation)
+- Bulk: 10 tests (multiple texts with captures)
+- Bulk+Direct: 5 tests (combined)
+- **Total: 45 tests for N-variant matching**
 
 #### 1.2.5b - Pattern Analysis
 
@@ -531,19 +583,34 @@ These are **NOT in RE2** but provide value for performance:
 
 ---
 
-## 7. ESTIMATED EFFORT
+## 7. ESTIMATED EFFORT (UPDATED with Bulk/Direct variants)
 
-| Sub-Phase | Functions | Tests | Effort (hours) |
-|-----------|-----------|-------|----------------|
-| 1.2.5a - N-variants | 4 | 20 | 4-6 |
-| 1.2.5b - Analysis | 5 | 10 | 2-3 |
-| 1.2.5c - Status | 5 | 5 | 1-2 |
-| 1.2.5d - Rewrite | 3 | 10 | 2-3 |
-| 1.2.5e - Generic Match | 1 | 15 | 3-4 |
-| 1.2.5f - Advanced | 1 | 5 | 1-2 |
-| **Total** | **19** | **65** | **13-20 hours** |
+**CRITICAL UPDATE:** Each matching/consume function needs **Standard + Direct + Bulk + Bulk+Direct** variants.
 
-**Timeline:** 2-3 days for implementation + testing
+| Sub-Phase | Standard | Direct | Bulk | Bulk+Direct | Tests | Effort (hours) |
+|-----------|----------|--------|------|-------------|-------|----------------|
+| 1.2.5a - N-variants matching | 4 | 4 | 2 | 2 | 45 | 8-12 |
+| 1.2.5b - Analysis (no variants) | 5 | - | - | - | 10 | 2-3 |
+| 1.2.5c - Status (no variants) | 5 | - | - | - | 5 | 1-2 |
+| 1.2.5d - Rewrite validation | 3 | - | - | - | 10 | 2-3 |
+| 1.2.5e - Generic Match | 1 | 1 | 1 | 1 | 20 | 4-6 |
+| 1.2.5f - Advanced (no variants) | 1 | - | - | - | 5 | 1-2 |
+| **Total** | **19** | **5** | **3** | **3** | **95** | **18-28 hours** |
+
+**Function Count Breakdown:**
+- Standard RE2-like functions: 19
+- Direct memory variants: 5 (N-variant matching + generic Match)
+- Bulk variants: 3 (N-variant matching subset)
+- Bulk+Direct combined: 3 (N-variant matching subset)
+- **Total new functions: 30**
+
+**Timeline:** 3-4 days for implementation + comprehensive testing
+
+**Key Insight:** N-variant matching needs 12 functions total:
+- 4 standard (fullMatchN, partialMatchN, consumeN, findAndConsumeN)
+- 4 direct (same with Direct suffix)
+- 2 bulk (fullMatchNBulk, partialMatchNBulk)
+- 2 bulk+direct (fullMatchNDirectBulk, partialMatchNDirectBulk)
 
 ---
 
@@ -551,15 +618,23 @@ These are **NOT in RE2** but provide value for performance:
 
 Phase 1.2.5 complete when:
 
-- ✅ All 19 missing core methods implemented
+- ✅ All 19 standard RE2-like methods implemented
+- ✅ All 5 direct memory variants implemented (zero-copy with int64_t addresses)
+- ✅ All 3 bulk variants implemented (process multiple texts in one call)
+- ✅ All 3 bulk+direct combined variants implemented
+- ✅ **Total: 30 new wrapper functions**
 - ✅ N-variant matching supports unlimited captures (tested up to 20)
+- ✅ Direct variants work with DirectByteBuffer addresses
+- ✅ Bulk variants handle null inputs gracefully (partial success)
 - ✅ All pattern analysis methods working
 - ✅ All status/validation methods working
 - ✅ All rewrite validation methods working
 - ✅ Generic Match() method working with all anchor modes
-- ✅ 65+ new tests passing (all with RE2 comparison)
+- ✅ 95+ new tests passing (all with RE2 comparison where applicable)
 - ✅ Wrapper API covers 90%+ of RE2 core functionality
+- ✅ All variants follow existing patterns (Direct uses int64_t, Bulk uses arrays)
 - ✅ Documentation updated with API coverage table
+- ✅ Performance verified (bulk/direct provide measurable benefit)
 
 ---
 
@@ -569,17 +644,30 @@ Phase 1.2.5 complete when:
 - Wrapper API provides ~40% of RE2's core functionality
 - Critical gaps in capture groups (limited to 0/1/2)
 - Missing pattern analysis, rewrite validation, generic match
+- Missing bulk/direct variants for new functions
 
 **Required Action:**
-- Implement Phase 1.2.5 (19 functions, 65+ tests)
+- Implement Phase 1.2.5 (30 functions total, 95+ tests)
+  - 19 standard RE2-like functions
+  - 5 direct memory variants (zero-copy)
+  - 3 bulk variants (multiple texts)
+  - 3 bulk+direct combined variants
 - Maintain RE2 comparison testing pattern for ALL new tests
 - Document API coverage and design decisions
+- Verify performance benefits of bulk/direct variants
 
 **After Phase 1.2.5:**
 - Wrapper will cover 90%+ of RE2 core API
+- All matching functions have bulk/direct variants for JNI performance
+- N-variant matching supports unlimited captures
 - Ready for Java layer integration
 - Production-ready for Cassandra use case
 
+**Estimated Effort:**
+- 30 functions, 95+ tests
+- 18-28 hours implementation
+- 3-4 days timeline
+
 ---
 
-**Next Step:** Review this analysis with user, get approval, start Phase 1.2.5a (N-variant matching)
+**Next Step:** Get user approval, start Phase 1.2.5a (N-variant matching - 12 functions)

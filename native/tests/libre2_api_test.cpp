@@ -5044,3 +5044,27 @@ TEST_F(Libre2APITest, RE2Ported_BigCountedRepetition) {
     EXPECT_TRUE(fullMatch(p, big));
     releasePattern(p);
 }
+
+// Ungreedy UTF8 (from RE2)
+TEST_F(Libre2APITest, RE2Ported_UngreedyUTF8) {RE2 r(".."); std::string s="αβ"; EXPECT_TRUE(RE2::FullMatch(s,r)); RE2Pattern* p=compilePattern("..",true,s); ASSERT_NE(p,nullptr); EXPECT_TRUE(fullMatch(p,"αβ")); releasePattern(p);}
+
+// FullMatchEnd (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchEnd) {RE2 r("(foo$)"); std::string s; EXPECT_TRUE(RE2::FullMatch("foo",r,&s)); EXPECT_EQ("foo",s); std::string e; RE2Pattern* p=compilePattern("(foo$)",true,e); ASSERT_NE(p,nullptr); std::string w; const Arg a(&w); const Arg* ar[]={&a}; EXPECT_TRUE(fullMatchN(p,"foo",ar,1)); EXPECT_EQ("foo",w); releasePattern(p);}
+
+// QuoteMeta SimpleNegative (from RE2)
+TEST_F(Libre2APITest, RE2Ported_QuoteMeta_SimpleNegative) {auto test=[](const std::string& p, const std::string& t, bool expect){RE2 r(RE2::QuoteMeta(p)); bool re2=RE2::FullMatch(t,r); std::string e; RE2Pattern* wp=compilePattern(quoteMeta(p),true,e); ASSERT_NE(wp,nullptr); bool w=fullMatch(wp,t); EXPECT_EQ(re2,w); EXPECT_EQ(expect,w); releasePattern(wp);}; test("foo","bar",false); test("...","bar",false); test("\\.","..",false); test("(a)","a",false);}
+
+// QuoteMeta Latin1 (from RE2)
+TEST_F(Libre2APITest, RE2Ported_QuoteMeta_Latin1) {std::string t="3\xb2 = 9"; RE2 r(RE2::QuoteMeta(t),RE2::Latin1); EXPECT_TRUE(RE2::FullMatch(t,r)); std::string e; RE2Pattern* p=compilePattern(quoteMeta(t),Options(CannedOptions::Latin1),e); ASSERT_NE(p,nullptr); EXPECT_TRUE(fullMatch(p,t)); releasePattern(p);}
+
+// CaseInsensitive MatchAndConsume (from RE2)
+TEST_F(Libre2APITest, RE2Ported_CaseInsensitive) {RE2::Options o; o.set_case_sensitive(false); RE2 r("hello",o); EXPECT_TRUE(RE2::PartialMatch("HELLO",r)); Options ow; ow.set_case_sensitive(false); std::string e; RE2Pattern* p=compilePattern("hello",ow,e); ASSERT_NE(p,nullptr); EXPECT_TRUE(partialMatch(p,"HELLO")); releasePattern(p);}
+
+// FullMatchIgnoredArg (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchIgnoredArg) {RE2 r("(\\d+):(\\d+)"); int i; EXPECT_TRUE(RE2::FullMatch("123:456",r,nullptr,&i)); EXPECT_EQ(456,i); std::string e; RE2Pattern* p=compilePattern("(\\d+):(\\d+)",true,e); ASSERT_NE(p,nullptr); int w; const Arg a1(nullptr), a2(&w); const Arg* ar[]={&a1,&a2}; EXPECT_TRUE(fullMatchN(p,"123:456",ar,2)); EXPECT_EQ(456,w); releasePattern(p);}
+
+// FullMatchZeroArg (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchZeroArg) {RE2 r("foo"); EXPECT_TRUE(RE2::FullMatch("foo",r)); std::string e; RE2Pattern* p=compilePattern("foo",true,e); ASSERT_NE(p,nullptr); EXPECT_TRUE(fullMatch(p,"foo")); releasePattern(p);}
+
+// FullMatchOneArg (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchOneArg) {RE2 r("(\\d+)"); int i; EXPECT_TRUE(RE2::FullMatch("123",r,&i)); EXPECT_EQ(123,i); std::string e; RE2Pattern* p=compilePattern("(\\d+)",true,e); ASSERT_NE(p,nullptr); int w; const Arg a(&w); const Arg* ar[]={&a}; EXPECT_TRUE(fullMatchN(p,"123",ar,1)); EXPECT_EQ(123,w); releasePattern(p);}

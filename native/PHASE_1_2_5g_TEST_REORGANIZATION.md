@@ -83,10 +83,14 @@ If RE2 tests a behavior, we should test it too (with RE2 comparison).
 
 **Skip ONLY:**
 - Internal implementation tests (parse_test.cc, dfa_test.cc)
-- Exhaustive tests (too slow, exhaustive_test.cc)
 - Hex/Octal/Decimal Arg parsing (we use strings only for now)
 
-**Expected:** 50-100+ ported tests (not 15-20)
+**INCLUDE:**
+- Exhaustive tests (exhaustive_test.cc, exhaustive1-3_test.cc) - USER REQUIRED
+- All functional API tests
+- All edge cases
+
+**Expected:** 100-200+ ported tests (comprehensive coverage)
 
 ---
 

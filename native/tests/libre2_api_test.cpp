@@ -3965,3 +3965,113 @@ TEST_F(Libre2APITest, QuoteMeta_HasNull) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// RE2 PORTED TESTS - Replace/Extract (from re2_test.cc)
+//=============================================================================
+
+// Replace - with capture groups (from RE2 test data)
+TEST_F(Libre2APITest, RE2Ported_Replace_CaptureRewrite) {
+    initCache();
+
+    // ========== TEST DATA (from RE2) ==========
+    const std::string PATTERN = "(qu|[b-df-hj-np-tv-z]*)([a-z]+)";
+    const std::string REWRITE = "\\2\\1ay";
+    const std::string ORIGINAL = "the quick brown fox";
+    const std::string EXPECTED = "ethay quick brown fox";
+    // ==========================================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string str_re2 = ORIGINAL;
+    bool result_re2 = RE2::Replace(&str_re2, re2_pattern, REWRITE);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string result_wrapper;
+    bool replaced_wrapper = replace(p, ORIGINAL, REWRITE, &result_wrapper);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, replaced_wrapper);
+    EXPECT_TRUE(replaced_wrapper);
+    EXPECT_EQ(str_re2, result_wrapper);
+    EXPECT_EQ(EXPECTED, result_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// GlobalReplace - multiple replacements (from RE2)
+TEST_F(Libre2APITest, RE2Ported_GlobalReplace_Multiple) {
+    initCache();
+
+    // ========== TEST DATA (from RE2) ==========
+    const std::string PATTERN = "\\w+";
+    const std::string REWRITE = "\\0-NOSPAM";
+    const std::string ORIGINAL = "abcd.efghi@google.com";
+    const std::string EXPECTED = "abcd-NOSPAM.efghi-NOSPAM@google-NOSPAM.com-NOSPAM";
+    const int EXPECTED_COUNT = 4;
+    // ==========================================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string str_re2 = ORIGINAL;
+    int count_re2 = RE2::GlobalReplace(&str_re2, re2_pattern, REWRITE);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string result_wrapper;
+    int count_wrapper = replaceAll(p, ORIGINAL, REWRITE, &result_wrapper);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(count_re2, count_wrapper);
+    EXPECT_EQ(str_re2, result_wrapper);
+    EXPECT_EQ(EXPECTED_COUNT, count_wrapper);
+    EXPECT_EQ(EXPECTED, result_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// Extract - basic extraction (from RE2)
+TEST_F(Libre2APITest, RE2Ported_Extract_Basic) {
+    initCache();
+
+    // ========== TEST DATA (from RE2) ==========
+    const std::string PATTERN = "(.*)@([^.]*)";
+    const std::string REWRITE = "\\2!\\1";
+    const std::string TEXT = "boris@kremvax.ru";
+    const std::string EXPECTED = "kremvax!boris";
+    // ==========================================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string out_re2;
+    bool result_re2 = RE2::Extract(TEXT, re2_pattern, REWRITE, &out_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string out_wrapper;
+    bool result_wrapper = extract(p, TEXT, REWRITE, &out_wrapper);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(out_re2, out_wrapper);
+    EXPECT_EQ(EXPECTED, out_wrapper);
+    // =============================
+
+    releasePattern(p);
+}

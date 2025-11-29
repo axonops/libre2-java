@@ -397,3 +397,96 @@ EXPECT_EQ(result_re2, result_wrapper) << "...";
 **Phase 1.2 Status:** ✅ COMPLETE - All 33 wrapper functions implemented and tested
 **Next Phase:** Phase 2 (Java layer / JNI integration)
 **Status:** Ready for next phase ✅
+
+---
+
+## PHASE 1.2.5 COMPLETION SUMMARY
+
+**Started:** 2025-11-29 15:30 UTC
+**Completed:** 2025-11-29 16:50 UTC
+**Duration:** ~1.5 hours
+
+### Sub-Phases Completed:
+
+**1.2.5a - N-Variant Matching (12 functions, 13 tests)**
+- Commit: c611d20, 9869021
+- Functions: fullMatchN, partialMatchN, consumeN, findAndConsumeN + variants
+- CRITICAL: Supports unlimited captures (not limited to 0/1/2)
+- Variants: Standard, Direct, Bulk, Bulk+Direct
+
+**1.2.5b - Pattern Analysis (5 functions, 5 tests)**
+- Commit: 595dd4a
+- Functions: getNumberOfCapturingGroups, getNamed*, getProgramSize, getReverse*
+
+**1.2.5c - Status/Validation (5 functions, 8 tests)**
+- Commit: 93fd32a
+- Functions: ok, getPattern, getError, getErrorCode, getErrorArg
+
+**1.2.5d - Rewrite Validation (3 functions, 6 tests)**
+- Commit: 2889b66
+- Functions: checkRewriteString, maxSubmatch, rewrite
+
+**1.2.5e - Generic Match (4 functions, 6 tests)**
+- Commit: 7c4b232
+- Functions: match (with Anchor enum), matchDirect, matchBulk, matchDirectBulk
+
+**1.2.5f - Advanced Analysis (1 function, 3 tests)**
+- Commit: 86ec4c9
+- Function: possibleMatchRange
+
+**1.2.5g - Test Reorganization (PLANNED)**
+- Commit: 8e6da60 (planning only)
+- Status: Ready to execute (split 3179 line file into 8 organized files)
+
+### Totals:
+
+**Functions Added:** 30
+- Standard RE2-like: 19
+- Direct variants: 5
+- Bulk variants: 3
+- Bulk+Direct variants: 3
+
+**Tests Added:** 41 (all with RE2 comparison pattern)
+**Test Count:** 260/260 passing (100%)
+**File Size:** libre2_api_test.cpp now 3179 lines (needs reorganization)
+
+### API Coverage:
+
+**Before Phase 1.2.5:** ~40% of RE2 core API
+**After Phase 1.2.5:** ~90% of RE2 core API ✅
+
+**What We Have Now:**
+- ✅ Unlimited capture groups (N-variant API)
+- ✅ Pattern analysis (groups, metadata)
+- ✅ Status/validation (error diagnostics)
+- ✅ Rewrite validation (template checking)
+- ✅ Generic Match (full control: anchors, positions)
+- ✅ Advanced analysis (match range)
+- ✅ All bulk/direct variants for performance
+
+**Still Missing (acceptable):**
+- RE2::Arg typed parsing (int, float, hex) - defer to Phase 1.2.6+
+- RE2::Options class getters/setters - have JSON equivalent
+- LazyRE2 - not needed for wrapper
+- ProgramFanout - low priority
+
+### Commits This Phase:
+
+1. 483acc1 - Gap analysis (identified critical gaps)
+2. 5baef9f - Updated gap analysis (bulk/direct requirement)
+3. c611d20 - N-variant implementation
+4. 9869021 - N-variant tests
+5. 595dd4a - Pattern analysis
+6. 93fd32a - Status/validation
+7. 2889b66 - Rewrite validation
+8. 7c4b232 - Generic Match
+9. 86ec4c9 - Advanced analysis
+10. 8e6da60 - Test reorganization planning
+
+**Total:** 10 commits, ~2500 lines added
+
+---
+
+**Phase 1.2.5 Status:** MOSTLY COMPLETE (1.2.5g execution pending)
+**Next:** Execute Phase 1.2.5g (test split + RE2 porting) or move to Phase 1.2.6
+**Token Usage:** 200K/1M (20%)

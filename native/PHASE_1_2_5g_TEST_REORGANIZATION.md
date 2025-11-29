@@ -60,15 +60,33 @@
 - FullMatchWithNoArgs, FullMatchZeroArg, FullMatchOneArg - Already covered
 - PartialMatch, PartialMatchN - Already have
 
-**Tests to Port (~15-20 edge cases):**
-1. ✅ QuoteMeta edge cases (Latin1, UTF8, HasNull)
-2. ✅ EmptyCharset tests
-3. ✅ NamedGroups capture test
-4. ✅ MatchNumberPeculiarity
-5. ✅ MaxSubmatchTooLarge
-6. ✅ Any Unicode edge cases
-7. ✅ Very long text/pattern tests
-8. ✅ Null handling tests
+**Tests to Port (ALL appropriate functional tests):**
+
+**CRITICAL:** Port ALL functional tests from RE2, not just edge cases.
+If RE2 tests a behavior, we should test it too (with RE2 comparison).
+
+**From re2_test.cc:**
+1. ✅ Replace - all test cases
+2. ✅ Extract - all test cases
+3. ✅ Consume - all test cases
+4. ✅ ConsumeN - all test cases
+5. ✅ FindAndConsume - all test cases
+6. ✅ FindAndConsumeN - all test cases
+7. ✅ Match - all test cases
+8. ✅ QuoteMeta (Simple, SimpleNegative, Latin1, UTF8, HasNull) - ALL
+9. ✅ FullMatch variations (NoArgs, ZeroArg, OneArg, etc) - ALL
+10. ✅ PartialMatch, PartialMatchN - ALL
+11. ✅ NamedGroups - ALL
+12. ✅ CheckRewriteString - ALL
+13. ✅ MaxSubmatch - ALL
+14. ✅ ProgramSize, ProgramFanout - ALL applicable
+
+**Skip ONLY:**
+- Internal implementation tests (parse_test.cc, dfa_test.cc)
+- Exhaustive tests (too slow, exhaustive_test.cc)
+- Hex/Octal/Decimal Arg parsing (we use strings only for now)
+
+**Expected:** 50-100+ ported tests (not 15-20)
 
 ---
 

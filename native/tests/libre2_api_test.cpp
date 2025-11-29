@@ -4613,3 +4613,154 @@ TEST_F(Libre2APITest, RE2Ported_CheckRewriteString) {
         if(p) releasePattern(p);
     }
 }
+
+// Match - generic (from RE2)
+TEST_F(Libre2APITest, RE2Ported_Match) {
+    initCache();
+    const std::string PATTERN = "((\\w+):)*(\\w+)";
+    const std::string TEXT = "a:b:c";
+    
+    RE2 re2_pat(PATTERN);
+    absl::string_view subs_re2[4];
+    bool r_re2 = re2_pat.Match(TEXT, 0, TEXT.size(), RE2::UNANCHORED, subs_re2, 4);
+    
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string subs_w[4];
+    std::string* subs_ptrs[] = {&subs_w[0], &subs_w[1], &subs_w[2], &subs_w[3]};
+    bool r_w = match(p, TEXT, 0, TEXT.size(), UNANCHORED, subs_ptrs, 4);
+    
+    EXPECT_EQ(r_re2, r_w);
+    for (int i = 0; i < 4; i++) {
+        std::string expected = subs_re2[i].data() ? std::string(subs_re2[i]) : "";
+        EXPECT_EQ(expected, subs_w[i]);
+    }
+    releasePattern(p);
+}
+
+// FullMatchStringArg (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchStringArg) {
+    initCache();
+    
+    RE2 re2_pat("h(.*)o");
+    std::string s_re2;
+    bool r_re2 = RE2::FullMatch("hello", re2_pat, &s_re2);
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("h(.*)o", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string s_w;
+    const Arg arg(&s_w); const Arg* args[] = {&arg};
+    bool r_w = fullMatchN(p, "hello", args, 1);
+    
+    EXPECT_EQ(r_re2, r_w);
+    EXPECT_EQ(s_re2, s_w);
+    EXPECT_EQ("ell", s_w);
+    releasePattern(p);
+}
+
+// FullMatchMultiArg (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchMultiArg) {
+    initCache();
+    
+    RE2 re2_pat("(\\w+):(\\d+)");
+    std::string s_re2;
+    int i_re2;
+    bool r_re2 = RE2::FullMatch("ruby:1234", re2_pat, &s_re2, &i_re2);
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\w+):(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+    std::string s_w;
+    int i_w;
+    const Arg a1(&s_w), a2(&i_w);
+    const Arg* args[] = {&a1, &a2};
+    bool r_w = fullMatchN(p, "ruby:1234", args, 2);
+    
+    EXPECT_EQ(r_re2, r_w);
+    EXPECT_EQ(s_re2, s_w);
+    EXPECT_EQ(i_re2, i_w);
+    EXPECT_EQ("ruby", s_w);
+    EXPECT_EQ(1234, i_w);
+    releasePattern(p);
+}
+
+// FloatingPointFullMatchTypes (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FloatingPointTypes) {
+    initCache();
+    
+    RE2 re2_pat("(.*)");
+    float f_re2;
+    double d_re2;
+    bool r1_re2 = RE2::FullMatch("1.5", re2_pat, &f_re2);
+    bool r2_re2 = RE2::FullMatch("1.5", re2_pat, &d_re2);
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("(.*)", true, error);
+    ASSERT_NE(p, nullptr);
+    float f_w;
+    double d_w;
+    const Arg a1(&f_w); const Arg* args1[] = {&a1};
+    bool r1_w = fullMatchN(p, "1.5", args1, 1);
+    const Arg a2(&d_w); const Arg* args2[] = {&a2};
+    bool r2_w = fullMatchN(p, "1.5", args2, 1);
+    
+    EXPECT_EQ(r1_re2, r1_w);
+    EXPECT_EQ(r2_re2, r2_w);
+    EXPECT_FLOAT_EQ(f_re2, f_w);
+    EXPECT_DOUBLE_EQ(d_re2, d_w);
+    EXPECT_FLOAT_EQ(1.5f, f_w);
+    EXPECT_DOUBLE_EQ(1.5, d_w);
+    releasePattern(p);
+}
+
+// Accessors (from RE2)
+TEST_F(Libre2APITest, RE2Ported_Accessors) {
+    initCache();
+    
+    RE2 re2_pat("(\\w+):(\\d+)");
+    EXPECT_TRUE(re2_pat.ok());
+    EXPECT_EQ("(\\w+):(\\d+)", re2_pat.pattern());
+    EXPECT_EQ("", re2_pat.error());
+    EXPECT_EQ(RE2::NoError, re2_pat.error_code());
+    EXPECT_EQ(2, re2_pat.NumberOfCapturingGroups());
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\w+):(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+    EXPECT_TRUE(ok(p));
+    EXPECT_EQ("(\\w+):(\\d+)", getPattern(p));
+    EXPECT_EQ("", getError(p));
+    EXPECT_EQ(static_cast<int>(RE2::NoError), getErrorCode(p));
+    EXPECT_EQ(2, getNumberOfCapturingGroups(p));
+    releasePattern(p);
+}
+
+// UTF8 test (from RE2)
+TEST_F(Libre2APITest, RE2Ported_UTF8) {
+    initCache();
+    
+    RE2 re2_pat("........");
+    EXPECT_TRUE(RE2::FullMatch("αβγδεζηθ", re2_pat));
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("........", true, error);
+    ASSERT_NE(p, nullptr);
+    bool r_w = fullMatch(p, "αβγδεζηθ");
+    EXPECT_TRUE(r_w);
+    releasePattern(p);
+}
+
+// ErrorCodeAndArg (from RE2)
+TEST_F(Libre2APITest, RE2Ported_ErrorCodeAndArg) {
+    RE2 re2_pat("(a\\1)");
+    EXPECT_FALSE(re2_pat.ok());
+    EXPECT_NE(RE2::NoError, re2_pat.error_code());
+    EXPECT_FALSE(re2_pat.error_arg().empty());
+    
+    std::string error;
+    RE2Pattern* p = compilePattern("(a\\1)", true, error);
+    EXPECT_EQ(p, nullptr);
+    EXPECT_FALSE(error.empty());
+}

@@ -769,6 +769,72 @@ std::string getPatternInfo(cache::RE2Pattern* pattern);
  */
 bool isPatternValid(cache::RE2Pattern* pattern);
 
+//=============================================================================
+// PATTERN ANALYSIS FUNCTIONS (Phase 1.2.5b)
+//=============================================================================
+
+/**
+ * Get number of capturing groups in pattern.
+ *
+ * Uses RE2::NumberOfCapturingGroups() - returns count of parenthesized groups.
+ * The overall match ($0) does not count.
+ *
+ * Example: Pattern "(\\w+):(\\d+)" returns 2
+ *
+ * @param pattern compiled pattern pointer
+ * @return number of capturing groups, or -1 if pattern invalid
+ */
+int getNumberOfCapturingGroups(cache::RE2Pattern* pattern);
+
+/**
+ * Get named capturing groups as JSON.
+ *
+ * Uses RE2::NamedCapturingGroups() - returns map of name → index.
+ * Returns JSON: {"group_name": 1, "another_name": 2}
+ *
+ * If a name appears multiple times, returns index of leftmost group.
+ *
+ * @param pattern compiled pattern pointer
+ * @return JSON object mapping group names to indices (empty {} if no named groups)
+ */
+std::string getNamedCapturingGroupsJSON(cache::RE2Pattern* pattern);
+
+/**
+ * Get capturing group names as JSON.
+ *
+ * Uses RE2::CapturingGroupNames() - returns map of index → name.
+ * Returns JSON: {"1": "group_name", "2": "another_name"}
+ *
+ * Unnamed groups do not appear in the map.
+ *
+ * @param pattern compiled pattern pointer
+ * @return JSON object mapping indices to group names (empty {} if no named groups)
+ */
+std::string getCapturingGroupNamesJSON(cache::RE2Pattern* pattern);
+
+/**
+ * Get pattern program size (complexity metric).
+ *
+ * Uses RE2::ProgramSize() - returns approximate "cost" of pattern.
+ * Larger numbers = more expensive pattern.
+ * Useful for performance analysis.
+ *
+ * @param pattern compiled pattern pointer
+ * @return program size, or -1 if pattern invalid
+ */
+int getProgramSize(cache::RE2Pattern* pattern);
+
+/**
+ * Get reverse program size (complexity metric).
+ *
+ * Uses RE2::ReverseProgramSize() - size of reverse pattern program.
+ * Used for reverse matching operations.
+ *
+ * @param pattern compiled pattern pointer
+ * @return reverse program size, or -1 if pattern invalid
+ */
+int getReverseProgramSize(cache::RE2Pattern* pattern);
+
 /**
  * Get current cache metrics as JSON string.
  *

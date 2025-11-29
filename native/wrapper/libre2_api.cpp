@@ -1021,6 +1021,71 @@ std::string getMetricsJSON() {
     return mgr->getMetricsJSON();
 }
 
+//============================================================================
+// PATTERN ANALYSIS FUNCTIONS (Phase 1.2.5b)
+//============================================================================
+
+int getNumberOfCapturingGroups(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->isValid()) {
+        return -1;
+    }
+    return pattern->compiled_regex->NumberOfCapturingGroups();
+}
+
+std::string getNamedCapturingGroupsJSON(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->isValid()) {
+        return "{}";
+    }
+
+    const std::map<std::string, int>& named_groups =
+        pattern->compiled_regex->NamedCapturingGroups();
+
+    std::ostringstream json;
+    json << "{";
+    bool first = true;
+    for (const auto& [name, index] : named_groups) {
+        if (!first) json << ",";
+        json << "\"" << name << "\":" << index;
+        first = false;
+    }
+    json << "}";
+    return json.str();
+}
+
+std::string getCapturingGroupNamesJSON(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->isValid()) {
+        return "{}";
+    }
+
+    const std::map<int, std::string>& group_names =
+        pattern->compiled_regex->CapturingGroupNames();
+
+    std::ostringstream json;
+    json << "{";
+    bool first = true;
+    for (const auto& [index, name] : group_names) {
+        if (!first) json << ",";
+        json << "\"" << index << "\":\"" << name << "\"";
+        first = false;
+    }
+    json << "}";
+    return json.str();
+}
+
+int getProgramSize(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->isValid()) {
+        return -1;
+    }
+    return pattern->compiled_regex->ProgramSize();
+}
+
+int getReverseProgramSize(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->isValid()) {
+        return -1;
+    }
+    return pattern->compiled_regex->ReverseProgramSize();
+}
+
 void initCache(const std::string& json_config) {
     std::lock_guard<std::mutex> lock(g_init_mutex);
 

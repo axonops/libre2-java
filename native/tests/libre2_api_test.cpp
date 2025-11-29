@@ -2236,3 +2236,157 @@ TEST_F(Libre2APITest, FullMatchNDirectBulk_Combined) {
 
     releasePattern(p);
 }
+
+
+//=============================================================================
+// PATTERN ANALYSIS TESTS (Phase 1.2.5b)
+//=============================================================================
+
+// getNumberOfCapturingGroups - basic pattern
+TEST_F(Libre2APITest, GetNumberOfCapturingGroups_Basic) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+):(\\w+)";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int result_re2 = re2_pattern.NumberOfCapturingGroups();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int result_wrapper = getNumberOfCapturingGroups(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(3, result_wrapper);  // Pattern has 3 groups
+    // =============================
+
+    releasePattern(p);
+}
+
+// getNumberOfCapturingGroups - no groups
+TEST_F(Libre2APITest, GetNumberOfCapturingGroups_NoGroups) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "\\d+";  // No capturing groups
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int result_re2 = re2_pattern.NumberOfCapturingGroups();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int result_wrapper = getNumberOfCapturingGroups(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(0, result_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// getProgramSize - complexity metric
+TEST_F(Libre2APITest, GetProgramSize_ComplexPattern) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+)";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int result_re2 = re2_pattern.ProgramSize();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int result_wrapper = getProgramSize(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_GT(result_wrapper, 0);  // Should have non-zero size
+    // =============================
+
+    releasePattern(p);
+}
+
+// getReverseProgramSize
+TEST_F(Libre2APITest, GetReverseProgramSize_ComplexPattern) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+)";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int result_re2 = re2_pattern.ReverseProgramSize();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int result_wrapper = getReverseProgramSize(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_GT(result_wrapper, 0);  // Should have non-zero size
+    // =============================
+
+    releasePattern(p);
+}
+
+// getNamedCapturingGroupsJSON - named groups
+TEST_F(Libre2APITest, GetNamedCapturingGroups_WithNames) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(?P<word>\\w+):(?P<number>\\d+)";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    const auto& named_re2 = re2_pattern.NamedCapturingGroups();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string json_wrapper = getNamedCapturingGroupsJSON(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    // Wrapper returns JSON, RE2 returns map - verify content
+    EXPECT_TRUE(json_wrapper.find("\"word\"") != std::string::npos);
+    EXPECT_TRUE(json_wrapper.find("\"number\"") != std::string::npos);
+
+    // Verify indices match
+    for (const auto& [name, index] : named_re2) {
+        std::string expected = "\"" + name + "\":" + std::to_string(index);
+        EXPECT_TRUE(json_wrapper.find(expected) != std::string::npos)
+            << "Missing or incorrect: " << name << " -> " << index;
+    }
+    // =============================
+
+    releasePattern(p);
+}
+

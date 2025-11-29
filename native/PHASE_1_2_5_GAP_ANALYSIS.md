@@ -617,7 +617,7 @@ tests/
 
 **Port strategy:**
 1. Find interesting RE2 test case
-2. Convert to wrapper API call
+2. Convert to wrapper API call with in our test suite (your not updating the re2 tests, just copything them over)
 3. Add RE2 comparison (our mandatory pattern)
 4. Verify both give same result
 

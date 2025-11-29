@@ -19,6 +19,7 @@
 #include "cache/cache_manager.h"
 #include "cache/murmur_hash3.h"
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -398,6 +399,185 @@ bool extract(
 
     // Call RE2::Extract (writes to result_out directly)
     return RE2::Extract(text, *pattern->compiled_regex, rewrite, result_out);
+}
+
+//============================================================================
+// BULK OPERATIONS (Phase 1.2.4)
+//============================================================================
+
+void fullMatchBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    bool* results_out) {
+
+    // Validate pattern and arrays
+    if (!pattern || !pattern->isValid() || !texts || !text_lens || !results_out) {
+        // Mark all as false on validation failure
+        if (results_out) {
+            for (int i = 0; i < num_texts; i++) {
+                results_out[i] = false;
+            }
+        }
+        return;
+    }
+
+    // Process all texts (absorbs logic from old JNI)
+    for (int i = 0; i < num_texts; i++) {
+        // Handle null/invalid inputs gracefully (mark false, continue)
+        if (texts[i] == nullptr || text_lens[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        // Use string_view for zero-copy (like StringPiece in old JNI)
+        std::string_view text(texts[i], text_lens[i]);
+        results_out[i] = RE2::FullMatch(text, *pattern->compiled_regex);
+    }
+}
+
+void partialMatchBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    bool* results_out) {
+
+    if (!pattern || !pattern->isValid() || !texts || !text_lens || !results_out) {
+        if (results_out) {
+            for (int i = 0; i < num_texts; i++) {
+                results_out[i] = false;
+            }
+        }
+        return;
+    }
+
+    for (int i = 0; i < num_texts; i++) {
+        if (texts[i] == nullptr || text_lens[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        std::string_view text(texts[i], text_lens[i]);
+        results_out[i] = RE2::PartialMatch(text, *pattern->compiled_regex);
+    }
+}
+
+//============================================================================
+// DIRECT MEMORY OPERATIONS (Phase 1.2.4 - Zero-Copy)
+//============================================================================
+
+bool fullMatchDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length) {
+
+    // Validate (from old JNI)
+    if (!pattern || !pattern->isValid()) {
+        return false;
+    }
+
+    if (text_address == 0) {
+        return false;
+    }
+
+    if (text_length < 0) {
+        return false;
+    }
+
+    // Zero-copy: cast and wrap in StringPiece (from old JNI)
+    const char* text = reinterpret_cast<const char*>(text_address);
+    re2::StringPiece input(text, static_cast<size_t>(text_length));
+
+    // Call RE2 with StringPiece (no copies)
+    return RE2::FullMatch(input, *pattern->compiled_regex);
+}
+
+bool partialMatchDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length) {
+
+    if (!pattern || !pattern->isValid()) {
+        return false;
+    }
+
+    if (text_address == 0) {
+        return false;
+    }
+
+    if (text_length < 0) {
+        return false;
+    }
+
+    // Zero-copy with StringPiece
+    const char* text = reinterpret_cast<const char*>(text_address);
+    re2::StringPiece input(text, static_cast<size_t>(text_length));
+
+    return RE2::PartialMatch(input, *pattern->compiled_regex);
+}
+
+void fullMatchDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    bool* results_out) {
+
+    // Validate
+    if (!pattern || !pattern->isValid() || !text_addresses || !text_lengths || !results_out) {
+        if (results_out) {
+            for (int i = 0; i < num_texts; i++) {
+                results_out[i] = false;
+            }
+        }
+        return;
+    }
+
+    // Process all with zero-copy (from old JNI fullMatchDirectBulk)
+    for (int i = 0; i < num_texts; i++) {
+        // Validate each address/length
+        if (text_addresses[i] == 0 || text_lengths[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        // Zero-copy: StringPiece wrap
+        const char* text = reinterpret_cast<const char*>(text_addresses[i]);
+        re2::StringPiece input(text, static_cast<size_t>(text_lengths[i]));
+
+        results_out[i] = RE2::FullMatch(input, *pattern->compiled_regex);
+    }
+}
+
+void partialMatchDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    bool* results_out) {
+
+    if (!pattern || !pattern->isValid() || !text_addresses || !text_lengths || !results_out) {
+        if (results_out) {
+            for (int i = 0; i < num_texts; i++) {
+                results_out[i] = false;
+            }
+        }
+        return;
+    }
+
+    for (int i = 0; i < num_texts; i++) {
+        if (text_addresses[i] == 0 || text_lengths[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        const char* text = reinterpret_cast<const char*>(text_addresses[i]);
+        re2::StringPiece input(text, static_cast<size_t>(text_lengths[i]));
+
+        results_out[i] = RE2::PartialMatch(input, *pattern->compiled_regex);
+    }
 }
 
 //============================================================================

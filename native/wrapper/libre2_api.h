@@ -330,6 +330,135 @@ bool extract(
     std::string* result_out);
 
 //=============================================================================
+// BULK OPERATIONS (Phase 1.2.4)
+//=============================================================================
+
+/**
+ * Full match bulk - match multiple texts against single pattern.
+ *
+ * Absorbs complexity that WAS in JNI layer (now reusable for all languages).
+ * Processes all texts even if some are null/invalid (marks as false, continues).
+ *
+ * Implementation (from old JNI):
+ * - Loop over all texts
+ * - Handle null/invalid (mark false, continue - NOT all-or-nothing)
+ * - Call RE2::FullMatch for each
+ * - Write results to output array
+ *
+ * @param pattern compiled pattern pointer
+ * @param texts array of text pointers (may contain nulls)
+ * @param text_lens array of lengths (parallel to texts)
+ * @param num_texts number of texts to process
+ * @param results_out pre-allocated bool array (size >= num_texts)
+ */
+void fullMatchBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    bool* results_out);
+
+/**
+ * Partial match bulk - match multiple texts against single pattern.
+ *
+ * Same logic as fullMatchBulk but uses RE2::PartialMatch.
+ *
+ * @param pattern compiled pattern pointer
+ * @param texts array of text pointers
+ * @param text_lens array of lengths
+ * @param num_texts number of texts
+ * @param results_out pre-allocated bool array
+ */
+void partialMatchBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    bool* results_out);
+
+//=============================================================================
+// DIRECT MEMORY OPERATIONS (Phase 1.2.4 - Zero-Copy)
+//=============================================================================
+
+/**
+ * Full match with direct memory access (zero-copy).
+ *
+ * Absorbs logic from JNI fullMatchDirect:
+ * - Cast jlong → const char*
+ * - Wrap in re2::StringPiece (CRITICAL: zero-copy)
+ * - Call RE2::FullMatch with StringPiece
+ *
+ * Uses re2::StringPiece which is (pointer, length) with NO data copy.
+ * This enables true zero-copy matching with DirectByteBuffer.
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_address memory address (from Java DirectByteBuffer.address())
+ * @param text_length length in bytes
+ * @return true if match, false otherwise
+ */
+bool fullMatchDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length);
+
+/**
+ * Partial match with direct memory access (zero-copy).
+ *
+ * Same as fullMatchDirect but uses RE2::PartialMatch.
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_address memory address
+ * @param text_length length in bytes
+ * @return true if match found, false otherwise
+ */
+bool partialMatchDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length);
+
+/**
+ * Full match direct bulk (zero-copy + bulk).
+ *
+ * Absorbs logic from JNI fullMatchDirectBulk:
+ * - Loop over address/length pairs
+ * - For each: cast → StringPiece → RE2::FullMatch
+ * - Handle invalid addresses (mark false, continue)
+ * - Write results to output
+ *
+ * Combines zero-copy (StringPiece) with bulk (single call).
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_addresses array of memory addresses
+ * @param text_lengths array of lengths
+ * @param num_texts number of texts
+ * @param results_out pre-allocated bool array
+ */
+void fullMatchDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    bool* results_out);
+
+/**
+ * Partial match direct bulk (zero-copy + bulk).
+ *
+ * Same as fullMatchDirectBulk but uses RE2::PartialMatch.
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_addresses array of memory addresses
+ * @param text_lengths array of lengths
+ * @param num_texts number of texts
+ * @param results_out pre-allocated bool array
+ */
+void partialMatchDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    bool* results_out);
+
+//=============================================================================
 // UTILITY FUNCTIONS (Phase 1.2.3)
 //=============================================================================
 

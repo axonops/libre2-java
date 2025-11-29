@@ -1682,3 +1682,119 @@ TEST_F(Libre2APITest, IsPatternValid_Valid) {
 TEST_F(Libre2APITest, IsPatternValid_Null) {
     EXPECT_FALSE(isPatternValid(nullptr));
 }
+
+//=============================================================================
+// PHASE 1.2.4: BULK & OFF-HEAP OPERATIONS TESTS
+//=============================================================================
+
+// FullMatchBulk - basic
+TEST_F(Libre2APITest, FullMatchBulk_Basic) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("\\d+", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::vector<std::string> TEXTS = {"123", "abc", "456", "xyz789"};
+    // ==============================================
+
+    // ========== EXECUTE RE2 (loop) ==========
+    bool results_re2[4];
+    for (size_t i = 0; i < TEXTS.size(); i++) {
+        results_re2[i] = RE2::FullMatch(TEXTS[i], *p->compiled_regex);
+    }
+    // ========================================
+
+    // ========== EXECUTE WRAPPER (bulk) ==========
+    const char* texts[4];
+    int lens[4];
+    for (size_t i = 0; i < TEXTS.size(); i++) {
+        texts[i] = TEXTS[i].data();
+        lens[i] = TEXTS[i].size();
+    }
+
+    bool results_wrapper[4];
+    fullMatchBulk(p, texts, lens, 4, results_wrapper);
+    // ===========================================
+
+    // ========== COMPARE (CRITICAL) ==========
+    for (size_t i = 0; i < TEXTS.size(); i++) {
+        EXPECT_EQ(results_re2[i], results_wrapper[i])
+            << "Result " << i << " must match - Text: '" << TEXTS[i] << "'";
+    }
+    // ========================================
+
+    releasePattern(p);
+}
+
+// FullMatchDirect - zero-copy
+TEST_F(Libre2APITest, FullMatchDirect_ZeroCopy) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("test", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "test";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (with StringPiece) ==========
+    re2::StringPiece input_re2(INPUT_TEXT);
+    bool result_re2 = RE2::FullMatch(input_re2, *p->compiled_regex);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (direct memory) ==========
+    int64_t address = reinterpret_cast<int64_t>(INPUT_TEXT.data());
+    bool result_wrapper = fullMatchDirect(p, address, INPUT_TEXT.size());
+    // =====================================================
+
+    // ========== COMPARE (CRITICAL) ==========
+    EXPECT_EQ(result_re2, result_wrapper) << "Results must match";
+    // ========================================
+
+    releasePattern(p);
+}
+
+// FullMatchDirectBulk - combined
+TEST_F(Libre2APITest, FullMatchDirectBulk_Combined) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("\\d+", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::vector<std::string> TEXTS = {"123", "abc", "456"};
+    // ==============================================
+
+    // ========== EXECUTE RE2 (loop with StringPiece) ==========
+    bool results_re2[3];
+    for (size_t i = 0; i < TEXTS.size(); i++) {
+        re2::StringPiece input(TEXTS[i]);
+        results_re2[i] = RE2::FullMatch(input, *p->compiled_regex);
+    }
+    // =========================================================
+
+    // ========== EXECUTE WRAPPER (bulk direct) ==========
+    int64_t addresses[3];
+    int lengths[3];
+    for (size_t i = 0; i < TEXTS.size(); i++) {
+        addresses[i] = reinterpret_cast<int64_t>(TEXTS[i].data());
+        lengths[i] = TEXTS[i].size();
+    }
+
+    bool results_wrapper[3];
+    fullMatchDirectBulk(p, addresses, lengths, 3, results_wrapper);
+    // ===================================================
+
+    // ========== COMPARE (CRITICAL) ==========
+    for (size_t i = 0; i < TEXTS.size(); i++) {
+        EXPECT_EQ(results_re2[i], results_wrapper[i])
+            << "Result " << i << " must match";
+    }
+    // ========================================
+
+    releasePattern(p);
+}

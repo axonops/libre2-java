@@ -65,10 +65,20 @@ Phase 1.2.4:  ⏸️ NEXT (Bulk & off-heap - final sub-phase!)
    - 100% passing
    - quoteMeta uses RE2 comparison
 
-**In Progress:**
-- 🔄 Sub-Phase 1.2.3b: Pattern options support (cache key modification)
+7. ✅ Sub-Phase 1.2.3b - Pattern Options Architecture
+   - Commit: c1dab14
+   - KEY FEATURE: Cached hash (computed once at init, not per lookup)
+   - PatternOptions struct with all 13 RE2::Options fields
+   - Cache key now includes options hash (different options = different cache entry)
+   - Dual compilePattern API (bool case_sensitive + JSON options)
+   - Extensible for future libre2-specific options
+   - Tests: 217/218 passing (1 flaky infrastructure test)
+   - All 58 API tests passing (100%)
 
-**Tokens Used:** 188,563 / 1,000,000 (18.9%)
+**In Progress:**
+- 🔄 Sub-Phase 1.2.4: Bulk & Off-Heap operations (FINAL SUB-PHASE)
+
+**Tokens Used:** 223,107 / 1,000,000 (22.3%)
 
 ---
 
@@ -130,12 +140,15 @@ Breakdown:
 - ✅ replaceAll(pattern, text, rewrite, result) - Replace all occurrences
 - ✅ extract(pattern, text, rewrite, result) - Extract with rewrite template
 
-**Phase 1.2.3a - Utility:**
+**Phase 1.2.3 - Utility & Options:**
 - ✅ quoteMeta(text) - Escape regex special characters
 - ✅ getPatternInfo(pattern) - Pattern metadata as JSON
 - ✅ isPatternValid(pattern) - Validity check
+- ✅ compilePattern(pattern, options_json, error) - Full options support
+- ✅ PatternOptions struct - All 13 RE2 options with cached hash
 
-**Total Functions:** 26 functions implemented and tested
+**Total Functions:** 27 functions implemented and tested
+**Cache Enhancement:** Options-aware cache key (O(1) hash lookup)
 
 ---
 
@@ -252,20 +265,17 @@ Breakdown:
 
 ## COMMITS THIS SESSION
 
-1. **d656c38** - Complete Phase 1.1: C++ Facade Layer (libre2::api)
-   - 7 files changed, 772 insertions(+)
-   - Added fullMatch/partialMatch with capture groups
-
+1. **d656c38** - Complete Phase 1.1: C++ Facade Layer
 2. **1bad4b2** - Sub-Phase 1.2.1: Consume/Scan functions + RE2 comparison pattern
-   - 4 files changed, 1850 insertions(+), 40 deletions(-)
-   - Added consume/findAndConsume functions
-   - Applied RE2 comparison to all functional tests
-
 3. **e76337b** - Add mandatory RE2 comparison testing guidelines
-   - 1 file changed, 600 insertions(+)
-   - Documented testing pattern for future development
+4. **631c58e** - Add session progress tracker for context recovery
+5. **101b545** - Sub-Phase 1.2.2: Replacement functions
+6. **70cf01e** - Sub-Phase 1.2.3a: Utility functions
+7. **f6e779c** - Update SESSION_PROGRESS.md - Sub-Phase 1.2.3a complete
+8. **c1dab14** - Sub-Phase 1.2.3b: Pattern options architecture with cached hash
+9. **5251e5d** - Update SESSION_PROGRESS - Sub-Phase 1.2.3 complete
 
-**Total:** 3 commits, 3,222 lines added
+**Total:** 9 commits, ~6,200 lines added
 
 ---
 

@@ -4188,3 +4188,187 @@ TEST_F(Libre2APITest, RE2Ported_ConsumeN_VariableArgs) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// RE2 PORTED TESTS - FullMatch/PartialMatch Variants (from re2_test.cc)
+//=============================================================================
+
+// FullMatch - with no args (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchWithNoArgs) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "h.*o";
+    const std::string TEXT = "hello";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    bool result_re2 = RE2::FullMatch(TEXT, re2_pattern);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    bool result_wrapper = fullMatch(p, TEXT);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// FullMatch - integer arg (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FullMatchIntegerArg) {
+    initCache();
+
+    // ========== TEST DATA (from RE2 test) ==========
+    struct TestCase {
+        std::string pattern;
+        std::string text;
+        int expected;
+    };
+    const TestCase cases[] = {
+        {"1(\\d*)4", "1234", 23},
+        {"(\\d)\\d+", "1234", 1},
+        {"(-\\d)\\d+", "-1234", -1}
+    };
+    // ================================================
+
+    for (const auto& tc : cases) {
+        // ========== EXECUTE RE2 ==========
+        RE2 re2_pattern(tc.pattern);
+        int value_re2;
+        bool result_re2 = RE2::FullMatch(tc.text, re2_pattern, &value_re2);
+        // =================================
+
+        // ========== EXECUTE WRAPPER ==========
+        std::string error;
+        RE2Pattern* p = compilePattern(tc.pattern, true, error);
+        ASSERT_NE(p, nullptr) << "Pattern: " << tc.pattern;
+        int value_wrapper;
+        const Arg arg(&value_wrapper);
+        const Arg* args[] = {&arg};
+        bool result_wrapper = fullMatchN(p, tc.text, args, 1);
+        // =====================================
+
+        // ========== COMPARE ==========
+        EXPECT_EQ(result_re2, result_wrapper) << "Pattern: " << tc.pattern;
+        EXPECT_TRUE(result_wrapper) << "Pattern: " << tc.pattern;
+        EXPECT_EQ(value_re2, value_wrapper) << "Pattern: " << tc.pattern;
+        EXPECT_EQ(tc.expected, value_wrapper) << "Pattern: " << tc.pattern;
+        // =============================
+
+        releasePattern(p);
+    }
+}
+
+// PartialMatch - basic (from RE2)
+TEST_F(Libre2APITest, RE2Ported_PartialMatch_Basic) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "ell";
+    const std::string TEXT = "hello";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    bool result_re2 = RE2::PartialMatch(TEXT, re2_pattern);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    bool result_wrapper = partialMatch(p, TEXT);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// PartialMatch - with capture (from RE2)
+TEST_F(Libre2APITest, RE2Ported_PartialMatch_WithCapture) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\d+)";
+    const std::string TEXT = "x*100 + 20";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int number_re2;
+    bool result_re2 = RE2::PartialMatch(TEXT, re2_pattern, &number_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int number_wrapper;
+    const Arg arg(&number_wrapper);
+    const Arg* args[] = {&arg};
+    bool result_wrapper = partialMatchN(p, TEXT, args, 1);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(number_re2, number_wrapper);
+    EXPECT_EQ(100, number_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// NamedGroups - capture test (from RE2)
+TEST_F(Libre2APITest, RE2Ported_NamedGroups) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(?P<foo>\\w+):(?P<bar>\\d+)";
+    const std::string TEXT = "test:1234";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    const auto& named_re2 = re2_pattern.NamedCapturingGroups();
+    std::string foo_re2, bar_re2;
+    bool result_re2 = RE2::FullMatch(TEXT, re2_pattern, &foo_re2, &bar_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string json = getNamedCapturingGroupsJSON(p);
+    std::string foo_wrapper, bar_wrapper;
+    const Arg arg1(&foo_wrapper), arg2(&bar_wrapper);
+    const Arg* args[] = {&arg1, &arg2};
+    bool result_wrapper = fullMatchN(p, TEXT, args, 2);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(foo_re2, foo_wrapper);
+    EXPECT_EQ(bar_re2, bar_wrapper);
+    EXPECT_EQ("test", foo_wrapper);
+    EXPECT_EQ("1234", bar_wrapper);
+    // Verify named groups JSON
+    EXPECT_TRUE(json.find("\"foo\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"bar\"") != std::string::npos);
+    // =============================
+
+    releasePattern(p);
+}

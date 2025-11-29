@@ -551,6 +551,99 @@ std::string getOptionsJSON(RE2Pattern* pattern);
 
 ---
 
+### Phase 1.2.5g - Test Reorganization & RE2 Test Suite Integration
+
+**Goal:** Reorganize growing test suite and leverage RE2's comprehensive tests
+
+#### Problem Statement
+- `libre2_api_test.cpp` now 2200+ lines (too large, hard to navigate)
+- RE2 has 15+ years of edge case testing in `re2/re2/testing/*`
+- We should leverage Google's test expertise
+- Need better test organization as API grows
+
+#### Tasks
+
+**1. Review RE2 Test Suite**
+```bash
+# RE2 test files to review:
+re2/re2/testing/re2_test.cc          # Core API tests
+re2/re2/testing/re2_arg_test.cc      # Argument conversion tests
+re2/re2/testing/compile_test.cc      # Compilation tests
+re2/re2/testing/parse_test.cc        # Pattern parsing (skip - internal)
+re2/re2/testing/exhaustive_test.cc   # Exhaustive matching (skip - slow)
+```
+
+**Actions:**
+- Identify tests for public API behavior (not internal implementation)
+- Focus on edge cases we haven't covered
+- Document which RE2 tests we skip and why
+
+**2. Split Test File into Multiple Files**
+
+**New structure:**
+```
+tests/
+├── libre2_api_test.cpp              # Basic API tests (compilation, cache init)
+├── libre2_matching_test.cpp         # fullMatch, partialMatch (all variants)
+├── libre2_consume_test.cpp          # consume, findAndConsume (all variants)
+├── libre2_replacement_test.cpp      # replace, replaceAll, extract
+├── libre2_options_test.cpp          # Pattern options, JSON config
+├── libre2_analysis_test.cpp         # Pattern analysis (groups, metadata)
+├── libre2_bulk_test.cpp             # All bulk/direct variants
+└── libre2_re2_ported_test.cpp       # Tests ported from RE2 test suite
+```
+
+**Benefits:**
+- Each file ~300-400 lines (manageable size)
+- Clear organization by functionality
+- Easier to find/add tests
+- Parallel test compilation (faster builds)
+
+**3. Port Relevant RE2 Tests**
+
+**Examples of tests to port:**
+```cpp
+// From re2_test.cc - edge cases we might have missed:
+- Empty pattern matching
+- Empty text matching
+- Unicode edge cases
+- Very long patterns (1000+ chars)
+- Very long text (1MB+)
+- Patterns with 20+ capture groups
+- Overlapping matches
+- Backslash edge cases
+- Special character handling
+```
+
+**Port strategy:**
+1. Find interesting RE2 test case
+2. Convert to wrapper API call
+3. Add RE2 comparison (our mandatory pattern)
+4. Verify both give same result
+
+**4. Update TESTING_GUIDELINES.md**
+
+Add section on test organization:
+- When to create new test file
+- Naming conventions
+- How to port RE2 tests
+- Test file size limits (300-500 lines)
+
+#### Deliverables
+- ✅ 7 organized test files (split from 1 large file)
+- ✅ 50+ tests ported from RE2 test suite
+- ✅ Documentation updated
+- ✅ All tests passing (300+ total expected)
+- ✅ Faster build times (parallel compilation)
+
+#### Effort Estimate
+- Review RE2 tests: 1-2 hours
+- Split test file: 2-3 hours
+- Port RE2 tests: 1-2 hours
+- **Total: 4-6 hours**
+
+---
+
 ### Phase 1.2.7 - Error Code Enumeration (Priority 2)
 
 ```cpp
@@ -595,7 +688,8 @@ These are **NOT in RE2** but provide value for performance:
 | 1.2.5d - Rewrite validation | 3 | - | - | - | 10 | 2-3 |
 | 1.2.5e - Generic Match | 1 | 1 | 1 | 1 | 20 | 4-6 |
 | 1.2.5f - Advanced (no variants) | 1 | - | - | - | 5 | 1-2 |
-| **Total** | **19** | **5** | **3** | **3** | **95** | **18-28 hours** |
+| 1.2.5g - Test reorganization & RE2 tests | - | - | - | - | 50+ | 4-6 |
+| **Total** | **19** | **5** | **3** | **3** | **145+** | **22-34 hours** |
 
 **Function Count Breakdown:**
 - Standard RE2-like functions: 19

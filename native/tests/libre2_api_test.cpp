@@ -4507,3 +4507,109 @@ TEST_F(Libre2APITest, RE2Ported_DecimalTests) {
         releasePattern(p);
     }
 }
+
+// FindAndConsume - multiple words (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FindAndConsume) {
+    initCache();
+    const std::string PATTERN = "(\\w+)";
+    const std::string INPUT = "   aaa b!@#$@#$cccc";
+    
+    RE2 re2_pattern(PATTERN);
+    absl::string_view input_re2(INPUT);
+    std::string w1_re2, w2_re2, w3_re2;
+    bool r1_re2 = RE2::FindAndConsume(&input_re2, re2_pattern, &w1_re2);
+    bool r2_re2 = RE2::FindAndConsume(&input_re2, re2_pattern, &w2_re2);
+    bool r3_re2 = RE2::FindAndConsume(&input_re2, re2_pattern, &w3_re2);
+    bool r4_re2 = RE2::FindAndConsume(&input_re2, re2_pattern, (std::string*)nullptr);
+    
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    const char* input_w = INPUT.data();
+    int len_w = INPUT.size();
+    std::string w1_w, w2_w, w3_w;
+    const Arg a1(&w1_w); const Arg* args1[] = {&a1};
+    bool r1_w = findAndConsumeN(p, &input_w, &len_w, args1, 1);
+    const Arg a2(&w2_w); const Arg* args2[] = {&a2};
+    bool r2_w = findAndConsumeN(p, &input_w, &len_w, args2, 1);
+    const Arg a3(&w3_w); const Arg* args3[] = {&a3};
+    bool r3_w = findAndConsumeN(p, &input_w, &len_w, args3, 1);
+    bool r4_w = findAndConsumeN(p, &input_w, &len_w, nullptr, 0);
+    
+    EXPECT_EQ(r1_re2, r1_w); EXPECT_EQ(r2_re2, r2_w); EXPECT_EQ(r3_re2, r3_w); EXPECT_EQ(r4_re2, r4_w);
+    EXPECT_EQ(w1_re2, w1_w); EXPECT_EQ(w2_re2, w2_w); EXPECT_EQ(w3_re2, w3_w);
+    EXPECT_EQ("aaa", w1_w); EXPECT_EQ("b", w2_w); EXPECT_EQ("cccc", w3_w);
+    
+    releasePattern(p);
+}
+
+// FindAndConsumeN - multi-arg (from RE2)
+TEST_F(Libre2APITest, RE2Ported_FindAndConsumeN) {
+    initCache();
+    const std::string INPUT = " one two three 4";
+    
+    RE2 re2_pattern1("(\\w+)");
+    RE2 re2_pattern2("(\\w+)\\s*(\\d+)");
+    absl::string_view input_re2(INPUT);
+    RE2::Arg argv_re2[2];
+    const RE2::Arg* args_re2[2] = {&argv_re2[0], &argv_re2[1]};
+    bool r1_re2 = RE2::FindAndConsumeN(&input_re2, re2_pattern1, args_re2, 0);
+    std::string word_re2;
+    argv_re2[0] = &word_re2;
+    bool r2_re2 = RE2::FindAndConsumeN(&input_re2, re2_pattern1, args_re2, 1);
+    int n_re2;
+    argv_re2[1] = &n_re2;
+    bool r3_re2 = RE2::FindAndConsumeN(&input_re2, re2_pattern2, args_re2, 2);
+    
+    std::string error1, error2;
+    RE2Pattern* p1 = compilePattern("(\\w+)", true, error1);
+    RE2Pattern* p2 = compilePattern("(\\w+)\\s*(\\d+)", true, error2);
+    ASSERT_NE(p1, nullptr); ASSERT_NE(p2, nullptr);
+    const char* input_w = INPUT.data();
+    int len_w = INPUT.size();
+    bool r1_w = findAndConsumeN(p1, &input_w, &len_w, nullptr, 0);
+    std::string word_w;
+    const Arg arg_w1(&word_w); const Arg* args1[] = {&arg_w1};
+    bool r2_w = findAndConsumeN(p1, &input_w, &len_w, args1, 1);
+    int n_w;
+    std::string word_w2;
+    const Arg arg_w2(&word_w2); const Arg arg_n(&n_w);
+    const Arg* args2[] = {&arg_w2, &arg_n};
+    bool r3_w = findAndConsumeN(p2, &input_w, &len_w, args2, 2);
+    word_w = word_w2;  // Copy for comparison
+    
+    EXPECT_EQ(r1_re2, r1_w); EXPECT_EQ(r2_re2, r2_w); EXPECT_EQ(r3_re2, r3_w);
+    EXPECT_EQ(word_re2, word_w); EXPECT_EQ(n_re2, n_w);
+    EXPECT_EQ("three", word_w); EXPECT_EQ(4, n_w);  // word_w gets "three" from final call
+    
+    releasePattern(p1); releasePattern(p2);
+}
+
+// CheckRewriteString - comprehensive (from RE2)
+TEST_F(Libre2APITest, RE2Ported_CheckRewriteString) {
+    initCache();
+    struct Test { std::string pat; std::string rewrite; bool valid; };
+    const Test cases[] = {
+        {"(\\w+)", "\\1", true},
+        {"(\\w+)", "\\1\\2", false},
+        {"(\\w+):(\\w+)", "\\2\\1", true},
+        {"(\\w+)", "\\0", true},
+        {"", "\\1", false}
+    };
+    
+    for (const auto& tc : cases) {
+        RE2 re2_pat(tc.pat);
+        std::string err_re2;
+        bool r_re2 = re2_pat.CheckRewriteString(tc.rewrite, &err_re2);
+        
+        std::string error;
+        RE2Pattern* p = compilePattern(tc.pat, true, error);
+        std::string err_w;
+        bool r_w = p ? checkRewriteString(p, tc.rewrite, &err_w) : false;
+        
+        EXPECT_EQ(r_re2, r_w) << "Pattern: " << tc.pat << ", Rewrite: " << tc.rewrite;
+        EXPECT_EQ(tc.valid, r_w);
+        
+        if(p) releasePattern(p);
+    }
+}

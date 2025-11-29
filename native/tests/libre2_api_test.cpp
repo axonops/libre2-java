@@ -4372,3 +4372,138 @@ TEST_F(Libre2APITest, RE2Ported_NamedGroups) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// RE2 PORTED TESTS - Hex/Octal/Decimal Parsing (from re2_test.cc)
+//=============================================================================
+
+// HexTests - parse hex integers (from RE2)
+TEST_F(Libre2APITest, RE2Ported_HexTests) {
+    initCache();
+
+    // ========== TEST DATA (from RE2 ASSERT_HEX macro) ==========
+    struct HexTest {
+        std::string text;
+        int64_t expected;
+    };
+    const HexTest cases[] = {
+        {"2bad", 0x2bad},
+        {"dead", 0xdead},
+        {"7eadbeef", 0x7eadbeef}
+    };
+    // ===========================================================
+
+    for (const auto& tc : cases) {
+        // ========== EXECUTE RE2 ==========
+        RE2 re2_pattern("([0-9a-fA-F]+)[uUlL]*");
+        int64_t value_re2;
+        bool result_re2 = RE2::FullMatch(tc.text, re2_pattern, RE2::Hex(&value_re2));
+        // =================================
+
+        // ========== EXECUTE WRAPPER ==========
+        std::string error;
+        RE2Pattern* p = compilePattern("([0-9a-fA-F]+)[uUlL]*", true, error);
+        ASSERT_NE(p, nullptr);
+        int64_t value_wrapper;
+        const Arg arg = Hex(&value_wrapper);
+        const Arg* args[] = {&arg};
+        bool result_wrapper = fullMatchN(p, tc.text, args, 1);
+        // =====================================
+
+        // ========== COMPARE ==========
+        EXPECT_EQ(result_re2, result_wrapper) << "Text: " << tc.text;
+        EXPECT_TRUE(result_wrapper);
+        EXPECT_EQ(value_re2, value_wrapper);
+        EXPECT_EQ(tc.expected, value_wrapper);
+        // =============================
+
+        releasePattern(p);
+    }
+}
+
+// OctalTests - parse octal integers (from RE2)
+TEST_F(Libre2APITest, RE2Ported_OctalTests) {
+    initCache();
+
+    // ========== TEST DATA (from RE2 ASSERT_OCTAL macro) ==========
+    struct OctalTest {
+        std::string text;
+        int64_t expected;
+    };
+    const OctalTest cases[] = {
+        {"77777", 077777},
+        {"177777", 0177777}
+    };
+    // =============================================================
+
+    for (const auto& tc : cases) {
+        // ========== EXECUTE RE2 ==========
+        RE2 re2_pattern("([0-7]+)[uUlL]*");
+        int64_t value_re2;
+        bool result_re2 = RE2::FullMatch(tc.text, re2_pattern, RE2::Octal(&value_re2));
+        // =================================
+
+        // ========== EXECUTE WRAPPER ==========
+        std::string error;
+        RE2Pattern* p = compilePattern("([0-7]+)[uUlL]*", true, error);
+        ASSERT_NE(p, nullptr);
+        int64_t value_wrapper;
+        const Arg arg = Octal(&value_wrapper);
+        const Arg* args[] = {&arg};
+        bool result_wrapper = fullMatchN(p, tc.text, args, 1);
+        // =====================================
+
+        // ========== COMPARE ==========
+        EXPECT_EQ(result_re2, result_wrapper);
+        EXPECT_TRUE(result_wrapper);
+        EXPECT_EQ(value_re2, value_wrapper);
+        EXPECT_EQ(tc.expected, value_wrapper);
+        // =============================
+
+        releasePattern(p);
+    }
+}
+
+// DecimalTests - parse decimal integers (from RE2)
+TEST_F(Libre2APITest, RE2Ported_DecimalTests) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    struct DecimalTest {
+        std::string text;
+        int64_t expected;
+    };
+    const DecimalTest cases[] = {
+        {"100", 100},
+        {"32767", 32767},
+        {"-1234", -1234}
+    };
+    // ===============================
+
+    for (const auto& tc : cases) {
+        // ========== EXECUTE RE2 ==========
+        RE2 re2_pattern("(-?[0-9]+)");
+        int64_t value_re2;
+        bool result_re2 = RE2::FullMatch(tc.text, re2_pattern, &value_re2);
+        // =================================
+
+        // ========== EXECUTE WRAPPER ==========
+        std::string error;
+        RE2Pattern* p = compilePattern("(-?[0-9]+)", true, error);
+        ASSERT_NE(p, nullptr);
+        int64_t value_wrapper;
+        const Arg arg(&value_wrapper);
+        const Arg* args[] = {&arg};
+        bool result_wrapper = fullMatchN(p, tc.text, args, 1);
+        // =====================================
+
+        // ========== COMPARE ==========
+        EXPECT_EQ(result_re2, result_wrapper);
+        EXPECT_TRUE(result_wrapper);
+        EXPECT_EQ(value_re2, value_wrapper);
+        EXPECT_EQ(tc.expected, value_wrapper);
+        // =============================
+
+        releasePattern(p);
+    }
+}

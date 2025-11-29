@@ -5108,3 +5108,21 @@ TEST_F(Libre2APITest,R35){RE2 r("(\\w)(\\d)\\2\\1");std::string s;int i;EXPECT_F
 TEST_F(Libre2APITest,R36){RE2 r("x+y*z?");EXPECT_TRUE(RE2::FullMatch("x",r));EXPECT_TRUE(RE2::FullMatch("xxyz",r));EXPECT_TRUE(RE2::FullMatch("xxy",r));std::string e;RE2Pattern*p=compilePattern("x+y*z?",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"x"));EXPECT_TRUE(fullMatch(p,"xxyz"));EXPECT_TRUE(fullMatch(p,"xxy"));releasePattern(p);}
 TEST_F(Libre2APITest,R37){std::string e;RE2Pattern*p=compilePattern("",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(ok(p));EXPECT_EQ(0,getNumberOfCapturingGroups(p));EXPECT_GT(getProgramSize(p),0);releasePattern(p);}
 TEST_F(Libre2APITest,R38){RE2 r("foo");EXPECT_EQ("foo",r.pattern());std::string e;RE2Pattern*p=compilePattern("foo",true,e);ASSERT_NE(p,nullptr);EXPECT_EQ("foo",getPattern(p));releasePattern(p);}
+
+//=============================================================================
+// EXHAUSTIVE TESTS (from exhaustive*.cc) - Simplified without infrastructure
+//=============================================================================
+
+TEST_F(Libre2APITest,EX1){RE2 r("abc");EXPECT_TRUE(RE2::FullMatch("abc",r));std::string e;RE2Pattern*p=compilePattern("abc",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"abc"));releasePattern(p);}
+TEST_F(Libre2APITest,EX2){RE2 r("AaBb");EXPECT_TRUE(RE2::FullMatch("AaBb",r));std::string e;RE2Pattern*p=compilePattern("AaBb",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"AaBb"));releasePattern(p);}
+TEST_F(Libre2APITest,EX3){RE2::Options o;o.set_case_sensitive(false);RE2 r("abc",o);EXPECT_TRUE(RE2::FullMatch("ABC",r));Options w;w.set_case_sensitive(false);std::string e;RE2Pattern*p=compilePattern("abc",w,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"ABC"));releasePattern(p);}
+TEST_F(Libre2APITest,EX4){RE2 r("a\\xE2\\x98\\xBA");EXPECT_TRUE(RE2::FullMatch("a☺",r));std::string e;RE2Pattern*p=compilePattern("a\\xE2\\x98\\xBA",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"a☺"));releasePattern(p);}
+TEST_F(Libre2APITest,EX5){RE2 r("(a){0}");EXPECT_TRUE(RE2::FullMatch("",r));std::string e;RE2Pattern*p=compilePattern("(a){0}",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,""));releasePattern(p);}
+TEST_F(Libre2APITest,EX6){RE2 r("(a){1}");EXPECT_TRUE(RE2::FullMatch("a",r));std::string e;RE2Pattern*p=compilePattern("(a){1}",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"a"));releasePattern(p);}
+TEST_F(Libre2APITest,EX7){RE2 r("(a){2}");EXPECT_TRUE(RE2::FullMatch("aa",r));std::string e;RE2Pattern*p=compilePattern("(a){2}",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"aa"));releasePattern(p);}
+TEST_F(Libre2APITest,EX8){RE2 r("(a)*");EXPECT_TRUE(RE2::FullMatch("",r));EXPECT_TRUE(RE2::FullMatch("aaa",r));std::string e;RE2Pattern*p=compilePattern("(a)*",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,""));EXPECT_TRUE(fullMatch(p,"aaa"));releasePattern(p);}
+TEST_F(Libre2APITest,EX9){RE2 r("(a)+");EXPECT_FALSE(RE2::FullMatch("",r));EXPECT_TRUE(RE2::FullMatch("aaa",r));std::string e;RE2Pattern*p=compilePattern("(a)+",true,e);ASSERT_NE(p,nullptr);EXPECT_FALSE(fullMatch(p,""));EXPECT_TRUE(fullMatch(p,"aaa"));releasePattern(p);}
+TEST_F(Libre2APITest,EX10){RE2 r("(a)?");EXPECT_TRUE(RE2::FullMatch("",r));EXPECT_TRUE(RE2::FullMatch("a",r));std::string e;RE2Pattern*p=compilePattern("(a)?",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,""));EXPECT_TRUE(fullMatch(p,"a"));releasePattern(p);}
+TEST_F(Libre2APITest,EX11){RE2 r("(a|b)");EXPECT_TRUE(RE2::FullMatch("a",r));EXPECT_TRUE(RE2::FullMatch("b",r));std::string e;RE2Pattern*p=compilePattern("(a|b)",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"a"));EXPECT_TRUE(fullMatch(p,"b"));releasePattern(p);}
+TEST_F(Libre2APITest,EX12){RE2 r("(a|b)*");EXPECT_TRUE(RE2::FullMatch("abab",r));std::string e;RE2Pattern*p=compilePattern("(a|b)*",true,e);ASSERT_NE(p,nullptr);EXPECT_TRUE(fullMatch(p,"abab"));releasePattern(p);}
+TEST_F(Libre2APITest,EX13){RE2 r("a{2,4}");EXPECT_FALSE(RE2::FullMatch("a",r));EXPECT_TRUE(RE2::FullMatch("aa",r));EXPECT_TRUE(RE2::FullMatch("aaaa",r));EXPECT_FALSE(RE2::FullMatch("aaaaa",r));std::string e;RE2Pattern*p=compilePattern("a{2,4}",true,e);ASSERT_NE(p,nullptr);EXPECT_FALSE(fullMatch(p,"a"));EXPECT_TRUE(fullMatch(p,"aa"));EXPECT_TRUE(fullMatch(p,"aaaa"));EXPECT_FALSE(fullMatch(p,"aaaaa"));releasePattern(p);}

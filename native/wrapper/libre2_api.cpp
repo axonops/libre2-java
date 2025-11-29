@@ -122,6 +122,53 @@ cache::RE2Pattern* compilePattern(
     return shared_pattern.get();
 }
 
+cache::RE2Pattern* compilePattern(
+    const std::string& pattern,
+    const Options& options,
+    std::string& error_out) {
+
+    // Convert RE2::Options to PatternOptions for cache key
+    api::PatternOptions pattern_opts;
+    pattern_opts.max_mem = options.max_mem();
+    pattern_opts.utf8 = (options.encoding() == RE2::Options::EncodingUTF8);
+    pattern_opts.posix_syntax = options.posix_syntax();
+    pattern_opts.longest_match = options.longest_match();
+    pattern_opts.log_errors = options.log_errors();
+    pattern_opts.literal = options.literal();
+    pattern_opts.never_nl = options.never_nl();
+    pattern_opts.dot_nl = options.dot_nl();
+    pattern_opts.never_capture = options.never_capture();
+    pattern_opts.case_sensitive = options.case_sensitive();
+    pattern_opts.perl_classes = options.perl_classes();
+    pattern_opts.word_boundary = options.word_boundary();
+    pattern_opts.one_line = options.one_line();
+
+    cache::CacheManager* mgr = g_cache_manager.load(std::memory_order_acquire);
+
+    if (mgr == nullptr) {
+        // NO CACHE - Compile directly using RE2::Options
+        auto regex = std::make_unique<RE2>(pattern, options);
+
+        if (!regex->ok()) {
+            error_out = regex->error();
+            return nullptr;
+        }
+
+        auto* pattern_wrapper = new cache::RE2Pattern(std::move(regex), pattern, pattern_opts);
+        return pattern_wrapper;
+    }
+
+    // CACHE ENABLED
+    cache::PatternCacheMetrics metrics;
+    auto shared_pattern = mgr->patternCache().getOrCompile(pattern, pattern_opts, metrics, error_out);
+
+    if (!shared_pattern) {
+        return nullptr;
+    }
+
+    return shared_pattern.get();
+}
+
 void releasePattern(cache::RE2Pattern* pattern) {
     if (!pattern) {
         return;  // Null-safe
@@ -1000,7 +1047,7 @@ std::string getProgramFanoutJSON(cache::RE2Pattern* pattern) {
     }
 
     std::vector<int> histogram;
-    int max_bucket = pattern->compiled_regex->ProgramFanout(&histogram);
+    pattern->compiled_regex->ProgramFanout(&histogram);
 
     std::ostringstream json;
     json << "[";
@@ -1018,7 +1065,7 @@ std::string getReverseProgramFanoutJSON(cache::RE2Pattern* pattern) {
     }
 
     std::vector<int> histogram;
-    int max_bucket = pattern->compiled_regex->ReverseProgramFanout(&histogram);
+    pattern->compiled_regex->ReverseProgramFanout(&histogram);
 
     std::ostringstream json;
     json << "[";

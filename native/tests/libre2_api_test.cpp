@@ -3578,3 +3578,129 @@ TEST_F(Libre2APITest, Encoding_EnumValues) {
     EXPECT_EQ(static_cast<int>(Encoding::EncodingLatin1), 
               static_cast<int>(RE2::Options::EncodingLatin1));
 }
+
+//=============================================================================
+// RE2::OPTIONS API TESTS (Phase 1.2.5j)
+//=============================================================================
+
+// compilePattern with Options object
+TEST_F(Libre2APITest, CompilePattern_WithOptions) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "HELLO";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2::Options opts_re2;
+    opts_re2.set_case_sensitive(false);
+    RE2 re2_pattern(PATTERN, opts_re2);
+    bool result_re2 = RE2::FullMatch("hello", re2_pattern);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    Options opts_wrapper;
+    opts_wrapper.set_case_sensitive(false);
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, opts_wrapper, error);
+    ASSERT_NE(p, nullptr);
+    bool result_wrapper = fullMatch(p, "hello");
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);  // Case-insensitive match
+    // =============================
+
+    releasePattern(p);
+}
+
+// Options - CannedOptions (Latin1)
+TEST_F(Libre2APITest, Options_CannedLatin1) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "test";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN, RE2::Latin1);
+    bool is_latin1_re2 = (re2_pattern.options().encoding() == RE2::Options::EncodingLatin1);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    Options opts_wrapper(CannedOptions::Latin1);
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, opts_wrapper, error);
+    ASSERT_NE(p, nullptr);
+    const PatternOptions& pattern_opts = getOptions(p);
+    bool is_latin1_wrapper = !pattern_opts.utf8;  // Latin1 = utf8 is false
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(is_latin1_re2, is_latin1_wrapper);
+    EXPECT_TRUE(is_latin1_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// Options - getters/setters
+TEST_F(Libre2APITest, Options_GettersSetters) {
+    // ========== TEST DATA ==========
+    // Test all 13 options
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2::Options opts_re2;
+    opts_re2.set_max_mem(2 * 1024 * 1024);
+    opts_re2.set_case_sensitive(false);
+    opts_re2.set_literal(true);
+    opts_re2.set_dot_nl(true);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    Options opts_wrapper;
+    opts_wrapper.set_max_mem(2 * 1024 * 1024);
+    opts_wrapper.set_case_sensitive(false);
+    opts_wrapper.set_literal(true);
+    opts_wrapper.set_dot_nl(true);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(opts_re2.max_mem(), opts_wrapper.max_mem());
+    EXPECT_EQ(opts_re2.case_sensitive(), opts_wrapper.case_sensitive());
+    EXPECT_EQ(opts_re2.literal(), opts_wrapper.literal());
+    EXPECT_EQ(opts_re2.dot_nl(), opts_wrapper.dot_nl());
+    EXPECT_EQ(2 * 1024 * 1024, opts_wrapper.max_mem());
+    EXPECT_FALSE(opts_wrapper.case_sensitive());
+    EXPECT_TRUE(opts_wrapper.literal());
+    EXPECT_TRUE(opts_wrapper.dot_nl());
+    // =============================
+}
+
+// Options - Copy() method
+TEST_F(Libre2APITest, Options_Copy) {
+    // ========== EXECUTE RE2 ==========
+    RE2::Options opts1_re2;
+    opts1_re2.set_case_sensitive(false);
+    opts1_re2.set_max_mem(1024);
+    RE2::Options opts2_re2;
+    opts2_re2.Copy(opts1_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    Options opts1_wrapper;
+    opts1_wrapper.set_case_sensitive(false);
+    opts1_wrapper.set_max_mem(1024);
+    Options opts2_wrapper;
+    opts2_wrapper.Copy(opts1_wrapper);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(opts2_re2.case_sensitive(), opts2_wrapper.case_sensitive());
+    EXPECT_EQ(opts2_re2.max_mem(), opts2_wrapper.max_mem());
+    EXPECT_FALSE(opts2_wrapper.case_sensitive());
+    EXPECT_EQ(1024, opts2_wrapper.max_mem());
+    // =============================
+}

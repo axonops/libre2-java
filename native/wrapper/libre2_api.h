@@ -43,6 +43,19 @@ namespace api {
 using Arg = RE2::Arg;
 
 /**
+ * Re-export RE2::Options for pattern compilation options.
+ *
+ * Provides access to all 13 RE2 options with getters/setters.
+ * Can use canned options (Latin1, POSIX, Quiet) or customize.
+ *
+ * Example:
+ *   Options opts;
+ *   opts.set_case_sensitive(false);
+ *   opts.set_max_mem(1024*1024);
+ */
+using Options = RE2::Options;
+
+/**
  * Parse integer with C-style radix detection.
  * Supports: 0x prefix (hex), 0 prefix (octal), else decimal.
  *
@@ -185,6 +198,19 @@ cache::RE2Pattern* compilePattern(
 cache::RE2Pattern* compilePattern(
     const std::string& pattern,
     const std::string& options_json,
+    std::string& error_out);
+
+/**
+ * Compile RE2 pattern with Options object (like RE2 constructor).
+ *
+ * @param pattern regex pattern string
+ * @param options RE2::Options object (all 13 options)
+ * @param error_out output parameter for compilation errors
+ * @return compiled pattern pointer, or nullptr on error
+ */
+cache::RE2Pattern* compilePattern(
+    const std::string& pattern,
+    const Options& options,
     std::string& error_out);
 
 /**

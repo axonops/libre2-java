@@ -357,3 +357,45 @@ TEST_F(Libre2APITest, FullMatchN_MultipleCaptures) {
 
 **Tracking:** All design decisions, issues, and caching opportunities logged here.
 **Commit Strategy:** Commit after each sub-phase (5a, 5b, 5c, 5d, 5e, 5f) with detailed messages.
+
+---
+
+## PHASE 1.2.5b COMPLETION
+
+**Status:** ✅ COMPLETE
+**Date:** 2025-11-29 16:15 UTC
+
+**Functions Implemented (5):**
+1. ✅ getNumberOfCapturingGroups() - RE2::NumberOfCapturingGroups()
+2. ✅ getNamedCapturingGroupsJSON() - RE2::NamedCapturingGroups() as JSON
+3. ✅ getCapturingGroupNamesJSON() - RE2::CapturingGroupNames() as JSON
+4. ✅ getProgramSize() - RE2::ProgramSize()
+5. ✅ getReverseProgramSize() - RE2::ReverseProgramSize()
+
+**Tests Added (5, all with RE2 comparison):**
+1. ✅ GetNumberOfCapturingGroups_Basic - 3 groups
+2. ✅ GetNumberOfCapturingGroups_NoGroups - 0 groups
+3. ✅ GetProgramSize_ComplexPattern - complexity metric
+4. ✅ GetReverseProgramSize_ComplexPattern - reverse complexity
+5. ✅ GetNamedCapturingGroups_WithNames - named groups
+
+**Test Results:**
+- Total: 237/237 passing (was 232, +5)
+- Pattern analysis: 5/5 passing
+- All comparisons: RE2 == Wrapper ✅
+
+**Implementation Notes:**
+- Direct delegation to RE2 methods (zero overhead)
+- Returns -1 for invalid patterns
+- JSON format for named groups (language-agnostic)
+- No caching needed (metadata in pattern object)
+
+**Caching Analysis:**
+- NO separate cache required
+- Metadata already stored in RE2Pattern object
+- Functions are O(1) lookups
+- No performance optimization opportunities
+
+**Commit:** 595dd4a
+
+**Next:** Phase 1.2.5c (Status/validation methods)

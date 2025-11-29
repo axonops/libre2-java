@@ -1086,6 +1086,45 @@ int getReverseProgramSize(cache::RE2Pattern* pattern) {
     return pattern->compiled_regex->ReverseProgramSize();
 }
 
+//============================================================================
+// STATUS/VALIDATION FUNCTIONS (Phase 1.2.5c)
+//============================================================================
+
+bool ok(cache::RE2Pattern* pattern) {
+    if (!pattern) {
+        return false;
+    }
+    return pattern->compiled_regex->ok();
+}
+
+std::string getPattern(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->compiled_regex) {
+        return "";
+    }
+    return pattern->compiled_regex->pattern();
+}
+
+std::string getError(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->compiled_regex) {
+        return "";
+    }
+    return pattern->compiled_regex->error();
+}
+
+int getErrorCode(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->compiled_regex) {
+        return -1;  // Invalid pattern
+    }
+    return static_cast<int>(pattern->compiled_regex->error_code());
+}
+
+std::string getErrorArg(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->compiled_regex) {
+        return "";
+    }
+    return pattern->compiled_regex->error_arg();
+}
+
 void initCache(const std::string& json_config) {
     std::lock_guard<std::mutex> lock(g_init_mutex);
 

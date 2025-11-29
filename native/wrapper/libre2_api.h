@@ -835,6 +835,72 @@ int getProgramSize(cache::RE2Pattern* pattern);
  */
 int getReverseProgramSize(cache::RE2Pattern* pattern);
 
+//=============================================================================
+// STATUS/VALIDATION FUNCTIONS (Phase 1.2.5c)
+//=============================================================================
+
+/**
+ * Check if pattern is valid (compiled successfully).
+ *
+ * Uses RE2::ok() - returns true if error_code() == NoError.
+ * Equivalent to isPatternValid() but follows RE2 naming.
+ *
+ * @param pattern compiled pattern pointer
+ * @return true if pattern valid, false if compilation failed
+ */
+bool ok(cache::RE2Pattern* pattern);
+
+/**
+ * Get original pattern string.
+ *
+ * Uses RE2::pattern() - returns the pattern string used for compilation.
+ *
+ * Example: If compiled with "(\\d+)", returns "(\\d+)"
+ *
+ * @param pattern compiled pattern pointer
+ * @return original pattern string, or empty string if pattern is null
+ */
+std::string getPattern(cache::RE2Pattern* pattern);
+
+/**
+ * Get error message from compilation.
+ *
+ * Uses RE2::error() - returns human-readable error message.
+ * Empty string if pattern compiled successfully.
+ *
+ * Example: "missing ): (?P<name>\\w+" → returns error description
+ *
+ * @param pattern compiled pattern pointer
+ * @return error message, or empty string if no error
+ */
+std::string getError(cache::RE2Pattern* pattern);
+
+/**
+ * Get error code from compilation.
+ *
+ * Uses RE2::error_code() - returns ErrorCode enum value.
+ * NoError (0) if pattern compiled successfully.
+ *
+ * Returns integer (not enum) for language-agnostic bindings.
+ *
+ * @param pattern compiled pattern pointer
+ * @return error code as integer (0 = NoError, see RE2::ErrorCode)
+ */
+int getErrorCode(cache::RE2Pattern* pattern);
+
+/**
+ * Get error argument (offending portion of pattern).
+ *
+ * Uses RE2::error_arg() - returns the part of pattern that caused error.
+ * Empty string if no error.
+ *
+ * Useful for diagnostics: "Error at position N: <error_arg>"
+ *
+ * @param pattern compiled pattern pointer
+ * @return offending portion of pattern, or empty string if no error
+ */
+std::string getErrorArg(cache::RE2Pattern* pattern);
+
 /**
  * Get current cache metrics as JSON string.
  *

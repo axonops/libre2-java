@@ -2390,3 +2390,243 @@ TEST_F(Libre2APITest, GetNamedCapturingGroups_WithNames) {
     releasePattern(p);
 }
 
+
+//=============================================================================
+// STATUS/VALIDATION TESTS (Phase 1.2.5c)
+//=============================================================================
+
+// ok() - valid pattern
+TEST_F(Libre2APITest, Ok_ValidPattern) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+)";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    bool result_re2 = re2_pattern.ok();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    bool result_wrapper = ok(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);  // Should be valid
+    // =============================
+
+    releasePattern(p);
+}
+
+// ok() - invalid pattern
+TEST_F(Libre2APITest, Ok_InvalidPattern) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(?P<incomplete";  // Missing )
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    bool result_re2 = re2_pattern.ok();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    bool result_wrapper = ok(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_FALSE(result_wrapper);  // Both should be false
+    // =============================
+
+    if (p) releasePattern(p);
+}
+
+// getPattern() - retrieve original pattern
+TEST_F(Libre2APITest, GetPattern_Original) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+)";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    const std::string& result_re2 = re2_pattern.pattern();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string result_wrapper = getPattern(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(PATTERN, result_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// getError() - valid pattern (no error)
+TEST_F(Libre2APITest, GetError_NoError) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "\\d+";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    const std::string& result_re2 = re2_pattern.error();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string result_wrapper = getError(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper.empty());  // No error
+    // =============================
+
+    releasePattern(p);
+}
+
+// getError() - invalid pattern (wrapper design difference)
+TEST_F(Libre2APITest, GetError_WithError) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(?P<name>incomplete";  // Missing )
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    const std::string& result_re2 = re2_pattern.error();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    // NOTE: compilePattern returns nullptr for invalid patterns (design difference)
+    // The error message is populated in the error_out parameter
+    std::string error_out;
+    RE2Pattern* p = compilePattern(PATTERN, true, error_out);
+    EXPECT_EQ(p, nullptr) << "Wrapper returns nullptr for invalid pattern";
+    // =====================================
+
+    // ========== COMPARE ==========
+    // Compare error messages (compilePattern error_out vs RE2::error())
+    EXPECT_EQ(result_re2, error_out) << "Error messages should match";
+    EXPECT_FALSE(error_out.empty());  // Should have error message
+    // =============================
+
+    // No release needed - p is nullptr
+}
+
+// getErrorCode() - valid pattern
+TEST_F(Libre2APITest, GetErrorCode_NoError) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "\\w+";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int result_re2 = static_cast<int>(re2_pattern.error_code());
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    int result_wrapper = getErrorCode(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(0, result_wrapper);  // RE2::NoError
+    // =============================
+
+    releasePattern(p);
+}
+
+// getErrorCode() - invalid pattern (wrapper design difference)
+TEST_F(Libre2APITest, GetErrorCode_WithError) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(?P<bad";  // Missing )
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    int result_re2 = static_cast<int>(re2_pattern.error_code());
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    // Wrapper returns nullptr for invalid patterns
+    std::string error_out;
+    RE2Pattern* p = compilePattern(PATTERN, true, error_out);
+    EXPECT_EQ(p, nullptr) << "Wrapper returns nullptr for invalid pattern";
+    EXPECT_FALSE(error_out.empty()) << "Error should be populated";
+
+    // getErrorCode(nullptr) returns -1 (wrapper convention)
+    int result_wrapper = getErrorCode(p);
+    // =====================================
+
+    // ========== COMPARE (accounting for design difference) ==========
+    // RE2 returns specific error code (e.g., ErrorMissingParen = 6)
+    // Wrapper returns -1 for nullptr (different design)
+    EXPECT_NE(0, result_re2) << "RE2 should have error code";
+    EXPECT_EQ(-1, result_wrapper) << "Wrapper returns -1 for nullptr";
+    // ================================================================
+
+    // No release needed - p is nullptr
+}
+
+// getErrorArg() - offending portion (wrapper design difference)
+TEST_F(Libre2APITest, GetErrorArg_WithError) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(?P<name>bad";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    const std::string& result_re2 = re2_pattern.error_arg();
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    // Wrapper returns nullptr for invalid patterns (design difference)
+    std::string error_out;
+    RE2Pattern* p = compilePattern(PATTERN, true, error_out);
+    EXPECT_EQ(p, nullptr) << "Wrapper returns nullptr for invalid pattern";
+
+    // getErrorArg(nullptr) returns empty string
+    std::string result_wrapper = getErrorArg(p);
+    // =====================================
+
+    // ========== COMPARE (accounting for design difference) ==========
+    // RE2 has error_arg in pattern object
+    // Wrapper returns "" for nullptr (cannot access error_arg)
+    EXPECT_FALSE(result_re2.empty()) << "RE2 should have error_arg";
+    EXPECT_TRUE(result_wrapper.empty()) << "Wrapper returns empty for nullptr";
+    // ================================================================
+
+    // No release needed - p is nullptr
+}

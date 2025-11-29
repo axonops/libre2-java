@@ -241,6 +241,64 @@ bool findAndConsume(
     std::string* capture2);
 
 //=============================================================================
+// REPLACEMENT FUNCTIONS (Phase 1.2.2)
+//=============================================================================
+
+/**
+ * Replace first occurrence of pattern with rewrite string.
+ *
+ * Uses RE2::Replace() - replaces first match, leaves rest unchanged.
+ * Rewrite string supports: \\0 (entire match), \\1, \\2, etc (capture groups).
+ *
+ * @param pattern compiled pattern pointer
+ * @param text input text
+ * @param rewrite rewrite template string
+ * @param result_out output string (receives result)
+ * @return true if replacement occurred, false if no match
+ */
+bool replace(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string_view rewrite,
+    std::string* result_out);
+
+/**
+ * Replace all occurrences of pattern with rewrite string.
+ *
+ * Uses RE2::GlobalReplace() - replaces all non-overlapping matches.
+ * Rewrite string supports: \\0 (entire match), \\1, \\2, etc (capture groups).
+ *
+ * @param pattern compiled pattern pointer
+ * @param text input text
+ * @param rewrite rewrite template string
+ * @param result_out output string (receives result)
+ * @return number of replacements made (0 if no matches)
+ */
+int replaceAll(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string_view rewrite,
+    std::string* result_out);
+
+/**
+ * Extract matched portion with rewrite template.
+ *
+ * Uses RE2::Extract() - extracts match and applies rewrite template.
+ * Unlike replace(), only outputs the rewritten match (not entire text).
+ *
+ * @param pattern compiled pattern pointer
+ * @param text input text
+ * @param rewrite rewrite template string
+ * @param result_out output string (receives extracted/rewritten result)
+ * @return true if match found and extraction succeeded, false otherwise
+ */
+bool extract(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string_view rewrite,
+    std::string* result_out);
+
+//=============================================================================
 // UTILITY FUNCTIONS
 //=============================================================================
 

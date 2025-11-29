@@ -1006,3 +1006,525 @@ TEST_F(Libre2APITest, FindAndConsume_NoMatch) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// PHASE 1.2.2: REPLACEMENT FUNCTIONS TESTS
+//=============================================================================
+
+// Replace - basic (first occurrence)
+TEST_F(Libre2APITest, Replace_Basic) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("world", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "hello world";
+    const std::string REWRITE = "RE2";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    bool result_re2 = RE2::Replace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    bool result_wrapper = replace(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper) << "Return value must match";
+    EXPECT_EQ(text_re2, text_wrapper) 
+        << "Result text must match - RE2: '" << text_re2 
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// Replace - with capture group references
+TEST_F(Libre2APITest, Replace_CaptureGroups) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\w+):(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "server:8080";
+    const std::string REWRITE = "\\1 on port \\2";  // host on port 8080
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    bool result_re2 = RE2::Replace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    bool result_wrapper = replace(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper) << "Return value must match";
+    EXPECT_EQ(text_re2, text_wrapper)
+        << "Result text must match - RE2: '" << text_re2
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// Replace - no match
+TEST_F(Libre2APITest, Replace_NoMatch) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("xyz", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "hello world";
+    const std::string REWRITE = "REPLACED";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    bool result_re2 = RE2::Replace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    bool result_wrapper = replace(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper) << "Return value must match (false)";
+    EXPECT_EQ(text_re2, text_wrapper)
+        << "Text must be unchanged - RE2: '" << text_re2
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// ReplaceAll - single occurrence
+TEST_F(Libre2APITest, ReplaceAll_Single) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("world", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "hello world";
+    const std::string REWRITE = "RE2";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    int count_re2 = RE2::GlobalReplace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    int count_wrapper = replaceAll(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(count_re2, count_wrapper)
+        << "Replacement count must match - RE2: " << count_re2
+        << " vs Wrapper: " << count_wrapper;
+    EXPECT_EQ(text_re2, text_wrapper)
+        << "Result text must match - RE2: '" << text_re2
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// ReplaceAll - multiple occurrences
+TEST_F(Libre2APITest, ReplaceAll_Multiple) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("a", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "aaa";
+    const std::string REWRITE = "b";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    int count_re2 = RE2::GlobalReplace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    int count_wrapper = replaceAll(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(count_re2, count_wrapper)
+        << "Replacement count must match - RE2: " << count_re2
+        << " vs Wrapper: " << count_wrapper;
+    EXPECT_EQ(text_re2, text_wrapper)
+        << "Result text must match - RE2: '" << text_re2
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// ReplaceAll - non-overlapping (banana example)
+TEST_F(Libre2APITest, ReplaceAll_NonOverlapping) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("ana", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "banana";
+    const std::string REWRITE = "XXX";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    int count_re2 = RE2::GlobalReplace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    int count_wrapper = replaceAll(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(count_re2, count_wrapper)
+        << "Replacement count must match - RE2: " << count_re2
+        << " vs Wrapper: " << count_wrapper;
+    EXPECT_EQ(text_re2, text_wrapper)
+        << "Result text must match - RE2: '" << text_re2
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// ReplaceAll - with capture references
+TEST_F(Libre2APITest, ReplaceAll_CaptureReferences) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "a1b22c333";
+    const std::string REWRITE = "[\\1]";  // Wrap numbers in brackets
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    int count_re2 = RE2::GlobalReplace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    int count_wrapper = replaceAll(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(count_re2, count_wrapper)
+        << "Replacement count must match - RE2: " << count_re2
+        << " vs Wrapper: " << count_wrapper;
+    EXPECT_EQ(text_re2, text_wrapper)
+        << "Result text must match - RE2: '" << text_re2
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// Extract - basic
+TEST_F(Libre2APITest, Extract_Basic) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\w+)@(\\w+)", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "email: user@example.com";
+    const std::string REWRITE = "\\1 at \\2";  // user at example
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string result_re2;
+    bool extracted_re2 = RE2::Extract(INPUT_TEXT, *p->compiled_regex, REWRITE, &result_re2);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string result_wrapper;
+    bool extracted_wrapper = extract(p, INPUT_TEXT, REWRITE, &result_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(extracted_re2, extracted_wrapper) << "Return value must match";
+    EXPECT_EQ(result_re2, result_wrapper)
+        << "Extracted text must match - RE2: '" << result_re2
+        << "' vs Wrapper: '" << result_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// Extract - no match
+TEST_F(Libre2APITest, Extract_NoMatch) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("xyz", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "hello world";
+    const std::string REWRITE = "REPLACED";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string result_re2;
+    bool extracted_re2 = RE2::Extract(INPUT_TEXT, *p->compiled_regex, REWRITE, &result_re2);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string result_wrapper;
+    bool extracted_wrapper = extract(p, INPUT_TEXT, REWRITE, &result_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(extracted_re2, extracted_wrapper) << "Return value must match (false)";
+    EXPECT_EQ(result_re2, result_wrapper)
+        << "Result must match - RE2: '" << result_re2
+        << "' vs Wrapper: '" << result_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// Replace - empty text
+TEST_F(Libre2APITest, Replace_EmptyText) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("test", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "";
+    const std::string REWRITE = "REPLACED";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    bool result_re2 = RE2::Replace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    bool result_wrapper = replace(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper) << "Return value must match";
+    EXPECT_EQ(text_re2, text_wrapper) << "Result must match";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// ReplaceAll - whole match reference (\\0)
+TEST_F(Libre2APITest, ReplaceAll_WholeMatchReference) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("\\w+", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "hello world";
+    const std::string REWRITE = "[\\0]";  // Wrap each word in brackets
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    int count_re2 = RE2::GlobalReplace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    int count_wrapper = replaceAll(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(count_re2, count_wrapper) << "Count must match";
+    EXPECT_EQ(text_re2, text_wrapper)
+        << "Result must match - RE2: '" << text_re2
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// Replace - large text
+TEST_F(Libre2APITest, Replace_LargeText) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("word", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    std::string large_text;
+    for (int i = 0; i < 10000; i++) {
+        large_text += "word ";
+    }
+    const std::string REWRITE = "REPLACED";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(large_text);
+    bool result_re2 = RE2::Replace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    bool result_wrapper = replace(p, large_text, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper) << "Return value must match";
+    EXPECT_EQ(text_re2, text_wrapper) << "Result must match";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// ReplaceAll - large text (performance)
+TEST_F(Libre2APITest, ReplaceAll_LargeText) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("word", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    std::string large_text;
+    for (int i = 0; i < 10000; i++) {
+        large_text += "word ";
+    }
+    const std::string REWRITE = "X";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(large_text);
+    int count_re2 = RE2::GlobalReplace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    int count_wrapper = replaceAll(p, large_text, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(count_re2, count_wrapper)
+        << "Count must match - RE2: " << count_re2
+        << " vs Wrapper: " << count_wrapper;
+    EXPECT_EQ(text_re2, text_wrapper) << "Result must match";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// Replace - Unicode
+TEST_F(Libre2APITest, Replace_Unicode) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("世界", true, error);
+    ASSERT_NE(p, nullptr);
+
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "hello 世界 test";
+    const std::string REWRITE = "world";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string text_re2(INPUT_TEXT);
+    bool result_re2 = RE2::Replace(&text_re2, *p->compiled_regex, REWRITE);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string text_wrapper;
+    bool result_wrapper = replace(p, INPUT_TEXT, REWRITE, &text_wrapper);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper) << "Return value must match";
+    EXPECT_EQ(text_re2, text_wrapper)
+        << "Result must match - RE2: '" << text_re2
+        << "' vs Wrapper: '" << text_wrapper << "'";
+    // ===========================================================
+
+    releasePattern(p);
+}
+
+// Replace - null pattern safety
+TEST_F(Libre2APITest, Replace_NullPattern) {
+    std::string result;
+    EXPECT_FALSE(replace(nullptr, "test", "repl", &result));
+    EXPECT_FALSE(extract(nullptr, "test", "repl", &result));
+}
+
+// ReplaceAll - null pattern safety
+TEST_F(Libre2APITest, ReplaceAll_NullPattern) {
+    std::string result;
+    EXPECT_EQ(replaceAll(nullptr, "test", "repl", &result), -1);
+}
+
+// Replace - thread safety
+TEST_F(Libre2APITest, Replace_ThreadSafe) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("test", true, error);
+    ASSERT_NE(p, nullptr);
+
+    const int num_threads = 10;
+    const int iterations = 100;
+    std::atomic<int> errors{0};
+
+    std::vector<std::thread> threads;
+    for (int t = 0; t < num_threads; t++) {
+        threads.emplace_back([&]() {
+            for (int i = 0; i < iterations; i++) {
+                std::string result;
+                if (!replace(p, "test123", "X", &result)) {
+                    errors.fetch_add(1);
+                }
+            }
+        });
+    }
+
+    for (auto& th : threads) {
+        th.join();
+    }
+
+    EXPECT_EQ(errors.load(), 0);
+
+    releasePattern(p);
+}

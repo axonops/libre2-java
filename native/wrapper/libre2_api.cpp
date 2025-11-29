@@ -291,6 +291,68 @@ bool findAndConsume(
 }
 
 //============================================================================
+// REPLACEMENT FUNCTIONS (Phase 1.2.2)
+//============================================================================
+
+bool replace(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string_view rewrite,
+    std::string* result_out) {
+
+    if (!pattern || !pattern->isValid() || !result_out) {
+        return false;
+    }
+
+    // Copy text to mutable string (RE2::Replace modifies in-place)
+    std::string mutable_text(text);
+
+    // Call RE2::Replace (modifies mutable_text)
+    bool replaced = RE2::Replace(&mutable_text, *pattern->compiled_regex, rewrite);
+
+    // Store result
+    *result_out = std::move(mutable_text);
+
+    return replaced;
+}
+
+int replaceAll(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string_view rewrite,
+    std::string* result_out) {
+
+    if (!pattern || !pattern->isValid() || !result_out) {
+        return -1;  // Error
+    }
+
+    // Copy text to mutable string (RE2::GlobalReplace modifies in-place)
+    std::string mutable_text(text);
+
+    // Call RE2::GlobalReplace (modifies mutable_text, returns count)
+    int count = RE2::GlobalReplace(&mutable_text, *pattern->compiled_regex, rewrite);
+
+    // Store result
+    *result_out = std::move(mutable_text);
+
+    return count;
+}
+
+bool extract(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    std::string_view rewrite,
+    std::string* result_out) {
+
+    if (!pattern || !pattern->isValid() || !result_out) {
+        return false;
+    }
+
+    // Call RE2::Extract (writes to result_out directly)
+    return RE2::Extract(text, *pattern->compiled_regex, rewrite, result_out);
+}
+
+//============================================================================
 // UTILITY FUNCTIONS
 //============================================================================
 

@@ -901,6 +901,69 @@ int getErrorCode(cache::RE2Pattern* pattern);
  */
 std::string getErrorArg(cache::RE2Pattern* pattern);
 
+//=============================================================================
+// REWRITE VALIDATION FUNCTIONS (Phase 1.2.5d)
+//=============================================================================
+
+/**
+ * Check if rewrite string is valid for this pattern.
+ *
+ * Uses RE2::CheckRewriteString() - validates rewrite template syntax.
+ * Checks that:
+ * - Pattern has enough capture groups for all \N tokens in rewrite
+ * - Rewrite syntax is valid (no bad escapes)
+ *
+ * If this returns true, Replace() and Extract() are guaranteed to succeed.
+ *
+ * Example: Pattern "(\\w+)" with rewrite "\\2" → returns false (only 1 group)
+ *
+ * @param pattern compiled pattern pointer
+ * @param rewrite rewrite template string
+ * @param error_out output for error message (if validation fails)
+ * @return true if rewrite is valid for this pattern
+ */
+bool checkRewriteString(
+    cache::RE2Pattern* pattern,
+    std::string_view rewrite,
+    std::string* error_out);
+
+/**
+ * Get maximum submatch index referenced in rewrite string.
+ *
+ * Uses RE2::MaxSubmatch() - static method, pattern-independent.
+ * Parses rewrite string and returns highest \N reference.
+ *
+ * Example: "foo \\2,\\1" → returns 2
+ * Example: "no captures" → returns 0
+ *
+ * @param rewrite rewrite template string
+ * @return maximum submatch index referenced, or 0 if no captures
+ */
+int maxSubmatch(std::string_view rewrite);
+
+/**
+ * Apply rewrite template with capture substitutions.
+ *
+ * Uses RE2::Rewrite() - manually apply rewrite template.
+ * Substitutes \0 (entire match), \1, \2, etc. from captures array.
+ *
+ * Lower-level than replace() - caller provides captures manually.
+ * Useful for custom matching workflows.
+ *
+ * @param pattern compiled pattern pointer
+ * @param out output string (result appended here)
+ * @param rewrite rewrite template string
+ * @param captures array of captured substrings
+ * @param n_captures number of captures in array
+ * @return true on success, false if rewrite malformed
+ */
+bool rewrite(
+    cache::RE2Pattern* pattern,
+    std::string* out,
+    std::string_view rewrite,
+    const std::string* captures[],
+    int n_captures);
+
 /**
  * Get current cache metrics as JSON string.
  *

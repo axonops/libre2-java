@@ -2630,3 +2630,188 @@ TEST_F(Libre2APITest, GetErrorArg_WithError) {
 
     // No release needed - p is nullptr
 }
+
+//=============================================================================
+// REWRITE VALIDATION TESTS (Phase 1.2.5d)
+//=============================================================================
+
+// checkRewriteString - valid rewrite
+TEST_F(Libre2APITest, CheckRewriteString_Valid) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+)";
+    const std::string REWRITE = "\\1=\\2";  // Valid: uses groups 1 and 2
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string error_re2;
+    bool result_re2 = re2_pattern.CheckRewriteString(REWRITE, &error_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string compile_error;
+    RE2Pattern* p = compilePattern(PATTERN, true, compile_error);
+    ASSERT_NE(p, nullptr);
+    std::string error_wrapper;
+    bool result_wrapper = checkRewriteString(p, REWRITE, &error_wrapper);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);  // Should be valid
+    EXPECT_EQ(error_re2, error_wrapper);  // Both should be empty
+    // =============================
+
+    releasePattern(p);
+}
+
+// checkRewriteString - invalid rewrite (too many groups)
+TEST_F(Libre2APITest, CheckRewriteString_TooManyGroups) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+)";  // Only 1 group
+    const std::string REWRITE = "\\1 \\2";  // Invalid: references \2 but pattern has only 1 group
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string error_re2;
+    bool result_re2 = re2_pattern.CheckRewriteString(REWRITE, &error_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string compile_error;
+    RE2Pattern* p = compilePattern(PATTERN, true, compile_error);
+    ASSERT_NE(p, nullptr);
+    std::string error_wrapper;
+    bool result_wrapper = checkRewriteString(p, REWRITE, &error_wrapper);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_FALSE(result_wrapper);  // Should be invalid
+    EXPECT_EQ(error_re2, error_wrapper);  // Both should have same error
+    EXPECT_FALSE(error_wrapper.empty());  // Should have error message
+    // =============================
+
+    releasePattern(p);
+}
+
+// maxSubmatch - static method (no pattern needed)
+TEST_F(Libre2APITest, MaxSubmatch_MultipleGroups) {
+    // ========== TEST DATA ==========
+    const std::string REWRITE = "foo \\2,\\1,\\3";  // References up to \3
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    int result_re2 = RE2::MaxSubmatch(REWRITE);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    int result_wrapper = maxSubmatch(REWRITE);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(3, result_wrapper);  // Highest reference is \3
+    // =============================
+}
+
+// maxSubmatch - no captures
+TEST_F(Libre2APITest, MaxSubmatch_NoCaptures) {
+    // ========== TEST DATA ==========
+    const std::string REWRITE = "no captures here";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    int result_re2 = RE2::MaxSubmatch(REWRITE);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    int result_wrapper = maxSubmatch(REWRITE);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(0, result_wrapper);  // No capture references
+    // =============================
+}
+
+// rewrite - apply template manually
+TEST_F(Libre2APITest, Rewrite_ManualSubstitution) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+)";
+    const std::string REWRITE_TEMPLATE = "name=\\1, value=\\2";
+    // NOTE: vec[0] = \0 (entire match), vec[1] = \1 (group 1), vec[2] = \2 (group 2)
+    const std::string ENTIRE_MATCH = "foo:123";  // \0
+    const std::string CAP1 = "foo";               // \1
+    const std::string CAP2 = "123";               // \2
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view vec_re2[] = {ENTIRE_MATCH, CAP1, CAP2};  // [0]=\0, [1]=\1, [2]=\2
+    std::string out_re2;
+    bool result_re2 = re2_pattern.Rewrite(&out_re2, REWRITE_TEMPLATE, vec_re2, 3);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string compile_error;
+    RE2Pattern* p = compilePattern(PATTERN, true, compile_error);
+    ASSERT_NE(p, nullptr);
+    const std::string* caps[] = {&ENTIRE_MATCH, &CAP1, &CAP2};  // [0]=\0, [1]=\1, [2]=\2
+    std::string out_wrapper;
+    bool result_wrapper = rewrite(p, &out_wrapper, REWRITE_TEMPLATE, caps, 3);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);  // Should succeed
+    EXPECT_EQ(out_re2, out_wrapper);  // Output should match
+    EXPECT_EQ("name=foo, value=123", out_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// rewrite - with \0 (entire match)
+TEST_F(Libre2APITest, Rewrite_WithEntireMatch) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+)";
+    const std::string REWRITE_TEMPLATE = "matched: \\0, group: \\1";
+    const std::string ENTIRE_MATCH = "hello";  // \0
+    const std::string CAP1 = "hello";           // \1
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view vec_re2[] = {ENTIRE_MATCH, CAP1};  // vec[0] = \0, vec[1] = \1
+    std::string out_re2;
+    bool result_re2 = re2_pattern.Rewrite(&out_re2, REWRITE_TEMPLATE, vec_re2, 2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string compile_error;
+    RE2Pattern* p = compilePattern(PATTERN, true, compile_error);
+    ASSERT_NE(p, nullptr);
+    const std::string* caps[] = {&ENTIRE_MATCH, &CAP1};
+    std::string out_wrapper;
+    bool result_wrapper = rewrite(p, &out_wrapper, REWRITE_TEMPLATE, caps, 2);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(out_re2, out_wrapper);
+    EXPECT_EQ("matched: hello, group: hello", out_wrapper);
+    // =============================
+
+    releasePattern(p);
+}

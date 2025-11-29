@@ -1125,6 +1125,65 @@ std::string getErrorArg(cache::RE2Pattern* pattern) {
     return pattern->compiled_regex->error_arg();
 }
 
+//============================================================================
+// REWRITE VALIDATION FUNCTIONS (Phase 1.2.5d)
+//============================================================================
+
+bool checkRewriteString(
+    cache::RE2Pattern* pattern,
+    std::string_view rewrite,
+    std::string* error_out) {
+
+    if (!pattern || !pattern->isValid()) {
+        if (error_out) {
+            *error_out = "Invalid pattern";
+        }
+        return false;
+    }
+
+    if (!error_out) {
+        // Need error output parameter
+        std::string dummy_error;
+        return pattern->compiled_regex->CheckRewriteString(rewrite, &dummy_error);
+    }
+
+    return pattern->compiled_regex->CheckRewriteString(rewrite, error_out);
+}
+
+int maxSubmatch(std::string_view rewrite) {
+    // Static method - no pattern needed
+    return RE2::MaxSubmatch(rewrite);
+}
+
+bool rewrite(
+    cache::RE2Pattern* pattern,
+    std::string* out,
+    std::string_view rewrite,
+    const std::string* captures[],
+    int n_captures) {
+
+    if (!pattern || !pattern->isValid() || !out) {
+        return false;
+    }
+
+    if (n_captures < 0) {
+        return false;
+    }
+
+    // Convert std::string* array to absl::string_view array for RE2
+    std::vector<absl::string_view> vec;
+    vec.reserve(n_captures);
+    for (int i = 0; i < n_captures; i++) {
+        if (captures[i]) {
+            vec.emplace_back(*captures[i]);
+        } else {
+            vec.emplace_back("");  // Null capture → empty string
+        }
+    }
+
+    return pattern->compiled_regex->Rewrite(out, rewrite, vec.data(), n_captures);
+}
+
 void initCache(const std::string& json_config) {
     std::lock_guard<std::mutex> lock(g_init_mutex);
 

@@ -18,9 +18,60 @@
 
 #include "cache/deferred_cache.h"
 #include <string>
+#include "re2/re2.h"
 
 namespace libre2 {
 namespace api {
+
+//=============================================================================
+// RE2 TYPE RE-EXPORTS (Phase 1.2.5h - Typed Captures)
+//=============================================================================
+
+/**
+ * Re-export RE2::Arg for typed capture support.
+ *
+ * RE2::Arg enables captures to ANY type: int*, float*, string*, optional<T>, etc.
+ * Users pass Arg objects to N-variant matching functions.
+ *
+ * Example:
+ *   int number;
+ *   std::string word;
+ *   const Arg args[] = {Arg(&word), Arg(&number)};
+ *   fullMatchN(pattern, "foo:123", args, 2);
+ *   // word = "foo", number = 123
+ */
+using Arg = RE2::Arg;
+
+/**
+ * Parse integer with C-style radix detection.
+ * Supports: 0x prefix (hex), 0 prefix (octal), else decimal.
+ *
+ * Example: CRadix(&val) with "0xFF" → val = 255
+ */
+template <typename T>
+inline Arg CRadix(T* ptr) {
+    return RE2::CRadix(ptr);
+}
+
+/**
+ * Parse integer as hexadecimal.
+ *
+ * Example: Hex(&val) with "FF" → val = 255
+ */
+template <typename T>
+inline Arg Hex(T* ptr) {
+    return RE2::Hex(ptr);
+}
+
+/**
+ * Parse integer as octal.
+ *
+ * Example: Octal(&val) with "77" → val = 63
+ */
+template <typename T>
+inline Arg Octal(T* ptr) {
+    return RE2::Octal(ptr);
+}
 
 /**
  * High-level C++ API for RE2 with automatic caching.
@@ -295,8 +346,8 @@ bool findAndConsume(
 bool fullMatchN(
     cache::RE2Pattern* pattern,
     std::string_view text,
-    std::string* captures[],
-    int n_captures);
+    const Arg* const args[],
+    int n_args);
 
 /**
  * Partial match with N capture groups (unlimited).
@@ -312,8 +363,8 @@ bool fullMatchN(
 bool partialMatchN(
     cache::RE2Pattern* pattern,
     std::string_view text,
-    std::string* captures[],
-    int n_captures);
+    const Arg* const args[],
+    int n_args);
 
 /**
  * Consume with N capture groups (unlimited).
@@ -332,8 +383,8 @@ bool consumeN(
     cache::RE2Pattern* pattern,
     const char** input_text,
     int* input_len,
-    std::string* captures[],
-    int n_captures);
+    const Arg* const args[],
+    int n_args);
 
 /**
  * FindAndConsume with N capture groups (unlimited).
@@ -352,8 +403,8 @@ bool findAndConsumeN(
     cache::RE2Pattern* pattern,
     const char** input_text,
     int* input_len,
-    std::string* captures[],
-    int n_captures);
+    const Arg* const args[],
+    int n_args);
 
 //=============================================================================
 // N-VARIANT DIRECT MEMORY (Phase 1.2.5a - Zero-Copy + Unlimited Captures)
@@ -375,8 +426,8 @@ bool fullMatchNDirect(
     cache::RE2Pattern* pattern,
     int64_t text_address,
     int text_length,
-    std::string* captures[],
-    int n_captures);
+    const Arg* const args[],
+    int n_args);
 
 /**
  * Partial match direct with N captures (zero-copy + unlimited).
@@ -392,8 +443,8 @@ bool partialMatchNDirect(
     cache::RE2Pattern* pattern,
     int64_t text_address,
     int text_length,
-    std::string* captures[],
-    int n_captures);
+    const Arg* const args[],
+    int n_args);
 
 /**
  * Consume direct with N captures (zero-copy + unlimited).
@@ -409,8 +460,8 @@ bool consumeNDirect(
     cache::RE2Pattern* pattern,
     int64_t* input_address,
     int* input_len,
-    std::string* captures[],
-    int n_captures);
+    const Arg* const args[],
+    int n_args);
 
 /**
  * FindAndConsume direct with N captures (zero-copy + unlimited).
@@ -426,8 +477,8 @@ bool findAndConsumeNDirect(
     cache::RE2Pattern* pattern,
     int64_t* input_address,
     int* input_len,
-    std::string* captures[],
-    int n_captures);
+    const Arg* const args[],
+    int n_args);
 
 //=============================================================================
 // N-VARIANT BULK (Phase 1.2.5a - Multiple Texts + Unlimited Captures)
@@ -439,7 +490,7 @@ bool findAndConsumeNDirect(
  * Process multiple texts with unlimited captures in one call.
  * Each text gets its own capture array.
  *
- * Capture array structure: captures_array[text_idx][capture_idx]
+ * Args array structure: args_array[text_idx] = array of Arg* for that text
  *
  * Example:
  *   const char* texts[] = {"foo:1", "bar:2"};
@@ -464,8 +515,8 @@ void fullMatchNBulk(
     const char** texts,
     const int* text_lens,
     int num_texts,
-    std::string** captures_array[],
-    int n_captures,
+    const Arg** args_array[],
+    int n_args,
     bool* results_out);
 
 /**
@@ -486,8 +537,8 @@ void partialMatchNBulk(
     const char** texts,
     const int* text_lens,
     int num_texts,
-    std::string** captures_array[],
-    int n_captures,
+    const Arg** args_array[],
+    int n_args,
     bool* results_out);
 
 //=============================================================================
@@ -512,8 +563,8 @@ void fullMatchNDirectBulk(
     const int64_t* text_addresses,
     const int* text_lengths,
     int num_texts,
-    std::string** captures_array[],
-    int n_captures,
+    const Arg** args_array[],
+    int n_args,
     bool* results_out);
 
 /**
@@ -532,8 +583,8 @@ void partialMatchNDirectBulk(
     const int64_t* text_addresses,
     const int* text_lengths,
     int num_texts,
-    std::string** captures_array[],
-    int n_captures,
+    const Arg** args_array[],
+    int n_args,
     bool* results_out);
 
 //=============================================================================
@@ -834,6 +885,16 @@ int getProgramSize(cache::RE2Pattern* pattern);
  * @return reverse program size, or -1 if pattern invalid
  */
 int getReverseProgramSize(cache::RE2Pattern* pattern);
+
+/**
+ * Get pattern options (read-only reference).
+ *
+ * Uses RE2::options() - returns the Options used to compile this pattern.
+ *
+ * @param pattern compiled pattern pointer
+ * @return const reference to PatternOptions struct
+ */
+const PatternOptions& getOptions(cache::RE2Pattern* pattern);
 
 //=============================================================================
 // STATUS/VALIDATION FUNCTIONS (Phase 1.2.5c)

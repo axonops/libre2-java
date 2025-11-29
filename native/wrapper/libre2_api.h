@@ -964,6 +964,128 @@ bool rewrite(
     const std::string* captures[],
     int n_captures);
 
+//=============================================================================
+// GENERIC MATCH FUNCTIONS (Phase 1.2.5e - Low-Level Control)
+//=============================================================================
+
+/**
+ * Anchor mode for generic Match() function.
+ * Matches RE2::Anchor enum exactly.
+ */
+enum Anchor {
+    UNANCHORED = 0,    // No anchoring - find match anywhere
+    ANCHOR_START = 1,  // Anchor at start only
+    ANCHOR_BOTH = 2    // Anchor at start and end (like FullMatch)
+};
+
+/**
+ * Generic low-level match with full control.
+ *
+ * Uses RE2::Match() - most flexible matching function.
+ * Provides control over:
+ * - Start/end positions (search within substring)
+ * - Anchor mode (UNANCHORED, ANCHOR_START, ANCHOR_BOTH)
+ * - Submatch extraction (like fullMatchN but with positions)
+ *
+ * submatch[0] = entire match
+ * submatch[1] = first capture group
+ * submatch[2] = second capture group, etc.
+ *
+ * Performance: Faster with fewer submatches requested.
+ *
+ * @param pattern compiled pattern pointer
+ * @param text input text to search
+ * @param startpos start offset in text
+ * @param endpos end offset in text (search stops here)
+ * @param anchor anchor mode (UNANCHORED, ANCHOR_START, ANCHOR_BOTH)
+ * @param submatches array for capturing results (pre-allocated)
+ * @param n_submatches number of submatches to extract (0 = just bool result)
+ * @return true if match found, false otherwise
+ */
+bool match(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    size_t startpos,
+    size_t endpos,
+    Anchor anchor,
+    std::string* submatches[],
+    int n_submatches);
+
+/**
+ * Generic match direct (zero-copy).
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_address memory address
+ * @param text_length length in bytes
+ * @param startpos start offset
+ * @param endpos end offset
+ * @param anchor anchor mode
+ * @param submatches array for results
+ * @param n_submatches number of submatches
+ * @return true if match found
+ */
+bool matchDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length,
+    size_t startpos,
+    size_t endpos,
+    Anchor anchor,
+    std::string* submatches[],
+    int n_submatches);
+
+/**
+ * Generic match bulk (multiple texts).
+ *
+ * @param pattern compiled pattern pointer
+ * @param texts array of text pointers
+ * @param text_lens array of lengths
+ * @param num_texts number of texts
+ * @param startpos start offset (same for all texts)
+ * @param endpos end offset (same for all texts)
+ * @param anchor anchor mode
+ * @param submatches_array array of submatch arrays
+ * @param n_submatches number of submatches per text
+ * @param results_out bool results array
+ */
+void matchBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    size_t startpos,
+    size_t endpos,
+    Anchor anchor,
+    std::string** submatches_array[],
+    int n_submatches,
+    bool* results_out);
+
+/**
+ * Generic match direct bulk (zero-copy + multiple).
+ *
+ * @param pattern compiled pattern pointer
+ * @param text_addresses array of memory addresses
+ * @param text_lengths array of lengths
+ * @param num_texts number of texts
+ * @param startpos start offset
+ * @param endpos end offset
+ * @param anchor anchor mode
+ * @param submatches_array array of submatch arrays
+ * @param n_submatches number of submatches
+ * @param results_out bool results array
+ */
+void matchDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    size_t startpos,
+    size_t endpos,
+    Anchor anchor,
+    std::string** submatches_array[],
+    int n_submatches,
+    bool* results_out);
+
 /**
  * Get current cache metrics as JSON string.
  *

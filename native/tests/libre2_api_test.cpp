@@ -2815,3 +2815,256 @@ TEST_F(Libre2APITest, Rewrite_WithEntireMatch) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// GENERIC MATCH TESTS (Phase 1.2.5e - Low-Level Control)
+//=============================================================================
+
+// match() - UNANCHORED (find anywhere)
+TEST_F(Libre2APITest, Match_Unanchored) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\d+)";
+    const std::string TEXT = "foo 123 bar";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view submatch_re2[2];  // [0]=entire, [1]=group1
+    bool result_re2 = re2_pattern.Match(TEXT, 0, TEXT.size(),
+                                        RE2::UNANCHORED, submatch_re2, 2);
+    std::string entire_re2(submatch_re2[0].data(), submatch_re2[0].size());
+    std::string cap1_re2(submatch_re2[1].data(), submatch_re2[1].size());
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string entire_wrapper, cap1_wrapper;
+    std::string* subs[] = {&entire_wrapper, &cap1_wrapper};
+    bool result_wrapper = match(p, TEXT, 0, TEXT.size(),
+                                UNANCHORED, subs, 2);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(entire_re2, entire_wrapper);
+    EXPECT_EQ(cap1_re2, cap1_wrapper);
+    EXPECT_EQ("123", cap1_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// match() - ANCHOR_START
+TEST_F(Libre2APITest, Match_AnchorStart) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+)";
+    const std::string TEXT = "hello world";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view submatch_re2[2];
+    bool result_re2 = re2_pattern.Match(TEXT, 0, TEXT.size(),
+                                        RE2::ANCHOR_START, submatch_re2, 2);
+    std::string cap1_re2 = (submatch_re2[1].data() != nullptr) ?
+        std::string(submatch_re2[1]) : "";
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string entire_wrapper, cap1_wrapper;
+    std::string* subs[] = {&entire_wrapper, &cap1_wrapper};
+    bool result_wrapper = match(p, TEXT, 0, TEXT.size(),
+                                ANCHOR_START, subs, 2);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(cap1_re2, cap1_wrapper);
+    EXPECT_EQ("hello", cap1_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// match() - ANCHOR_BOTH (like FullMatch)
+TEST_F(Libre2APITest, Match_AnchorBoth) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "\\w+";
+    const std::string TEXT = "hello";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view submatch_re2[1];
+    bool result_re2 = re2_pattern.Match(TEXT, 0, TEXT.size(),
+                                        RE2::ANCHOR_BOTH, submatch_re2, 1);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string entire_wrapper;
+    std::string* subs[] = {&entire_wrapper};
+    bool result_wrapper = match(p, TEXT, 0, TEXT.size(),
+                                ANCHOR_BOTH, subs, 1);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ("hello", entire_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// match() - substring (startpos, endpos)
+TEST_F(Libre2APITest, Match_Substring) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\d+)";
+    const std::string TEXT = "abc 123 def 456 ghi";
+    size_t START = 12;  // Start at "456"
+    size_t END = 15;    // End after "456"
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view submatch_re2[2];
+    bool result_re2 = re2_pattern.Match(TEXT, START, END,
+                                        RE2::UNANCHORED, submatch_re2, 2);
+    std::string cap1_re2 = (submatch_re2[1].data() != nullptr) ?
+        std::string(submatch_re2[1]) : "";
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string entire_wrapper, cap1_wrapper;
+    std::string* subs[] = {&entire_wrapper, &cap1_wrapper};
+    bool result_wrapper = match(p, TEXT, START, END,
+                                UNANCHORED, subs, 2);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(cap1_re2, cap1_wrapper);
+    EXPECT_EQ("456", cap1_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// matchDirect() - zero-copy with anchor
+TEST_F(Libre2APITest, MatchDirect_WithCaptures) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+)";
+    const std::string TEXT = "foo:123";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view submatch_re2[3];
+    bool result_re2 = re2_pattern.Match(TEXT, 0, TEXT.size(),
+                                        RE2::ANCHOR_BOTH, submatch_re2, 3);
+    std::string cap1_re2 = std::string(submatch_re2[1]);
+    std::string cap2_re2 = std::string(submatch_re2[2]);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string entire_wrapper, cap1_wrapper, cap2_wrapper;
+    std::string* subs[] = {&entire_wrapper, &cap1_wrapper, &cap2_wrapper};
+    int64_t address = reinterpret_cast<int64_t>(TEXT.data());
+    bool result_wrapper = matchDirect(p, address, TEXT.size(),
+                                      0, TEXT.size(), ANCHOR_BOTH, subs, 3);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(cap1_re2, cap1_wrapper);
+    EXPECT_EQ(cap2_re2, cap2_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// matchBulk() - multiple texts with anchor
+TEST_F(Libre2APITest, MatchBulk_MultipleTexts) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\d+)";
+    const std::vector<std::string> TEXTS = {"123", "abc", "456"};
+    // ===============================
+
+    // ========== EXECUTE RE2 (loop) ==========
+    RE2 re2_pattern(PATTERN);
+    bool results_re2[3];
+    std::string caps_re2[3][2];  // [text][submatch]
+
+    for (size_t i = 0; i < TEXTS.size(); i++) {
+        absl::string_view submatch_re2[2];
+        results_re2[i] = re2_pattern.Match(TEXTS[i], 0, TEXTS[i].size(),
+                                           RE2::ANCHOR_BOTH, submatch_re2, 2);
+        if (results_re2[i]) {
+            caps_re2[i][0] = submatch_re2[0].data() ? std::string(submatch_re2[0]) : "";
+            caps_re2[i][1] = submatch_re2[1].data() ? std::string(submatch_re2[1]) : "";
+        }
+    }
+    // ========================================
+
+    // ========== EXECUTE WRAPPER (bulk) ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+
+    const char* texts[3] = {TEXTS[0].data(), TEXTS[1].data(), TEXTS[2].data()};
+    int lens[3] = {(int)TEXTS[0].size(), (int)TEXTS[1].size(), (int)TEXTS[2].size()};
+
+    std::string caps_wrapper[3][2];
+    std::string* caps0[] = {&caps_wrapper[0][0], &caps_wrapper[0][1]};
+    std::string* caps1[] = {&caps_wrapper[1][0], &caps_wrapper[1][1]};
+    std::string* caps2[] = {&caps_wrapper[2][0], &caps_wrapper[2][1]};
+    std::string** caps_array[] = {caps0, caps1, caps2};
+
+    bool results_wrapper[3];
+    // Note: Using largest text size as endpos (works for all since ANCHOR_BOTH checks full text)
+    size_t max_len = std::max({TEXTS[0].size(), TEXTS[1].size(), TEXTS[2].size()});
+    matchBulk(p, texts, lens, 3, 0, max_len, ANCHOR_BOTH, caps_array, 2, results_wrapper);
+    // ============================================
+
+    // ========== COMPARE ==========
+    for (size_t i = 0; i < 3; i++) {
+        EXPECT_EQ(results_re2[i], results_wrapper[i]) << "Result " << i;
+        if (results_re2[i]) {
+            EXPECT_EQ(caps_re2[i][0], caps_wrapper[i][0]) << "Text " << i << " entire";
+            EXPECT_EQ(caps_re2[i][1], caps_wrapper[i][1]) << "Text " << i << " cap1";
+        }
+    }
+    // =============================
+
+    releasePattern(p);
+}

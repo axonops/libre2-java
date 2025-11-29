@@ -1184,6 +1184,137 @@ bool rewrite(
     return pattern->compiled_regex->Rewrite(out, rewrite, vec.data(), n_captures);
 }
 
+//============================================================================
+// GENERIC MATCH FUNCTIONS (Phase 1.2.5e - Low-Level Control)
+//============================================================================
+
+bool match(
+    cache::RE2Pattern* pattern,
+    std::string_view text,
+    size_t startpos,
+    size_t endpos,
+    Anchor anchor,
+    std::string* submatches[],
+    int n_submatches) {
+
+    if (!pattern || !pattern->isValid()) {
+        return false;
+    }
+
+    if (n_submatches < 0) {
+        return false;
+    }
+
+    // Special case: no submatches requested
+    if (n_submatches == 0 || submatches == nullptr) {
+        return pattern->compiled_regex->Match(
+            text, startpos, endpos,
+            static_cast<RE2::Anchor>(anchor),
+            nullptr, 0);
+    }
+
+    // Convert string* array to string_view array for RE2::Match
+    std::vector<absl::string_view> submatch_views(n_submatches);
+
+    bool result = pattern->compiled_regex->Match(
+        text, startpos, endpos,
+        static_cast<RE2::Anchor>(anchor),
+        submatch_views.data(), n_submatches);
+
+    if (result) {
+        // Copy submatch results to output strings
+        for (int i = 0; i < n_submatches; i++) {
+            if (submatches[i]) {
+                if (submatch_views[i].data() != nullptr) {
+                    *submatches[i] = std::string(submatch_views[i]);
+                } else {
+                    submatches[i]->clear();  // Null match → empty string
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+bool matchDirect(
+    cache::RE2Pattern* pattern,
+    int64_t text_address,
+    int text_length,
+    size_t startpos,
+    size_t endpos,
+    Anchor anchor,
+    std::string* submatches[],
+    int n_submatches) {
+
+    if (text_address == 0 || text_length < 0) {
+        return false;
+    }
+
+    const char* text = reinterpret_cast<const char*>(text_address);
+    re2::StringPiece sp(text, static_cast<size_t>(text_length));
+
+    return match(pattern, sp, startpos, endpos, anchor, submatches, n_submatches);
+}
+
+void matchBulk(
+    cache::RE2Pattern* pattern,
+    const char** texts,
+    const int* text_lens,
+    int num_texts,
+    size_t startpos,
+    size_t endpos,
+    Anchor anchor,
+    std::string** submatches_array[],
+    int n_submatches,
+    bool* results_out) {
+
+    if (!pattern || !results_out || num_texts <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < num_texts; i++) {
+        if (!texts || !texts[i] || !text_lens || text_lens[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        std::string** subs = (submatches_array && submatches_array[i]) ? submatches_array[i] : nullptr;
+
+        re2::StringPiece sp(texts[i], static_cast<size_t>(text_lens[i]));
+        results_out[i] = match(pattern, sp, startpos, endpos, anchor, subs, n_submatches);
+    }
+}
+
+void matchDirectBulk(
+    cache::RE2Pattern* pattern,
+    const int64_t* text_addresses,
+    const int* text_lengths,
+    int num_texts,
+    size_t startpos,
+    size_t endpos,
+    Anchor anchor,
+    std::string** submatches_array[],
+    int n_submatches,
+    bool* results_out) {
+
+    if (!pattern || !results_out || num_texts <= 0) {
+        return;
+    }
+
+    for (int i = 0; i < num_texts; i++) {
+        if (!text_addresses || text_addresses[i] == 0 || !text_lengths || text_lengths[i] < 0) {
+            results_out[i] = false;
+            continue;
+        }
+
+        std::string** subs = (submatches_array && submatches_array[i]) ? submatches_array[i] : nullptr;
+
+        results_out[i] = matchDirect(pattern, text_addresses[i], text_lengths[i],
+                                     startpos, endpos, anchor, subs, n_submatches);
+    }
+}
+
 void initCache(const std::string& json_config) {
     std::lock_guard<std::mutex> lock(g_init_mutex);
 

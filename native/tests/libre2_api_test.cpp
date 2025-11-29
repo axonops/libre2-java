@@ -3480,3 +3480,101 @@ TEST_F(Libre2APITest, FullMatchN_OptionalPresent) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// PROGRAM FANOUT & ENUM TESTS (Phase 1.2.5i)
+//=============================================================================
+
+// getProgramFanoutJSON - histogram analysis
+TEST_F(Libre2APITest, GetProgramFanoutJSON_Complex) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+|\\d+)*";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::vector<int> histogram_re2;
+    int max_bucket_re2 = re2_pattern.ProgramFanout(&histogram_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string json_wrapper = getProgramFanoutJSON(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    // Verify JSON contains histogram values
+    EXPECT_FALSE(json_wrapper.empty());
+    EXPECT_NE("[]", json_wrapper);
+    // Should be JSON array format
+    EXPECT_EQ('[', json_wrapper[0]);
+    EXPECT_EQ(']', json_wrapper[json_wrapper.size()-1]);
+    // =============================
+
+    releasePattern(p);
+}
+
+// getReverseProgramFanoutJSON
+TEST_F(Libre2APITest, GetReverseProgramFanoutJSON_Complex) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "(\\w+):(\\d+)";
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::vector<int> histogram_re2;
+    int max_bucket_re2 = re2_pattern.ReverseProgramFanout(&histogram_re2);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string json_wrapper = getReverseProgramFanoutJSON(p);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_FALSE(json_wrapper.empty());
+    EXPECT_EQ('[', json_wrapper[0]);
+    EXPECT_EQ(']', json_wrapper[json_wrapper.size()-1]);
+    // =============================
+
+    releasePattern(p);
+}
+
+// ErrorCode enum - verify values match
+TEST_F(Libre2APITest, ErrorCode_EnumValues) {
+    // Verify our re-exported ErrorCode matches RE2::ErrorCode
+    EXPECT_EQ(static_cast<int>(ErrorCode::NoError), 
+              static_cast<int>(RE2::NoError));
+    EXPECT_EQ(static_cast<int>(ErrorCode::ErrorBadEscape), 
+              static_cast<int>(RE2::ErrorBadEscape));
+    EXPECT_EQ(static_cast<int>(ErrorCode::ErrorMissingParen), 
+              static_cast<int>(RE2::ErrorMissingParen));
+}
+
+// CannedOptions enum - verify values
+TEST_F(Libre2APITest, CannedOptions_EnumValues) {
+    EXPECT_EQ(static_cast<int>(CannedOptions::DefaultOptions), 
+              static_cast<int>(RE2::DefaultOptions));
+    EXPECT_EQ(static_cast<int>(CannedOptions::Latin1), 
+              static_cast<int>(RE2::Latin1));
+    EXPECT_EQ(static_cast<int>(CannedOptions::POSIX), 
+              static_cast<int>(RE2::POSIX));
+    EXPECT_EQ(static_cast<int>(CannedOptions::Quiet), 
+              static_cast<int>(RE2::Quiet));
+}
+
+// Encoding enum - verify values
+TEST_F(Libre2APITest, Encoding_EnumValues) {
+    EXPECT_EQ(static_cast<int>(Encoding::EncodingUTF8), 
+              static_cast<int>(RE2::Options::EncodingUTF8));
+    EXPECT_EQ(static_cast<int>(Encoding::EncodingLatin1), 
+              static_cast<int>(RE2::Options::EncodingLatin1));
+}

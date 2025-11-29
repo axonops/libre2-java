@@ -994,6 +994,42 @@ int getReverseProgramSize(cache::RE2Pattern* pattern) {
     return pattern->compiled_regex->ReverseProgramSize();
 }
 
+std::string getProgramFanoutJSON(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->isValid()) {
+        return "[]";
+    }
+
+    std::vector<int> histogram;
+    int max_bucket = pattern->compiled_regex->ProgramFanout(&histogram);
+
+    std::ostringstream json;
+    json << "[";
+    for (size_t i = 0; i < histogram.size(); i++) {
+        if (i > 0) json << ",";
+        json << histogram[i];
+    }
+    json << "]";
+    return json.str();
+}
+
+std::string getReverseProgramFanoutJSON(cache::RE2Pattern* pattern) {
+    if (!pattern || !pattern->isValid()) {
+        return "[]";
+    }
+
+    std::vector<int> histogram;
+    int max_bucket = pattern->compiled_regex->ReverseProgramFanout(&histogram);
+
+    std::ostringstream json;
+    json << "[";
+    for (size_t i = 0; i < histogram.size(); i++) {
+        if (i > 0) json << ",";
+        json << histogram[i];
+    }
+    json << "]";
+    return json.str();
+}
+
 const PatternOptions& getOptions(cache::RE2Pattern* pattern) {
     // Note: Returns reference to pattern's options
     // Caller must not use after pattern is released

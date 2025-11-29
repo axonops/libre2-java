@@ -73,6 +73,46 @@ inline Arg Octal(T* ptr) {
     return RE2::Octal(ptr);
 }
 
+//=============================================================================
+// RE2 ENUM RE-EXPORTS (Phase 1.2.5i)
+//=============================================================================
+
+/**
+ * Error codes from pattern compilation.
+ * Matches RE2::ErrorCode exactly.
+ */
+using ErrorCode = RE2::ErrorCode;
+
+// ErrorCode values (for reference):
+// NoError = 0
+// ErrorInternal, ErrorBadEscape, ErrorBadCharClass, ErrorBadCharRange
+// ErrorMissingBracket, ErrorMissingParen, ErrorUnexpectedParen
+// ErrorTrailingBackslash, ErrorRepeatArgument, ErrorRepeatSize
+// ErrorRepeatOp, ErrorBadPerlOp, ErrorBadUTF8, ErrorBadNamedCapture
+// ErrorPatternTooLarge
+
+/**
+ * Predefined option sets.
+ * Matches RE2::CannedOptions exactly.
+ */
+using CannedOptions = RE2::CannedOptions;
+
+// CannedOptions values (for reference):
+// DefaultOptions = 0
+// Latin1 - treat input as Latin-1 (default UTF-8)
+// POSIX - POSIX syntax, leftmost-longest match
+// Quiet - do not log regexp parse errors
+
+/**
+ * Text encoding.
+ * Matches RE2::Options::Encoding exactly.
+ */
+using Encoding = RE2::Options::Encoding;
+
+// Encoding values (for reference):
+// EncodingUTF8 = 1
+// EncodingLatin1
+
 /**
  * High-level C++ API for RE2 with automatic caching.
  *
@@ -885,6 +925,27 @@ int getProgramSize(cache::RE2Pattern* pattern);
  * @return reverse program size, or -1 if pattern invalid
  */
 int getReverseProgramSize(cache::RE2Pattern* pattern);
+
+/**
+ * Get program fanout histogram (branching factor analysis).
+ *
+ * Uses RE2::ProgramFanout() - analyzes branching complexity.
+ * Returns histogram as JSON array.
+ *
+ * @param pattern compiled pattern pointer
+ * @return JSON array of histogram buckets, or "[]" if invalid
+ */
+std::string getProgramFanoutJSON(cache::RE2Pattern* pattern);
+
+/**
+ * Get reverse program fanout histogram.
+ *
+ * Uses RE2::ReverseProgramFanout() - reverse pattern branching.
+ *
+ * @param pattern compiled pattern pointer
+ * @return JSON array of histogram buckets, or "[]" if invalid
+ */
+std::string getReverseProgramFanoutJSON(cache::RE2Pattern* pattern);
 
 /**
  * Get pattern options (read-only reference).

@@ -4075,3 +4075,116 @@ TEST_F(Libre2APITest, RE2Ported_Extract_Basic) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// RE2 PORTED TESTS - Consume/FindAndConsume (from re2_test.cc)
+//=============================================================================
+
+// Consume - multiple iterations (from RE2)
+TEST_F(Libre2APITest, RE2Ported_Consume_MultipleWords) {
+    initCache();
+
+    // ========== TEST DATA (from RE2) ==========
+    const std::string PATTERN = "\\s*(\\w+)";
+    const std::string INPUT = "   aaa b!@#$@#$cccc";
+    // ==========================================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view input_re2(INPUT);
+    std::string word1_re2, word2_re2;
+    bool r1_re2 = RE2::Consume(&input_re2, re2_pattern, &word1_re2);
+    bool r2_re2 = RE2::Consume(&input_re2, re2_pattern, &word2_re2);
+    bool r3_re2 = RE2::Consume(&input_re2, re2_pattern, (std::string*)nullptr);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    const char* input_wrapper = INPUT.data();
+    int len_wrapper = INPUT.size();
+    std::string word1_wrapper, word2_wrapper;
+    const Arg arg1_w(&word1_wrapper);
+    const Arg* args1[] = {&arg1_w};
+    bool r1_wrapper = consumeN(p, &input_wrapper, &len_wrapper, args1, 1);
+    const Arg arg2_w(&word2_wrapper);
+    const Arg* args2[] = {&arg2_w};
+    bool r2_wrapper = consumeN(p, &input_wrapper, &len_wrapper, args2, 1);
+    bool r3_wrapper = consumeN(p, &input_wrapper, &len_wrapper, nullptr, 0);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(r1_re2, r1_wrapper);
+    EXPECT_EQ(r2_re2, r2_wrapper);
+    EXPECT_EQ(r3_re2, r3_wrapper);
+    EXPECT_TRUE(r1_wrapper);
+    EXPECT_TRUE(r2_wrapper);
+    EXPECT_FALSE(r3_wrapper);
+    EXPECT_EQ(word1_re2, word1_wrapper);
+    EXPECT_EQ(word2_re2, word2_wrapper);
+    EXPECT_EQ("aaa", word1_wrapper);
+    EXPECT_EQ("b", word2_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// ConsumeN - variable args (from RE2)
+TEST_F(Libre2APITest, RE2Ported_ConsumeN_VariableArgs) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "\\s*(\\w+)";
+    const std::string INPUT = " one two three";
+    // ===============================
+
+    // ========== EXECUTE RE2 - 0 args ==========
+    RE2 re2_pattern(PATTERN);
+    absl::string_view input_re2_0(INPUT);
+    bool r0_re2 = RE2::ConsumeN(&input_re2_0, re2_pattern, nullptr, 0);
+    std::string remaining0_re2(input_re2_0);
+    // ==========================================
+
+    // ========== EXECUTE WRAPPER - 0 args ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    const char* input_w_0 = INPUT.data();
+    int len_w_0 = INPUT.size();
+    bool r0_wrapper = consumeN(p, &input_w_0, &len_w_0, nullptr, 0);
+    std::string remaining0_wrapper(input_w_0, len_w_0);
+    // ==============================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(r0_re2, r0_wrapper);
+    EXPECT_TRUE(r0_wrapper);
+    EXPECT_EQ(remaining0_re2, remaining0_wrapper);
+    // =============================
+
+    // ========== EXECUTE RE2 - 1 arg ==========
+    absl::string_view input_re2_1(INPUT);
+    std::string word_re2;
+    const RE2::Arg argv_re2[] = {RE2::Arg(&word_re2)};
+    const RE2::Arg* args_re2[] = {&argv_re2[0]};
+    bool r1_re2 = RE2::ConsumeN(&input_re2_1, re2_pattern, args_re2, 1);
+    // =========================================
+
+    // ========== EXECUTE WRAPPER - 1 arg ==========
+    const char* input_w_1 = INPUT.data();
+    int len_w_1 = INPUT.size();
+    std::string word_wrapper;
+    const Arg arg_w(&word_wrapper);
+    const Arg* args_w[] = {&arg_w};
+    bool r1_wrapper = consumeN(p, &input_w_1, &len_w_1, args_w, 1);
+    // =============================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(r1_re2, r1_wrapper);
+    EXPECT_TRUE(r1_wrapper);
+    EXPECT_EQ(word_re2, word_wrapper);
+    EXPECT_EQ("one", word_wrapper);
+    // =============================
+
+    releasePattern(p);
+}

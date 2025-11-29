@@ -1086,6 +1086,36 @@ void matchDirectBulk(
     int n_submatches,
     bool* results_out);
 
+//=============================================================================
+// ADVANCED ANALYSIS FUNCTIONS (Phase 1.2.5f)
+//=============================================================================
+
+/**
+ * Compute possible match range for pattern.
+ *
+ * Uses RE2::PossibleMatchRange() - computes string range that could match.
+ * For any string s that matches this pattern (anchored): min <= s <= max
+ *
+ * Useful for:
+ * - Database query optimization (range scans)
+ * - Determining if pattern can match certain value ranges
+ *
+ * Note: Only considers first copy of infinitely repeated elements (*, +)
+ *
+ * Example: Pattern "[0-9]{3}" might return min="000", max="999"
+ *
+ * @param pattern compiled pattern pointer
+ * @param min_out output for minimum possible match
+ * @param max_out output for maximum possible match
+ * @param maxlen maximum length of returned strings
+ * @return true on success, false on error
+ */
+bool possibleMatchRange(
+    cache::RE2Pattern* pattern,
+    std::string* min_out,
+    std::string* max_out,
+    int maxlen);
+
 /**
  * Get current cache metrics as JSON string.
  *

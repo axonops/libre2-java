@@ -1315,6 +1315,23 @@ void matchDirectBulk(
     }
 }
 
+//============================================================================
+// ADVANCED ANALYSIS FUNCTIONS (Phase 1.2.5f)
+//============================================================================
+
+bool possibleMatchRange(
+    cache::RE2Pattern* pattern,
+    std::string* min_out,
+    std::string* max_out,
+    int maxlen) {
+
+    if (!pattern || !pattern->isValid() || !min_out || !max_out || maxlen < 0) {
+        return false;
+    }
+
+    return pattern->compiled_regex->PossibleMatchRange(min_out, max_out, maxlen);
+}
+
 void initCache(const std::string& json_config) {
     std::lock_guard<std::mutex> lock(g_init_mutex);
 

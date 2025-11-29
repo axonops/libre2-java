@@ -3068,3 +3068,112 @@ TEST_F(Libre2APITest, MatchBulk_MultipleTexts) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// ADVANCED ANALYSIS TESTS (Phase 1.2.5f)
+//=============================================================================
+
+// possibleMatchRange - simple digit pattern
+TEST_F(Libre2APITest, PossibleMatchRange_Digits) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "[0-9]{3}";  // 3 digits
+    const int MAXLEN = 10;
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string min_re2, max_re2;
+    bool result_re2 = re2_pattern.PossibleMatchRange(&min_re2, &max_re2, MAXLEN);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string min_wrapper, max_wrapper;
+    bool result_wrapper = possibleMatchRange(p, &min_wrapper, &max_wrapper, MAXLEN);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_TRUE(result_wrapper);
+    EXPECT_EQ(min_re2, min_wrapper);
+    EXPECT_EQ(max_re2, max_wrapper);
+    // Range should be 000 to 999
+    EXPECT_EQ("000", min_wrapper);
+    EXPECT_EQ("999", max_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// possibleMatchRange - word pattern
+TEST_F(Libre2APITest, PossibleMatchRange_Word) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "\\w+";  // One or more word chars
+    const int MAXLEN = 5;
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string min_re2, max_re2;
+    bool result_re2 = re2_pattern.PossibleMatchRange(&min_re2, &max_re2, MAXLEN);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string min_wrapper, max_wrapper;
+    bool result_wrapper = possibleMatchRange(p, &min_wrapper, &max_wrapper, MAXLEN);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(min_re2, min_wrapper);
+    EXPECT_EQ(max_re2, max_wrapper);
+    // =============================
+
+    releasePattern(p);
+}
+
+// possibleMatchRange - complex pattern
+TEST_F(Libre2APITest, PossibleMatchRange_Complex) {
+    initCache();
+
+    // ========== TEST DATA ==========
+    const std::string PATTERN = "a[0-9]+b";
+    const int MAXLEN = 20;
+    // ===============================
+
+    // ========== EXECUTE RE2 ==========
+    RE2 re2_pattern(PATTERN);
+    std::string min_re2, max_re2;
+    bool result_re2 = re2_pattern.PossibleMatchRange(&min_re2, &max_re2, MAXLEN);
+    // =================================
+
+    // ========== EXECUTE WRAPPER ==========
+    std::string error;
+    RE2Pattern* p = compilePattern(PATTERN, true, error);
+    ASSERT_NE(p, nullptr);
+    std::string min_wrapper, max_wrapper;
+    bool result_wrapper = possibleMatchRange(p, &min_wrapper, &max_wrapper, MAXLEN);
+    // =====================================
+
+    // ========== COMPARE ==========
+    EXPECT_EQ(result_re2, result_wrapper);
+    EXPECT_EQ(min_re2, min_wrapper);
+    EXPECT_EQ(max_re2, max_wrapper);
+    // Should start with 'a' and end with 'b'
+    EXPECT_FALSE(min_wrapper.empty());
+    EXPECT_FALSE(max_wrapper.empty());
+    EXPECT_EQ('a', min_wrapper[0]);
+    EXPECT_EQ('a', max_wrapper[0]);
+    // =============================
+
+    releasePattern(p);
+}

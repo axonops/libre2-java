@@ -299,8 +299,50 @@ bool extract(
     std::string* result_out);
 
 //=============================================================================
-// UTILITY FUNCTIONS
+// UTILITY FUNCTIONS (Phase 1.2.3)
 //=============================================================================
+
+/**
+ * Quote/escape special regex characters.
+ *
+ * Uses RE2::QuoteMeta() - escapes all regex metacharacters.
+ * Result string, used as regex, will match original string literally.
+ *
+ * Thread-safe, stateless (no caching).
+ *
+ * Example: "1.5-2.0?" → "1\\.5\\-2\\.0\\?"
+ *
+ * @param text input text to quote
+ * @return quoted string safe for use as regex pattern
+ */
+std::string quoteMeta(std::string_view text);
+
+/**
+ * Get pattern information and metadata.
+ *
+ * Returns JSON with complete pattern details:
+ * {
+ *   "valid": true,
+ *   "error": "",
+ *   "pattern": "(\\w+):(\\d+)",
+ *   "capturing_groups": 2,
+ *   "named_groups": {"name": 1, "value": 2},
+ *   "group_names": {"1": "name", "2": "value"},
+ *   "program_size": 512
+ * }
+ *
+ * @param pattern compiled pattern pointer
+ * @return JSON string with pattern metadata
+ */
+std::string getPatternInfo(cache::RE2Pattern* pattern);
+
+/**
+ * Check if pattern is valid.
+ *
+ * @param pattern compiled pattern pointer
+ * @return true if pattern compiled successfully, false if compilation failed
+ */
+bool isPatternValid(cache::RE2Pattern* pattern);
 
 /**
  * Get current cache metrics as JSON string.

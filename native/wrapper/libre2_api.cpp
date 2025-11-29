@@ -20,6 +20,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <stdexcept>
 
 namespace libre2 {
@@ -353,8 +354,68 @@ bool extract(
 }
 
 //============================================================================
-// UTILITY FUNCTIONS
+// UTILITY FUNCTIONS (Phase 1.2.3)
 //============================================================================
+
+std::string quoteMeta(std::string_view text) {
+    // RE2::QuoteMeta is thread-safe, stateless
+    return RE2::QuoteMeta(text);
+}
+
+std::string getPatternInfo(cache::RE2Pattern* pattern) {
+    if (!pattern) {
+        return R"({"valid":false,"error":"Null pattern"})";
+    }
+
+    // Build JSON manually (nlohmann::json available if needed, but simple for now)
+    std::ostringstream json;
+    json << "{";
+    json << "\"valid\":" << (pattern->isValid() ? "true" : "false") << ",";
+    json << "\"error\":\"" << (pattern->isValid() ? "" : "Compilation failed") << "\",";
+    json << "\"pattern\":\"" << pattern->pattern_string << "\",";
+    json << "\"case_sensitive\":" << (pattern->case_sensitive ? "true" : "false") << ",";
+
+    if (pattern->isValid()) {
+        const RE2* re = pattern->compiled_regex.get();
+        json << "\"capturing_groups\":" << re->NumberOfCapturingGroups() << ",";
+
+        // Named groups
+        const auto& named_groups = re->NamedCapturingGroups();
+        json << "\"named_groups\":{";
+        bool first = true;
+        for (const auto& [name, index] : named_groups) {
+            if (!first) json << ",";
+            json << "\"" << name << "\":" << index;
+            first = false;
+        }
+        json << "},";
+
+        // Group names
+        const auto& group_names = re->CapturingGroupNames();
+        json << "\"group_names\":{";
+        first = true;
+        for (const auto& [index, name] : group_names) {
+            if (!first) json << ",";
+            json << "\"" << index << "\":\"" << name << "\"";
+            first = false;
+        }
+        json << "},";
+
+        json << "\"program_size\":" << re->ProgramSize();
+    } else {
+        json << "\"capturing_groups\":0,";
+        json << "\"named_groups\":{},";
+        json << "\"group_names\":{},";
+        json << "\"program_size\":0";
+    }
+
+    json << "}";
+    return json.str();
+}
+
+bool isPatternValid(cache::RE2Pattern* pattern) {
+    return pattern && pattern->isValid();
+}
 
 std::string getMetricsJSON() {
     cache::CacheManager* mgr = g_cache_manager.load(std::memory_order_acquire);

@@ -1528,3 +1528,157 @@ TEST_F(Libre2APITest, Replace_ThreadSafe) {
 
     releasePattern(p);
 }
+
+//=============================================================================
+// PHASE 1.2.3: UTILITY FUNCTIONS TESTS
+//=============================================================================
+
+// QuoteMeta - basic special characters
+TEST_F(Libre2APITest, QuoteMeta_Basic) {
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "1.5-2.0?";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string result_re2 = RE2::QuoteMeta(INPUT_TEXT);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string result_wrapper = quoteMeta(INPUT_TEXT);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper)
+        << "Quoted string must match - RE2: '" << result_re2
+        << "' vs Wrapper: '" << result_wrapper << "'";
+    // ===========================================================
+}
+
+// QuoteMeta - all special characters
+TEST_F(Libre2APITest, QuoteMeta_AllSpecialChars) {
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = ".*+?^$[]{}()|\\";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string result_re2 = RE2::QuoteMeta(INPUT_TEXT);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string result_wrapper = quoteMeta(INPUT_TEXT);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper)
+        << "Quoted string must match - RE2: '" << result_re2
+        << "' vs Wrapper: '" << result_wrapper << "'";
+    // ===========================================================
+}
+
+// QuoteMeta - empty string
+TEST_F(Libre2APITest, QuoteMeta_Empty) {
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string result_re2 = RE2::QuoteMeta(INPUT_TEXT);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string result_wrapper = quoteMeta(INPUT_TEXT);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper) << "Results must match";
+    // ===========================================================
+}
+
+// QuoteMeta - Unicode
+TEST_F(Libre2APITest, QuoteMeta_Unicode) {
+    // ========== TEST DATA (defined ONCE) ==========
+    const std::string INPUT_TEXT = "Price: $5.99 (世界)";
+    // ==============================================
+
+    // ========== EXECUTE RE2 (capture results) ==========
+    std::string result_re2 = RE2::QuoteMeta(INPUT_TEXT);
+    // ===================================================
+
+    // ========== EXECUTE WRAPPER (capture results) ==========
+    std::string result_wrapper = quoteMeta(INPUT_TEXT);
+    // ========================================================
+
+    // ========== COMPARE (CRITICAL: must be identical) ==========
+    EXPECT_EQ(result_re2, result_wrapper)
+        << "Quoted string must match - RE2: '" << result_re2
+        << "' vs Wrapper: '" << result_wrapper << "'";
+    // ===========================================================
+}
+
+// GetPatternInfo - valid pattern
+TEST_F(Libre2APITest, GetPatternInfo_Valid) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("(\\w+):(\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+
+    std::string info = getPatternInfo(p);
+
+    // Verify JSON contains expected fields
+    EXPECT_NE(info.find("\"valid\":true"), std::string::npos);
+    EXPECT_NE(info.find("\"capturing_groups\":2"), std::string::npos);
+    EXPECT_NE(info.find("\"pattern\":"), std::string::npos);
+    EXPECT_NE(info.find("\"program_size\":"), std::string::npos);
+
+    releasePattern(p);
+}
+
+// GetPatternInfo - invalid pattern
+TEST_F(Libre2APITest, GetPatternInfo_Invalid) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("[invalid", true, error);
+    EXPECT_EQ(p, nullptr) << "Invalid pattern should return nullptr";
+
+    // getPatternInfo with null should return error JSON
+    std::string info = getPatternInfo(nullptr);
+    EXPECT_NE(info.find("\"valid\":false"), std::string::npos);
+}
+
+// GetPatternInfo - named groups
+TEST_F(Libre2APITest, GetPatternInfo_NamedGroups) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("(?P<name>\\w+):(?P<port>\\d+)", true, error);
+    ASSERT_NE(p, nullptr);
+
+    std::string info = getPatternInfo(p);
+
+    // Verify named groups present
+    EXPECT_NE(info.find("\"named_groups\""), std::string::npos);
+    EXPECT_NE(info.find("\"name\""), std::string::npos);
+    EXPECT_NE(info.find("\"port\""), std::string::npos);
+
+    releasePattern(p);
+}
+
+// IsPatternValid - valid
+TEST_F(Libre2APITest, IsPatternValid_Valid) {
+    initCache();
+
+    std::string error;
+    RE2Pattern* p = compilePattern("test", true, error);
+    ASSERT_NE(p, nullptr);
+
+    EXPECT_TRUE(isPatternValid(p));
+
+    releasePattern(p);
+}
+
+// IsPatternValid - null
+TEST_F(Libre2APITest, IsPatternValid_Null) {
+    EXPECT_FALSE(isPatternValid(nullptr));
+}
